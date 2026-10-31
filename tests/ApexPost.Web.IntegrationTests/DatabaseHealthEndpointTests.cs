@@ -30,18 +30,29 @@ public class DatabaseHealthEndpointTests : IAsyncLifetime
 		return Task.CompletedTask;
 	}
 
-	// Also the guard that tests cannot reach the development database: on a
-	// machine with the connection string in user-secrets, this fails if the
-	// value becomes visible to Program.
 	[Fact]
-	public async Task DatabaseHealth_WithoutConnectionString_IsNotMapped()
+	public void Startup_WithoutConnectionString_Stops()
+	{
+		using var factory = CreateFactory(Environments.Development, string.Empty);
+
+		var exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+
+		Assert.Contains(
+			"ConnectionStrings:ApexPostDb",
+			exception.ToString(),
+			StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public async Task DatabaseHealth_WhenServerIsReachable_ReturnsHealthy()
 	{
 		using var factory = CreateFactory(Environments.Development, null);
 		using var client = CreateClient(factory);
 
 		var response = await client.GetAsync("/health/database");
 
-		Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+		Assert.Equal("Healthy", await response.Content.ReadAsStringAsync());
 	}
 
 	[Fact]

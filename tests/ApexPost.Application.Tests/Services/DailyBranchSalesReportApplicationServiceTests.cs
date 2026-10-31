@@ -104,7 +104,7 @@ public sealed class DailyBranchSalesReportApplicationServiceTests
 	public async Task GetReportAsync_MissingStaffIdIsDeniedWithoutLoading()
 	{
 		var repository = new FakeApexPostRepository();
-		var service = new DailyBranchSalesReportApplicationService(repository);
+		var service = TestServices.DailySalesReport(repository);
 
 		await Assert.ThrowsAsync<UnauthorizedAccessException>(
 			() => service.GetReportAsync(" ", ReportDate));
@@ -115,7 +115,7 @@ public sealed class DailyBranchSalesReportApplicationServiceTests
 	private static DailyBranchSalesReportApplicationService CreateService(
 		Staff staff,
 		IEnumerable<TransactionBasket> baskets) =>
-		new(new FakeApexPostRepository(new ApexPostSnapshot(
+		TestServices.DailySalesReport(new FakeApexPostRepository(new ApexPostSnapshot(
 			[],
 			[staff],
 			[],

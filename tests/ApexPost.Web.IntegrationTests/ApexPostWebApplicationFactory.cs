@@ -1,3 +1,4 @@
+using ApexPost.Application.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 
@@ -10,14 +11,20 @@ namespace ApexPost.Web.IntegrationTests;
 //
 // ConfigureAppConfiguration runs when the host is built, after Program has
 // already read builder.Configuration, so removing the source alone does not
-// hide a secret from Program. UseSetting applies early enough, so it blanks
-// the development connection string: tests must never reach that database.
-// A test that needs a connection string sets its own with UseSetting.
+// hide a secret from Program. UseSetting applies early enough, so it replaces
+// the development connection string with the disposable test database: tests
+// must never reach ApexPostDb. A test can still override it with UseSetting.
 public class ApexPostWebApplicationFactory : WebApplicationFactory<Program>
 {
+	// Each factory starts from an empty database.
+	public ApexPostWebApplicationFactory() =>
+		TestSqlServer.Database.Reset();
+
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
-		builder.UseSetting("ConnectionStrings:ApexPostDb", string.Empty);
+		builder.UseSetting(
+			"ConnectionStrings:ApexPostDb",
+			TestSqlServer.Database.ConnectionString);
 
 		builder.ConfigureAppConfiguration((_, configuration) =>
 		{
@@ -28,6 +35,11 @@ public class ApexPostWebApplicationFactory : WebApplicationFactory<Program>
 			foreach (var source in userSecrets)
 				configuration.Sources.Remove(source);
 		});
+
+		builder.ConfigureTestServices(services =>
+			services.AddSingleton<IApexPostRepository>(provider =>
+				new SqlSnapshotRepository(
+					provider.GetRequiredService<IServiceScopeFactory>())));
 	}
 
 	internal static bool IsUserSecrets(FileConfigurationSource source) =>

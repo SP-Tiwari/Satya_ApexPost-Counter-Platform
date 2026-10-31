@@ -79,7 +79,7 @@ public sealed class ShippingVolumeReportApplicationServiceTests
 	public async Task GetReportAsync_MissingStaffIdIsDeniedWithoutLoading()
 	{
 		var repository = new FakeApexPostRepository();
-		var service = new ShippingVolumeReportApplicationService(repository);
+		var service = TestServices.ShippingVolumeReport(repository);
 
 		await Assert.ThrowsAsync<UnauthorizedAccessException>(
 			() => service.GetReportAsync(" "));
@@ -90,7 +90,7 @@ public sealed class ShippingVolumeReportApplicationServiceTests
 	private static ShippingVolumeReportApplicationService CreateService(
 		Staff staff,
 		IEnumerable<ShippingItem> items) =>
-		new(new FakeApexPostRepository(new ApexPostSnapshot(
+		TestServices.ShippingVolumeReport(new FakeApexPostRepository(new ApexPostSnapshot(
 			[], [staff], [], [], items, [], [], [], [])));
 
 	private static Staff CreateStaff(StaffRole role) =>

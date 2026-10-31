@@ -11,7 +11,7 @@ public sealed class StockAdjustmentApplicationServiceTests
 	public async Task GetCatalogAsync_ReturnsOnlyPersistedHomeBranchStock()
 	{
 		var repository = CreateRepository();
-		var service = new StockAdjustmentApplicationService(repository);
+		var service = TestServices.StockAdjustment(repository);
 
 		var catalog = await service.GetCatalogAsync(ManagerId);
 
@@ -25,7 +25,7 @@ public sealed class StockAdjustmentApplicationServiceTests
 	public async Task AdjustStockAsync_AddsStockAndPersistsTheChange()
 	{
 		var repository = CreateRepository();
-		var service = new StockAdjustmentApplicationService(repository);
+		var service = TestServices.StockAdjustment(repository);
 
 		await service.AdjustStockAsync(ManagerId, ExistingSku.Value, 3);
 
@@ -41,7 +41,7 @@ public sealed class StockAdjustmentApplicationServiceTests
 	public async Task AdjustStockAsync_RemovesStockWithoutGoingBelowZero()
 	{
 		var repository = CreateRepository();
-		var service = new StockAdjustmentApplicationService(repository);
+		var service = TestServices.StockAdjustment(repository);
 
 		await service.AdjustStockAsync(ManagerId, ExistingSku.Value, -2);
 
@@ -59,7 +59,7 @@ public sealed class StockAdjustmentApplicationServiceTests
 		int quantity)
 	{
 		var repository = CreateRepository();
-		var service = new StockAdjustmentApplicationService(repository);
+		var service = TestServices.StockAdjustment(repository);
 
 		await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
 			service.AdjustStockAsync(ManagerId, ExistingSku.Value, quantity));
@@ -75,7 +75,7 @@ public sealed class StockAdjustmentApplicationServiceTests
 	public async Task AdjustStockAsync_RejectsRemovalBeyondAvailableStock()
 	{
 		var repository = CreateRepository();
-		var service = new StockAdjustmentApplicationService(repository);
+		var service = TestServices.StockAdjustment(repository);
 
 		await Assert.ThrowsAsync<InvalidOperationException>(() =>
 			service.AdjustStockAsync(ManagerId, ExistingSku.Value, -5));
@@ -91,7 +91,7 @@ public sealed class StockAdjustmentApplicationServiceTests
 	public async Task AdjustStockAsync_RejectsQuantityOverflowWithoutMutation()
 	{
 		var repository = CreateRepository(homeStockQuantity: int.MaxValue);
-		var service = new StockAdjustmentApplicationService(repository);
+		var service = TestServices.StockAdjustment(repository);
 
 		await Assert.ThrowsAsync<OverflowException>(() =>
 			service.AdjustStockAsync(ManagerId, ExistingSku.Value, 1));
@@ -107,7 +107,7 @@ public sealed class StockAdjustmentApplicationServiceTests
 	public async Task AdjustStockAsync_RejectsMissingProductWithoutMutation()
 	{
 		var repository = CreateRepository();
-		var service = new StockAdjustmentApplicationService(repository);
+		var service = TestServices.StockAdjustment(repository);
 
 		await Assert.ThrowsAsync<KeyNotFoundException>(() =>
 			service.AdjustStockAsync(ManagerId, "MISSING", 1));
@@ -123,7 +123,7 @@ public sealed class StockAdjustmentApplicationServiceTests
 	public async Task AdjustStockAsync_RejectsMissingHomeBranchStockWithoutMutation()
 	{
 		var repository = CreateRepository(includeHomeStock: false);
-		var service = new StockAdjustmentApplicationService(repository);
+		var service = TestServices.StockAdjustment(repository);
 
 		await Assert.ThrowsAsync<KeyNotFoundException>(() =>
 			service.AdjustStockAsync(ManagerId, ExistingSku.Value, 1));
@@ -136,9 +136,9 @@ public sealed class StockAdjustmentApplicationServiceTests
 	{
 		var inactiveManager = CreateManager();
 		inactiveManager.Deactivate();
-		var inactiveService = new StockAdjustmentApplicationService(
+		var inactiveService = TestServices.StockAdjustment(
 			CreateRepository(staff: inactiveManager));
-		var unknownService = new StockAdjustmentApplicationService(
+		var unknownService = TestServices.StockAdjustment(
 			CreateRepository());
 
 		await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
@@ -158,7 +158,7 @@ public sealed class StockAdjustmentApplicationServiceTests
 			"clerk@example.test",
 			StaffRole.CounterClerk,
 			HomeBranch);
-		var service = new StockAdjustmentApplicationService(
+		var service = TestServices.StockAdjustment(
 			CreateRepository(staff: clerk));
 
 		await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>

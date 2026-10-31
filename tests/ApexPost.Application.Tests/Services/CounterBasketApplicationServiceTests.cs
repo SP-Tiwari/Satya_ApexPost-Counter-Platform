@@ -308,7 +308,7 @@ public sealed class CounterBasketApplicationServiceTests
 	[Fact]
 	public async Task MoneyOrder_FeeTaxCategoryWithoutConfiguredRateIsUnavailable()
 	{
-		var service = new MixedBasketApplicationService(
+		var service = TestServices.MixedBasket(
 			new FakeApexPostRepository(CreateSnapshot()),
 			new Dictionary<TaxCategory, decimal> { [TaxCategory.Standard] = 0.1m },
 			new Dictionary<ShippingServiceLevel, Weight>(),
@@ -358,7 +358,7 @@ public sealed class CounterBasketApplicationServiceTests
 		MoneyOrderBasketSettings? moneyOrderSettings,
 		IIdentityVerificationService? verification = null,
 		IReadOnlyCollection<string>? paymentMethods = null) =>
-		new(
+		TestServices.MixedBasket(
 			repository,
 			new Dictionary<TaxCategory, decimal>
 			{

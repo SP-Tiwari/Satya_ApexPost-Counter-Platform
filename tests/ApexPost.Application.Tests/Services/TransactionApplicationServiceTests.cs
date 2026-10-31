@@ -12,7 +12,7 @@ public sealed class TransactionApplicationServiceTests
 	public async Task CreateBasketAndAddLineItemAsync_PersistsBasketWithExplicitTaxRates()
 	{
 		var repository = new InMemoryApexPostRepository(CreateSnapshot());
-		var service = new TransactionApplicationService(repository);
+		var service = TestServices.Transactions(repository);
 		var rates = new Dictionary<TaxCategory, decimal>
 		{
 			[TaxCategory.Standard] = 0.1m
@@ -226,7 +226,7 @@ public sealed class TransactionApplicationServiceTests
 		var repository = CreateMixedBasketRepository();
 
 		Assert.Throws<ArgumentOutOfRangeException>(() =>
-			new MixedBasketApplicationService(
+			TestServices.MixedBasket(
 				repository,
 				new Dictionary<TaxCategory, decimal>
 				{
@@ -298,7 +298,7 @@ public sealed class TransactionApplicationServiceTests
 		var repository = new InMemoryApexPostRepository(
 			CreateScopedSnapshot(
 				[localBasket, otherBranchBasket, legacyBasket]));
-		var service = new TransactionApplicationService(repository);
+		var service = TestServices.Transactions(repository);
 
 		var visible = await service.GetTransactionBasketsAsync("manager-1");
 		var details = await service.GetTransactionBasketAsync(
@@ -324,13 +324,13 @@ public sealed class TransactionApplicationServiceTests
 			[CreateScopedBasket(
 				Guid.NewGuid(), BranchOne, TransactionPaymentStatus.Paid)],
 			[manager]);
-		var inactiveService = new TransactionApplicationService(
+		var inactiveService = TestServices.Transactions(
 			new InMemoryApexPostRepository(inactiveSnapshot));
 
 		await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
 			inactiveService.GetTransactionBasketsAsync("manager-1"));
 
-		var clerkService = new TransactionApplicationService(
+		var clerkService = TestServices.Transactions(
 			new InMemoryApexPostRepository(CreateScopedSnapshot(
 				[],
 				[CreateStaff("manager-1", StaffRole.CounterClerk, BranchOne)])));
@@ -349,7 +349,7 @@ public sealed class TransactionApplicationServiceTests
 			Guid.NewGuid(), BranchTwo, status);
 		var repository = new InMemoryApexPostRepository(
 			CreateScopedSnapshot([foreignBasket]));
-		var service = new TransactionApplicationService(repository);
+		var service = TestServices.Transactions(repository);
 
 		var operation = action == "void"
 			? service.VoidAsync(
@@ -368,7 +368,7 @@ public sealed class TransactionApplicationServiceTests
 	public async Task ProcessSaleAsync_UsesDomainRulesAndPersistsStockDeduction()
 	{
 		var repository = new InMemoryApexPostRepository(CreateSnapshot());
-		var service = new TransactionApplicationService(repository);
+		var service = TestServices.Transactions(repository);
 		var transactionId = await CreateGoodsBasketAsync(service);
 
 		await service.ProcessSaleAsync(transactionId, "manager-1", BranchOne);
@@ -384,7 +384,7 @@ public sealed class TransactionApplicationServiceTests
 	public async Task ProcessSaleAsync_WhenStaffIsNotAssignedToBranch_DoesNotPersistMutation()
 	{
 		var repository = new InMemoryApexPostRepository(CreateSnapshot());
-		var service = new TransactionApplicationService(repository);
+		var service = TestServices.Transactions(repository);
 		var transactionId = await CreateGoodsBasketAsync(service);
 
 		await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -401,7 +401,7 @@ public sealed class TransactionApplicationServiceTests
 	public async Task VoidAndRefundAsync_RequireManagerAndPersistReasons()
 	{
 		var repository = new InMemoryApexPostRepository(CreateSnapshot());
-		var service = new TransactionApplicationService(repository);
+		var service = TestServices.Transactions(repository);
 		var voidBasket = new TransactionBasket(
 			"INR", CreateTaxRates(), BranchOne);
 		var initialSnapshot = await repository.LoadAsync();
@@ -448,7 +448,7 @@ public sealed class TransactionApplicationServiceTests
 	[Fact]
 	public async Task OperationsAsync_WhenTransactionDoesNotExist_ReportsMissingInput()
 	{
-		var service = new TransactionApplicationService(
+		var service = TestServices.Transactions(
 			new InMemoryApexPostRepository(CreateSnapshot()));
 
 		await Assert.ThrowsAsync<KeyNotFoundException>(() =>
@@ -466,7 +466,7 @@ public sealed class TransactionApplicationServiceTests
 	public async Task CreateBasketAsync_PropagatesCancellation()
 	{
 		var repository = new InMemoryApexPostRepository(CreateSnapshot());
-		var service = new TransactionApplicationService(repository);
+		var service = TestServices.Transactions(repository);
 		using var cancellation = new CancellationTokenSource();
 		cancellation.Cancel();
 
@@ -482,7 +482,7 @@ public sealed class TransactionApplicationServiceTests
 	public async Task StatusChangeAsync_PaidSaleReturnsStockOnce(string action)
 	{
 		var repository = new InMemoryApexPostRepository(CreateSnapshot());
-		var service = new TransactionApplicationService(repository);
+		var service = TestServices.Transactions(repository);
 		var transactionId = await CreateGoodsBasketAsync(service);
 		await service.ProcessSaleAsync(transactionId, "manager-1", BranchOne);
 		Assert.Equal(
@@ -512,7 +512,7 @@ public sealed class TransactionApplicationServiceTests
 	public async Task VoidAsync_WhenStockRecordIsMissing_PersistsNoChange()
 	{
 		var repository = new InMemoryApexPostRepository(CreateSnapshot());
-		var service = new TransactionApplicationService(repository);
+		var service = TestServices.Transactions(repository);
 		var transactionId = await CreateGoodsBasketAsync(service);
 		await service.ProcessSaleAsync(transactionId, "manager-1", BranchOne);
 		var soldSnapshot = await repository.LoadAsync();
@@ -635,7 +635,7 @@ public sealed class TransactionApplicationServiceTests
 	private static MixedBasketApplicationService CreateMixedBasketService(
 		InMemoryApexPostRepository repository,
 		IReadOnlyDictionary<ShippingServiceLevel, Weight>? maximumWeights = null) =>
-		new(
+		TestServices.MixedBasket(
 			repository,
 			new Dictionary<TaxCategory, decimal>
 			{

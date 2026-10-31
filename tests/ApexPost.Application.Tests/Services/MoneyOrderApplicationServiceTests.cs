@@ -27,7 +27,7 @@ public sealed class MoneyOrderApplicationServiceTests
 				[manager, CreateStaff(
 					"manager-2", StaffRole.BranchManager, "BR02")],
 				[ownBranchOrder, otherBranchOrder, unknownBranchOrder]));
-		var service = new MoneyOrderApplicationService(repository, Threshold);
+		var service = TestServices.MoneyOrders(repository, Threshold);
 
 		var orders = await service.GetMoneyOrdersAsync("manager-1");
 
@@ -40,7 +40,7 @@ public sealed class MoneyOrderApplicationServiceTests
 		var inactiveManager = CreateStaff(
 			"manager-1", StaffRole.BranchManager, "BR01");
 		inactiveManager.Deactivate();
-		var service = new MoneyOrderApplicationService(
+		var service = TestServices.MoneyOrders(
 			new FakeApexPostRepository(CreateSnapshot([inactiveManager])),
 			Threshold);
 
@@ -54,7 +54,7 @@ public sealed class MoneyOrderApplicationServiceTests
 	[InlineData(" ")]
 	public async Task GetMoneyOrdersAsync_RejectsNonManagerOrUnknownStaff(string staffId)
 	{
-		var service = new MoneyOrderApplicationService(
+		var service = TestServices.MoneyOrders(
 			new FakeApexPostRepository(CreateSnapshot()),
 			Threshold);
 
@@ -67,8 +67,8 @@ public sealed class MoneyOrderApplicationServiceTests
 	{
 		var repository = new FakeApexPostRepository(CreateSnapshot());
 
-		Assert.True(new MoneyOrderApplicationService(repository, Threshold).IsConfigured);
-		Assert.False(new MoneyOrderApplicationService(repository, null).IsConfigured);
+		Assert.True(TestServices.MoneyOrders(repository, Threshold).IsConfigured);
+		Assert.False(TestServices.MoneyOrders(repository, null).IsConfigured);
 	}
 
 	private static ApexPostSnapshot CreateSnapshot(

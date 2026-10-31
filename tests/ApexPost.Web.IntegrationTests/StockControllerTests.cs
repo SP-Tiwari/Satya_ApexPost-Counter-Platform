@@ -66,14 +66,8 @@ public sealed class StockControllerTests : IAsyncLifetime
 			snapshot.BranchStocks,
 			stock => stock.BranchCode == new BranchCode("BR02")).Quantity);
 
-		var auditJson = await File.ReadAllTextAsync(_auditFilePath);
-		var records = auditJson.Split(
-				'\n', StringSplitOptions.RemoveEmptyEntries)
-			.Select(line => JsonSerializer.Deserialize<AuditRecord>(
-					line, AuditJsonOptions)
-				?? throw new InvalidDataException(
-					"Audit record could not be read."))
-			.ToArray();
+		var records = await TestSqlServer.ReadAuditRecordsAsync();
+		var auditJson = await TestSqlServer.ReadAuditTextAsync();
 		Assert.Contains(
 			records,
 			item => item.Controller == "Stock" &&

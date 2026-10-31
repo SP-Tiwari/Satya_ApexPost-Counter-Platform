@@ -19,7 +19,7 @@ public sealed class LowStockReportApplicationServiceTests
 				new BranchStock(HomeBranch, new Sku("LOCAL-OK"), 4),
 				new BranchStock(OtherBranch, new Sku("FOREIGN-LOW"), 0)
 			]);
-		var service = new LowStockReportApplicationService(repository, 2);
+		var service = TestServices.LowStockReport(repository, 2);
 
 		var report = await service.GetReportAsync(ManagerId);
 
@@ -64,7 +64,7 @@ public sealed class LowStockReportApplicationServiceTests
 	public async Task GetReportAsync_MissingStaffIdIsDenied()
 	{
 		var repository = new FakeApexPostRepository();
-		var service = new LowStockReportApplicationService(repository, 2);
+		var service = TestServices.LowStockReport(repository, 2);
 
 		await Assert.ThrowsAsync<UnauthorizedAccessException>(
 			() => service.GetReportAsync(" "));
@@ -75,7 +75,7 @@ public sealed class LowStockReportApplicationServiceTests
 	[Fact]
 	public async Task GetReportAsync_MissingThresholdFailsAfterAuthorization()
 	{
-		var service = new LowStockReportApplicationService(
+		var service = TestServices.LowStockReport(
 			CreateRepository(CreateManager(), []), null);
 
 		await Assert.ThrowsAsync<InvalidOperationException>(
@@ -88,12 +88,12 @@ public sealed class LowStockReportApplicationServiceTests
 		var repository = new FakeApexPostRepository();
 
 		Assert.Throws<ArgumentOutOfRangeException>(
-			() => new LowStockReportApplicationService(repository, -1));
+			() => TestServices.LowStockReport(repository, -1));
 	}
 
 	private static LowStockReportApplicationService CreateService(
 		Staff staff) =>
-		new(CreateRepository(staff, []), 2);
+		TestServices.LowStockReport(CreateRepository(staff, []), 2);
 
 	private static IApexPostRepository CreateRepository(
 		Staff staff,

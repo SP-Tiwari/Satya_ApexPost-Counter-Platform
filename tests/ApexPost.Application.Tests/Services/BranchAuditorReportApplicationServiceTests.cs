@@ -68,7 +68,7 @@ public sealed class BranchAuditorReportApplicationServiceTests
 	public async Task GetReportAsync_MissingStaffIdIsDeniedWithoutLoading()
 	{
 		var repository = new FakeApexPostRepository();
-		var service = new BranchAuditorReportApplicationService(repository);
+		var service = TestServices.BranchAuditorReport(repository);
 
 		await Assert.ThrowsAsync<UnauthorizedAccessException>(
 			() => service.GetReportAsync(" "));
@@ -79,7 +79,7 @@ public sealed class BranchAuditorReportApplicationServiceTests
 	private static BranchAuditorReportApplicationService CreateService(
 		Staff staff,
 		IEnumerable<MoneyOrder> moneyOrders) =>
-		new(new FakeApexPostRepository(new ApexPostSnapshot(
+		TestServices.BranchAuditorReport(new FakeApexPostRepository(new ApexPostSnapshot(
 			[],
 			[staff],
 			[],
