@@ -1,14 +1,15 @@
-using Microsoft.Data.SqlClient;
+using ApexPost.Infrastructure.Persistence.Sql;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace ApexPost.Infrastructure.Persistence;
 
-// Opens a connection and runs a trivial query, only when the check is
-// requested. The result never carries the exception text, which can name the
+// Asks EF Core whether the database can be reached, only when the check is
+// requested. The result never carries exception text, which can name the
 // server or the database.
 public sealed class SqlServerConnectivityHealthCheck : IHealthCheck
 {
-	private readonly string _connectionString;
+	private readonly DbContextOptions<ApexPostDbContext> _options;
 
 	public SqlServerConnectivityHealthCheck(string connectionString)
 	{
@@ -16,7 +17,9 @@ public sealed class SqlServerConnectivityHealthCheck : IHealthCheck
 			throw new ArgumentException(
 				"A connection string is required.", nameof(connectionString));
 
-		_connectionString = connectionString;
+		_options = new DbContextOptionsBuilder<ApexPostDbContext>()
+			.UseSqlServer(connectionString)
+			.Options;
 	}
 
 	public async Task<HealthCheckResult> CheckHealthAsync(
@@ -25,23 +28,15 @@ public sealed class SqlServerConnectivityHealthCheck : IHealthCheck
 	{
 		ArgumentNullException.ThrowIfNull(context);
 
-		try
-		{
-			await using var connection = new SqlConnection(_connectionString);
-			await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+		await using var database = new ApexPostDbContext(_options);
+		var canConnect = await database.Database
+			.CanConnectAsync(cancellationToken)
+			.ConfigureAwait(false);
 
-			await using var command = connection.CreateCommand();
-			command.CommandText = "SELECT 1;";
-			await command.ExecuteScalarAsync(cancellationToken)
-				.ConfigureAwait(false);
-
-			return HealthCheckResult.Healthy();
-		}
-		catch (SqlException)
-		{
-			return new HealthCheckResult(
+		return canConnect
+			? HealthCheckResult.Healthy()
+			: new HealthCheckResult(
 				context.Registration.FailureStatus,
 				"The database could not be reached.");
-		}
 	}
 }

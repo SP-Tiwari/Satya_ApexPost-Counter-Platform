@@ -4,12 +4,17 @@ namespace ApexPost.Domain.Entities;
 
 public sealed class TransactionBasket
 {
-	private readonly Dictionary<TaxCategory, decimal> _taxRates;
+	// Held as a list rather than a dictionary so that each rate can be stored
+	// as a row of its own. The public TaxRates dictionary is built from it.
+	private readonly List<TransactionTaxRate> _taxRates = [];
 	private readonly List<TransactionLineItem> _lineItems = [];
-	private readonly List<DomainNotification> _notifications = [];
 	private TransactionPaymentStatus _paymentStatus =
 		TransactionPaymentStatus.Open;
 	private BranchCode? _branchCode;
+
+	// A basket records at most one reversal, so the void or refund notification
+	// is derived from this reason and the payment status.
+	private string? _reversalReason;
 
 	public Guid Id { get; }
 	public string Currency { get; }
@@ -47,7 +52,7 @@ public sealed class TransactionBasket
 		get
 		{
 			lock (DomainMutationLock.Gate)
-				return new Dictionary<TaxCategory, decimal>(_taxRates);
+				return CopyTaxRates();
 		}
 	}
 
@@ -56,7 +61,7 @@ public sealed class TransactionBasket
 		get
 		{
 			lock (DomainMutationLock.Gate)
-				return _notifications.ToArray();
+				return GetNotifications();
 		}
 	}
 
@@ -70,11 +75,11 @@ public sealed class TransactionBasket
 				GetSubtotal(),
 				GetTax(),
 				Total,
-				new Dictionary<TaxCategory, decimal>(_taxRates),
+				CopyTaxRates(),
 				_lineItems.ToArray(),
 				_branchCode,
 				_paymentStatus,
-				_notifications.ToArray(),
+				GetNotifications(),
 				OccurredAtUtc,
 				SaleDetails);
 		}
@@ -117,6 +122,12 @@ public sealed class TransactionBasket
 		}
 	}
 
+	// Used by EF Core when it materializes a stored transaction.
+	private TransactionBasket()
+	{
+		Currency = null!;
+	}
+
 	public TransactionBasket(
 		string currency,
 		IReadOnlyDictionary<TaxCategory, decimal> taxRates,
@@ -145,7 +156,6 @@ public sealed class TransactionBasket
 		OccurredAtUtc = occurredAtUtc?.ToUniversalTime();
 		SaleDetails = saleDetails;
 		_branchCode = branchCode;
-		_taxRates = new Dictionary<TaxCategory, decimal>();
 
 		foreach (var (taxCategory, taxRate) in taxRates)
 		{
@@ -156,7 +166,7 @@ public sealed class TransactionBasket
 				throw new ArgumentOutOfRangeException(
 					nameof(taxRates), "Tax rates cannot be negative.");
 
-			_taxRates.Add(taxCategory, taxRate);
+			_taxRates.Add(new TransactionTaxRate(taxCategory, taxRate));
 		}
 	}
 
@@ -238,7 +248,7 @@ public sealed class TransactionBasket
 					nameof(lineItem));
 
 			if (lineItem.Type != TransactionItemType.MoneyOrder &&
-				!_taxRates.ContainsKey(lineItem.TaxCategory))
+				!_taxRates.Exists(taxRate => taxRate.Category == lineItem.TaxCategory))
 				throw new InvalidOperationException(
 					$"No tax rate is configured for category '{lineItem.TaxCategory}'.");
 
@@ -292,8 +302,7 @@ public sealed class TransactionBasket
 					$"A transaction can only be voided when its status is Open or Paid; current status is '{PaymentStatus}'.");
 			}
 
-			_notifications.Add(
-				new TransactionVoidedNotification(reason.Trim()));
+			_reversalReason = reason.Trim();
 			PaymentStatus = TransactionPaymentStatus.Voided;
 		}
 	}
@@ -312,8 +321,7 @@ public sealed class TransactionBasket
 					$"A transaction can only be refunded when its status is Paid; current status is '{PaymentStatus}'.");
 			}
 
-			_notifications.Add(
-				new TransactionRefundedNotification(reason.Trim()));
+			_reversalReason = reason.Trim();
 			PaymentStatus = TransactionPaymentStatus.Refunded;
 		}
 	}
@@ -352,7 +360,21 @@ public sealed class TransactionBasket
 		lineItem.Type switch
 		{
 			TransactionItemType.MoneyOrder => 0m,
-			_ => lineItem.Subtotal.Amount * _taxRates[lineItem.TaxCategory]
+			_ => lineItem.Subtotal.Amount * _taxRates
+				.First(taxRate => taxRate.Category == lineItem.TaxCategory).Rate
+		};
+
+	private Dictionary<TaxCategory, decimal> CopyTaxRates() =>
+		_taxRates.ToDictionary(taxRate => taxRate.Category, taxRate => taxRate.Rate);
+
+	private DomainNotification[] GetNotifications() =>
+		_paymentStatus switch
+		{
+			TransactionPaymentStatus.Voided =>
+				[new TransactionVoidedNotification(_reversalReason!)],
+			TransactionPaymentStatus.Refunded =>
+				[new TransactionRefundedNotification(_reversalReason!)],
+			_ => []
 		};
 
 	private static string GetRequiredReason<TNotification>(

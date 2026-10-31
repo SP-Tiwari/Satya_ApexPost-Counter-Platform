@@ -11,6 +11,15 @@ public sealed class ShippingItem
 	public string DestinationZone { get; }
 	public ShippingServiceLevel ServiceLevel { get; }
 
+	// Used by EF Core when it materializes a stored row.
+	private ShippingItem()
+	{
+		Id = null!;
+		Weight = null!;
+		Dimensions = null!;
+		DestinationZone = null!;
+	}
+
 	public ShippingItem(
 		string id,
 		ShippingItemType type,

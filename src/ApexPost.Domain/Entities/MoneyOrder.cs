@@ -23,6 +23,15 @@ public sealed class MoneyOrder
 		private set;
 	} = MoneyOrderStatus.Issued;
 
+	// Used by EF Core when it materializes a stored row.
+	private MoneyOrder()
+	{
+		Amount = null!;
+		Sender = null!;
+		Recipient = null!;
+		Fee = null!;
+	}
+
 	public MoneyOrder(
 		Money amount,
 		string sender,

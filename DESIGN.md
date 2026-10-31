@@ -1,6 +1,6 @@
 # ApexPost Counter Platform — Design
 
-This document describes the platform as implemented on the `feature/void-refund-restock` branch. Where something is planned but not built, it says so. Decisions are recorded as ADRs in [docs/adr/](docs/adr/); a short request-flow walkthrough is in [docs/architecture.md](docs/architecture.md).
+This document describes the platform as implemented on the `feature/week3-sql-persistence` branch. Where something is planned but not built, it says so. The application still runs on JSON persistence; the SQL Server schema and mapping from Week 3 M1 are described in [section 4.4](#44-sql-server-schema), and the application moves onto them in M2 and M3 ([plan](docs/week-3-plan.md)). Decisions are recorded as ADRs in [docs/adr/](docs/adr/); a short request-flow walkthrough is in [docs/architecture.md](docs/architecture.md).
 
 ## 1. Architecture
 
@@ -10,7 +10,7 @@ This document describes the platform as implemented on the `feature/void-refund-
 |---|---|---|
 | `ApexPost.Domain` | Entities, value objects, business rules, domain services, events, specifications and report calculations. No I/O. | — |
 | `ApexPost.Application` | Use cases (application services), persistence/security/audit/courier/verification abstractions, the domain-event publisher, the reference-data cache and request validation. | Domain |
-| `ApexPost.Infrastructure` | JSON snapshot repository, JSON credential store, JSON Lines audit store, demo seed, and the simulated courier and identity-verification services. | Application, Domain |
+| `ApexPost.Infrastructure` | JSON snapshot repository, JSON credential store, JSON Lines audit store, demo seed, and the simulated courier and identity-verification services. Also `ApexPostDbContext`, its EF Core mappings and migrations, which the running application does not use until M3. | Application, Domain |
 | `ApexPost.Web` | MVC controllers and views, middleware, filters, authentication, authorization policies, the partner API and the composition root (`Program.cs`). | Application, Infrastructure |
 
 ```mermaid
@@ -192,7 +192,290 @@ Events are collected inside the repository update and published by `DomainEventP
   Older files are migrated on load without inventing business data; for example, undated legacy sales stay undated. A file without a version that contains newer fields is rejected.
 - **Failure behaviour:** a missing file is an empty snapshot. A malformed, unsupported or domain-invalid file fails loudly and is never overwritten.
 - **Other stores:** credentials live in a separate file (`Authentication:CredentialFile`, [ADR 0007](docs/adr/0007-separate-staff-credential-store.md)), and audit records are appended to a JSON Lines file (`Audit:FilePath`).
-- **Next step:** a database can replace these stores behind the same interfaces. The lock is per process; it does not coordinate several processes sharing one folder.
+- **Next step:** the SQL Server schema below replaces these stores in M2 and M3. The lock is per process; it does not coordinate several processes sharing one folder.
+
+### 4.4 SQL Server schema
+
+Week 3 M1 adds the schema and mapping. **No screen or service uses them yet.** Decisions are in [ADR 0017](docs/adr/0017-money-precision-and-rounding.md) (money precision), [ADR 0018](docs/adr/0018-schema-design-and-delete-behaviours.md) (schema and deletes) and [ADR 0019](docs/adr/0019-domain-and-persistence-separation.md) (domain and persistence models).
+
+#### ER diagram
+
+Every table also has `CreatedAtUtc`, `CreatedBy` and `ModifiedAtUtc`, left out here for space.
+
+```mermaid
+erDiagram
+    Branches ||--o{ Counters : has
+    Branches ||--o{ Staff : "home branch"
+    Branches ||--o{ BranchStock : holds
+    Branches ||--o{ CounterTransactions : records
+    Branches ||--o{ MoneyOrders : processes
+    Roles ||--o{ Staff : assigns
+    Staff ||--o| StaffCredentials : "signs in with"
+    Staff ||--o{ CounterTransactions : "clerk of"
+    Staff ||--o{ StockAdjustments : makes
+    ProductCategories ||--o{ Products : groups
+    Products ||--o{ BranchStock : "stocked as"
+    Products ||--o{ TransactionLines : "sold as"
+    BranchStock ||--o{ StockAdjustments : "changed by"
+    ShippingZones ||--o{ ShippingRates : prices
+    ShippingZones ||--o{ Shipments : "destination of"
+    Counters ||--o{ CounterTransactions : takes
+    CounterTransactions ||--|{ TransactionLines : contains
+    CounterTransactions ||--o{ TransactionTaxRates : captures
+    CounterTransactions ||--o{ Payments : "paid by"
+    Shipments ||--o| TransactionLines : "billed on"
+    MoneyOrders ||--o| TransactionLines : "billed on"
+    MoneyOrders ||--o| IdentityVerifications : "verified by"
+
+    Branches {
+        int BranchId PK
+        varchar BranchCode UK
+        nvarchar Name
+        nvarchar Region
+        nvarchar OpeningHours
+        bit IsActive
+    }
+    Counters {
+        varchar BranchCode PK,FK
+        varchar CounterId PK
+        nvarchar Name
+        bit IsActive
+    }
+    Staff {
+        varchar StaffId PK
+        nvarchar Name
+        nvarchar Email UK
+        tinyint RoleId FK
+        varchar HomeBranchCode FK
+        bit IsActive
+    }
+    StaffCredentials {
+        varchar StaffId PK,FK
+        int Version
+        int Iterations
+        varchar Salt
+        varchar PasswordHash
+    }
+    Roles {
+        tinyint RoleId PK
+        nvarchar Name UK
+    }
+    Products {
+        int ProductId PK
+        varchar Sku UK
+        nvarchar Name
+        tinyint ProductCategoryId FK
+        varchar TaxCategory
+        decimal UnitPrice
+        char Currency
+    }
+    ProductCategories {
+        tinyint ProductCategoryId PK
+        nvarchar Name UK
+    }
+    BranchStock {
+        varchar BranchCode PK,FK
+        varchar Sku PK,FK
+        int Quantity
+        rowversion RowVersion
+    }
+    StockAdjustments {
+        uniqueidentifier StockAdjustmentId PK
+        varchar BranchCode FK
+        varchar Sku FK
+        int Delta
+        nvarchar Reason
+        varchar ChangedByStaffId FK
+        datetime2 OccurredAtUtc
+    }
+    ShippingZones {
+        int ShippingZoneId PK
+        varchar ZoneCode UK
+        nvarchar Name
+    }
+    ShippingRates {
+        varchar ZoneCode PK,FK
+        varchar ServiceLevel PK
+        decimal BasePrice
+        char BasePriceCurrency
+        decimal PerKilogramCharge
+        char PerKilogramChargeCurrency
+    }
+    Shipments {
+        varchar ShipmentId PK
+        varchar ShipmentType
+        decimal WeightKg
+        decimal LengthCm
+        decimal WidthCm
+        decimal HeightCm
+        varchar ZoneCode FK
+        varchar ServiceLevel
+    }
+    MoneyOrders {
+        uniqueidentifier MoneyOrderId PK
+        decimal Amount
+        char Currency
+        decimal Fee
+        char FeeCurrency
+        nvarchar Sender
+        nvarchar Recipient
+        varchar ProcessingBranchCode FK
+        varchar Status
+    }
+    IdentityVerifications {
+        uniqueidentifier MoneyOrderId PK,FK
+        varchar DocumentType
+        varchar MaskedDocumentIdentifier
+        bit IsSuccessful
+    }
+    CounterTransactions {
+        uniqueidentifier TransactionId PK
+        char Currency
+        varchar BranchCode FK
+        varchar CounterId FK
+        varchar ClerkStaffId FK
+        nvarchar PaymentMethod
+        datetime2 OccurredAtUtc
+        varchar Status
+        nvarchar ReversalReason
+        rowversion RowVersion
+    }
+    TransactionLines {
+        bigint TransactionLineId PK
+        uniqueidentifier TransactionId FK
+        varchar LineType
+        nvarchar Description
+        decimal UnitPrice
+        char Currency
+        int Quantity
+        varchar TaxCategory
+        varchar Sku FK
+        varchar ShipmentId FK
+        uniqueidentifier MoneyOrderId FK
+    }
+    TransactionTaxRates {
+        uniqueidentifier TransactionId PK,FK
+        varchar TaxCategory PK
+        decimal Rate
+    }
+    Payments {
+        uniqueidentifier PaymentId PK
+        uniqueidentifier TransactionId FK
+        varchar EntryType
+        decimal Amount
+        char Currency
+        nvarchar PaymentMethod
+        datetime2 RecordedAtUtc
+    }
+    AuditEntries {
+        bigint AuditEntryId PK
+        datetime2 TimestampUtc
+        varchar Controller
+        varchar Action
+        nvarchar Description
+        varchar Outcome
+        int StatusCode
+        float DurationMilliseconds
+        nvarchar RouteValues
+        varchar StaffId
+        varchar StaffRole
+        varchar BranchCode
+        varchar CorrelationId
+    }
+```
+
+The table count is 19: the 17 the brief lists, plus `TransactionTaxRates` and `StaffCredentials`.
+
+#### Normalization note (3NF)
+
+Every non-key column depends only on its table's key. Three concrete anomalies this design prevents:
+
+| Anomaly | Without this design | How the schema prevents it |
+|---|---|---|
+| **Update** | If each sale copied the branch's name and region, renaming a region would mean updating every sale, and a missed row would leave reports disagreeing | Name and region exist once, in `Branches`. `CounterTransactions` holds only `BranchCode` |
+| **Insertion** | If stock and product details shared a table, a product could not be added to the catalogue until a branch stocked it. If zones existed only as text on rates, a zone could not exist before its first rate, and a typo would create a new zone | `Products` is separate from `BranchStock`. `ShippingZones` is separate, and `ShippingRates` and `Shipments` must reference a real zone |
+| **Deletion** | If product details lived only on transaction lines, losing the last line for a product would lose the product | `Products` stands alone, and `Restrict` stops a referenced product being deleted |
+
+**Deliberate exceptions:**
+- `TransactionLines.Description`, `UnitPrice` and `TaxCategory` are copied from the product at sale time. They are not redundant: they record what was charged then, and they must not change when a price changes.
+- `TransactionLines.Currency` repeats the transaction's currency, because `Money` is stored as a whole value. The domain rejects a line in another currency (`TransactionBasket.AddLineItem`).
+- `PaymentMethod` is on both `CounterTransactions` and `Payments`, recording different facts. The transaction column is the method selected for the sale; the payment column is the method used for that financial movement, so a refund can record how the money went back. For a normal sale the two match. Neither is edited after it is written ([ADR 0018](docs/adr/0018-schema-design-and-delete-behaviours.md)).
+
+#### Mapping reference
+
+Code: `src/ApexPost.Infrastructure/Persistence/Sql/`.
+
+| Concern | Implementation |
+|---|---|
+| DbContext | `ApexPostDbContext`, scoped use from M2; the configurations are applied with `ApplyConfigurationsFromAssembly` |
+| Design-time creation | `ApexPostDbContextFactory`: holds no connection string, so generating a migration or script never reads secrets or touches a database |
+| Fluent configuration | `Configurations/`: one `IEntityTypeConfiguration` class per entity, 18 in all. The 19th table, `TransactionTaxRates`, is an owned collection configured inside `CounterTransactionConfiguration` |
+| Shared column rules | `MappingExtensions`: `IsBranchCode`, `IsSku`, `IsCode`, `IsEnumCode`, `IsMoney`, `IsUtcDateTime`, `IsActiveFlag`, `HasAuditColumns` |
+| Value converters | `ValueConverters.cs`: `BranchCodeConverter`, `SkuConverter`, `WeightConverter`, `MoneyAmountConverter`, `UtcDateTimeOffsetConverter`, `RouteValuesConverter` |
+| Complex types | `Money` (two columns, so a converter handles its amount and the type maps as a complex property, safely shared between objects) and `Dimensions` |
+| Owned types | `CounterSaleDetails` (optional, stored on `CounterTransactions`) and `TransactionTaxRate` (owned collection, stored in `TransactionTaxRates`) |
+| Shadow properties | `RowVersion`; `CreatedAtUtc`, `CreatedBy`, `ModifiedAtUtc`; surrogate keys such as `BranchId`; foreign keys such as `TransactionId` on lines |
+| Backing fields | `_lineItems`, `_counterTerminals`, `_taxRates`, `_reversalReason`, `_branchCode`, `_paymentStatus` |
+| Separate persistence model | `IdentityVerificationRecord` and `IdentityVerificationMapper` |
+| `varchar` codes | `IsUnicode(false)` with a maximum length on every code column. Verified: EF sends `@sku varchar(30)`, so an indexed code column is not compared through an implicit conversion |
+| Health check | `SqlServerConnectivityHealthCheck` uses `Database.CanConnectAsync`, is mapped only in Development, and connects only when `/health/database` is requested |
+
+`Address` on `Branch` was not added: the brief offers it as an example, nothing in ApexPost records one, and `Dimensions` and `CounterSaleDetails` already cover "complex and owned types where they fit".
+
+#### Constraints
+
+| Type | Count | Examples |
+|---|---|---|
+| UNIQUE | 6 | `UQ_Branches_BranchCode`, `UQ_Products_Sku`, `UQ_Staff_Email`, `UQ_ShippingZones_ZoneCode`, `UQ_Roles_Name`, `UQ_ProductCategories_Name` |
+| CHECK | 33 | `CK_BranchStock_Quantity` (≥ 0), `CK_MoneyOrders_Amount` and `CK_Payments_Amount` (> 0), `CK_Shipments_Weight` (> 0), `CK_CounterTransactions_Status`, `CK_IdentityVerifications_MaskedDocumentIdentifier` |
+| DEFAULT | 43 | Three audit defaults per table (`SYSUTCDATETIME()`, `SUSER_SNAME()`) are the main group, plus `IsActive`, `Quantity` and `Status` |
+| Foreign key | 22 | 21 `NO ACTION`, 1 `CASCADE`; see [ADR 0018](docs/adr/0018-schema-design-and-delete-behaviours.md) |
+| Rowversion | 2 | `BranchStock.RowVersion`, `CounterTransactions.RowVersion`, both `NOT NULL` |
+
+Identity documents are stored only as `****` plus the last four characters, in `varchar(8)` with a CHECK that also rejects any other format. The domain's `IdentityVerification` masks first, so a full number never reaches the mapper.
+
+#### Migrations
+
+| Item | Location |
+|---|---|
+| Migration | `src/ApexPost.Infrastructure/Persistence/Sql/Migrations/20261031085407_InitialCreate.cs` |
+| Idempotent script | `sql/schema/ApexPostDb-idempotent.sql` |
+| Follow-up migration | `AddPerformanceIndexes`, planned for M6 |
+
+The application never calls `EnsureCreated()` or migrates at startup. `InitialCreate` was reviewed by hand. The review made `CreatedBy`, `RowVersion` and `TransactionLines.TransactionId` non-nullable, and added the composite counter foreign key by hand.
+
+**`ApexPostDb` itself has not been migrated.** It is still empty; verification used a separate disposable database.
+
+#### M1 traceability
+
+Verification ran on 2026-10-31 on SQL Server 2025 (17.0) Enterprise Evaluation, in a disposable database in `E:\SqlData\ApexPost\Tests`, since dropped. The EF round-trip checks were a throwaway probe, not repository tests; automated tests follow in the approved testing phase.
+
+| Assignment requirement | Implementation | Documentation | Verification evidence |
+|---|---|---|---|
+| Part A: required tables | `Configurations/*.cs` | ER diagram above | 19 user tables after applying the script |
+| A: PKs, FKs, delete behaviour | `Configurations/*.cs`; hand-written FK in `InitialCreate` | ADR 0018 | 22 FKs. Deleting a referenced branch and product was rejected. A counter from another branch was rejected |
+| A: UNIQUE constraints | `HasAlternateKey` in `BranchConfiguration`, `ProductConfiguration`, `StaffConfiguration` | Constraints table | Duplicate `BranchCode`, `Sku` and email each rejected |
+| A: CHECK constraints | `HasCheckConstraint` in each configuration | Constraints table | Negative stock, invalid status, zero amount, zero weight, unmasked document and a reason on a paid sale each rejected |
+| A: DEFAULT and audit columns | `MappingExtensions.HasAuditColumns`, `IsActiveFlag` | Constraints table | Every table has all three audit columns; 43 defaults |
+| A: rowversion | `BranchStockConfiguration`, `CounterTransactionConfiguration` | Constraints table | Both `NOT NULL`. Two contexts selling the same stock: the second got `DbUpdateConcurrencyException`, and stock stayed at 0 |
+| A: data types | `MappingExtensions` | Mapping reference, ADR 0017 | Catalog query: 70 `varchar`/`char` columns, money `decimal(18,2)`; the 18 `nvarchar` columns are all names or free text |
+| A: masked documents | `IdentityVerification`, `IdentityVerificationMapper`, `IdentityVerificationConfiguration` | ADR 0019 | `ABCDEFGH1234` stored as `****1234`; an unmasked value and an over-long value were rejected |
+| A: ER diagram, three anomalies | This section | This section | Review |
+| A: idempotent script | `sql/schema/ApexPostDb-idempotent.sql` | Migrations table | Applied twice to one database: both runs exited 0, and one history row was recorded |
+| E: `ApexPostDbContext` | `ApexPostDbContext.cs` | Mapping reference | Round trip of a sale with goods, shipping and money-order lines |
+| E: Fluent configuration per entity | `Configurations/*.cs` | Mapping reference | `has-pending-model-changes` reports no changes |
+| E: value converters | `ValueConverters.cs` | Mapping reference, ADR 0017 | `BranchCode`, `Sku`, `Weight` and UTC times round-tripped; 11.255 stored as 11.26 |
+| E: owned and complex types | `TransactionConfigurations.cs`, `ShippingConfigurations.cs` | Mapping reference | `CounterSaleDetails`, tax rates, `Money` and `Dimensions` round-tripped; null sale details stayed null |
+| E: `InitialCreate` | `Migrations/20261031085407_InitialCreate.cs` | Migrations table | Applied by script and by `dotnet ef database update`; reverted to 0 tables and re-applied to 19 |
+| A: `Payments` with its payment method | `Payment.cs`, `PaymentConfiguration` in `TransactionConfigurations.cs` | Normalization note, ADR 0018 | `Payments.PaymentMethod` is `nvarchar(50) NOT NULL`, and a NULL insert was rejected. `CounterTransactions.PaymentMethod` stays `nvarchar(50) NULL`. A sale selected `Card` while its refund entry recorded `Cash`, and both round-tripped |
+| E: never `EnsureCreated()` | No call in `src` | Migrations table | `grep` of `src` found no `EnsureCreated` or `Migrate` call |
+| F: rich entities, shadow properties | Domain entities; `HasAuditColumns`, `RowVersion` | ADR 0019 | Round trip through private constructors and backing fields |
+| F: separate persistence entity and mapper | `IdentityVerificationRecord.cs` | ADR 0019 | Mapper round trip to `IdentityVerification.FromMaskedIdentifier` |
+| Plan: `varchar` with `IsUnicode(false)` | `MappingExtensions.IsCode`, `IsBranchCode`, `IsSku`, `IsEnumCode` | Mapping reference | `ToQueryString()` shows `DECLARE @sku varchar(30)` |
+| Plan: health check through EF Core | `SqlServerConnectivityHealthCheck.cs` | Mapping reference, README | `/health/database` returned `200 Healthy`; the existing health check tests passed |
+| Week 2 rules preserved | Domain changes in ADR 0019 | ADR 0019 | All 558 existing tests passed after the `Payments.PaymentMethod` correction: Domain 213, Application 110, Infrastructure 38, Web 197. No test file was modified. These tests verify existing behaviour on JSON persistence, not the new SQL persistence. SQL schema and mapping were verified separately with throwaway probes on disposable databases, which are not repeatable automated tests |
+
+**Not implemented in M1:** repositories and the Unit of Work, stamping of `ModifiedAtUtc` and the real `CreatedBy`, seed data, and automated SQL tests. Those belong to later milestones.
 
 ## 5. HTTP pipeline
 
@@ -363,8 +646,8 @@ Only the assignment's allowed libraries are used: xUnit, `Microsoft.AspNetCore.M
 |---|---|---|
 | Domain | 213/213 | Stock, weight-limit, money-order verification and void/refund rules, pricing, transaction access (`CanView`) |
 | Application | 110/110 | Multi-line counter sales, payment-method configuration, money orders as basket lines (fee, threshold, verification success, failure and timeout), dated reports, catalogue, clerk read access, password hashing and the dummy-hash timing |
-| Infrastructure | 33/33 | JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed |
-| Web | 193/193 | The six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
+| Infrastructure | 38/38 | JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed, database health check failure and cancellation paths |
+| Web | 197/197 | Database health endpoint isolation, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
 
 The dummy-hash timing test compares the fastest of three runs and accepts a ratio of 0.6–1.6 against a real check; the old 210,000-iteration dummy measured about 0.35.
 
@@ -395,3 +678,7 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 | [0013](docs/adr/0013-partner-parcel-status-api-and-endpoint-security.md) | Partner parcel-status API and endpoint security |
 | [0014](docs/adr/0014-transaction-dates-and-sale-details.md) | Transaction dates and sale details |
 | [0015](docs/adr/0015-caching-concurrency-and-timeouts.md) | Caching, concurrency and timeouts |
+| [0016](docs/adr/0016-patched-cryptography-dependency.md) | Pin the patched cryptography dependency |
+| [0017](docs/adr/0017-money-precision-and-rounding.md) | Money precision at the database boundary |
+| [0018](docs/adr/0018-schema-design-and-delete-behaviours.md) | Schema design and delete behaviours |
+| [0019](docs/adr/0019-domain-and-persistence-separation.md) | Where domain and persistence models are separated |

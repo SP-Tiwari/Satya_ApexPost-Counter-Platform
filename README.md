@@ -104,7 +104,7 @@ curl.exe -H "X-API-Key: <your partner key>" https://localhost:7034/integration/p
 
 ## SQL Server setup (Week 3, in progress)
 
-The application still runs on JSON persistence. The migration to SQL Server follows [the Week 3 plan](docs/week-3-plan.md); this section covers only the local database.
+The application still runs on JSON persistence. The move to SQL Server follows [the Week 3 plan](docs/week-3-plan.md); this section covers only the local database.
 
 Requirements: a local SQL Server instance, `sqlcmd`, and the `dotnet-ef` tool.
 
@@ -120,7 +120,48 @@ The script:
 2. Creates an empty `ApexPostDb` from [sql/setup/create-database.sql](sql/setup/create-database.sql). An existing database is left untouched.
 3. Stores the connection string in user-secrets as `ConnectionStrings:ApexPostDb`, unless one is already set. It uses Windows authentication and trusts the local self-signed certificate, so it is for development only.
 
-Tables are not created yet; they arrive with the EF Core migrations.
+### Set up the database with SSMS instead
+
+Use these steps if you prefer SQL Server Management Studio to the script. They produce the same result.
+
+1. Create the folder `E:\SqlData\ApexPost`. In its **Properties** > **Security** tab, give `NT Service\MSSQLSERVER` **Modify** access.
+2. In SSMS, connect to server `.` with **Windows Authentication**. If the connection fails with a certificate error, tick **Trust server certificate**.
+3. Open [sql/setup/create-database.sql](sql/setup/create-database.sql), and turn on **Query** > **SQLCMD Mode**.
+4. Add these two lines at the top of the query window, without saving them to the file:
+
+   ```sql
+   :setvar DatabaseName ApexPostDb
+   :setvar DataDirectory "E:\SqlData\ApexPost"
+   ```
+
+5. Execute the query. The results list the data and log files, which should both be in `E:\SqlData\ApexPost`.
+6. From the repository root, store the connection string:
+
+   ```powershell
+   dotnet user-secrets set "ConnectionStrings:ApexPostDb" "Server=.;Database=ApexPostDb;Integrated Security=True;Encrypt=True;TrustServerCertificate=True" --project src/ApexPost.Web
+   ```
+
+### Create the tables
+
+The schema comes from the EF Core migration `InitialCreate` (Week 3 M1). The application does not migrate itself at startup, and it does not use these tables until M3. The tool's design-time factory holds no connection string, so name the target database with `--connection`:
+
+```powershell
+dotnet ef database update --connection "Server=.;Database=ApexPostDb;Integrated Security=True;Encrypt=True;TrustServerCertificate=True" --project src/ApexPost.Infrastructure --startup-project src/ApexPost.Web --context ApexPostDbContext
+```
+
+Or apply the idempotent script, which is safe to run more than once. `sqlcmd` needs `-I` because the schema has filtered indexes:
+
+```powershell
+sqlcmd -S . -E -C -I -b -d ApexPostDb -i sql/schema/ApexPostDb-idempotent.sql
+```
+
+To regenerate the script after a schema change:
+
+```powershell
+dotnet ef migrations script --idempotent --project src/ApexPost.Infrastructure --startup-project src/ApexPost.Web --context ApexPostDbContext --output sql/schema/ApexPostDb-idempotent.sql
+```
+
+The schema, ER diagram and constraints are described in [DESIGN.md](DESIGN.md#44-sql-server-schema).
 
 To check connectivity, start the app with `dotnet run --project src/ApexPost.Web --launch-profile https` and open <https://localhost:7034/health/database>. It answers `Healthy`, or `Unhealthy` with status 503. The endpoint exists only in Development with a connection string configured, because each request opens a database connection. `/health` does not depend on the database.
 
