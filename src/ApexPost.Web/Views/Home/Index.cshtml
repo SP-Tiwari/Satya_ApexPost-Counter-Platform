@@ -1,4 +1,4 @@
-﻿@model ApexPost.Application.Services.BranchDashboard?
+﻿@model ApexPost.Web.Models.DashboardViewModel?
 @using ApexPost.Application.Courier
 @{
     ViewData["Title"] = "Branch dashboard";
@@ -14,7 +14,7 @@
     return;
 }
 
-<h1>@Model.Branch.Name (@Model.Branch.Code.Value)</h1>
+<h1>@Model.Branch.Name (@Model.Branch.Code)</h1>
 <p>
     Signed in as @Model.StaffName (@Model.Role).
     Branch status: <strong>@(Model.Branch.IsActive ? "Open" : "Closed")</strong>,
@@ -28,7 +28,7 @@
             <div class="card-body">
                 <h2 class="h5 card-title">Counters</h2>
                 <p class="card-text">
-                    @Model.ActiveCounterCount of @Model.Branch.CounterTerminals.Count
+                    @Model.Branch.ActiveCounterCount of @Model.Branch.CounterCount
                     counter terminals active.
                 </p>
                 @if (Model.Role is ApexPost.Domain.Enums.StaffRole.CounterClerk
@@ -64,11 +64,11 @@
                             <dt class="col-6">Transactions</dt>
                             <dd class="col-6">@sales.TransactionCount</dd>
                             <dt class="col-6">Retail</dt>
-                            <dd class="col-6">@totals.RetailSales.Amount @totals.RetailSales.Currency</dd>
+                            <dd class="col-6">@totals.RetailSales @totals.Currency</dd>
                             <dt class="col-6">Services</dt>
-                            <dd class="col-6">@totals.ServiceSales.Amount @totals.ServiceSales.Currency</dd>
+                            <dd class="col-6">@totals.ServiceSales @totals.Currency</dd>
                             <dt class="col-6">Total</dt>
-                            <dd class="col-6">@totals.TotalSales.Amount @totals.TotalSales.Currency</dd>
+                            <dd class="col-6">@totals.TotalSales @totals.Currency</dd>
                         </dl>
                     }
                     else
@@ -103,7 +103,7 @@
                 @foreach (var row in Model.LowStock)
                 {
                     <tr>
-                        <td>@row.ProductSku.Value</td>
+                        <td>@row.Sku</td>
                         <td>@row.Quantity</td>
                         <td>@row.Threshold</td>
                     </tr>

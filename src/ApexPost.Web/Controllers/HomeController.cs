@@ -14,8 +14,8 @@ public class HomeController(BranchDashboardApplicationService dashboard) : Contr
 
         try
         {
-            return View(await dashboard.GetDashboardAsync(
-                staffId, cancellationToken));
+            return View(DashboardViewModel.From(await dashboard.GetDashboardAsync(
+                staffId, cancellationToken)));
         }
         catch (UnauthorizedAccessException)
         {

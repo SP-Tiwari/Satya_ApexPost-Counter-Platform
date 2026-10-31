@@ -1,4 +1,3 @@
-using ApexPost.Application.Persistence;
 using ApexPost.Web.Filters;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -7,7 +6,7 @@ namespace ApexPost.Web.Controllers;
 [Authorize(Roles = nameof(StaffRole.Administrator))]
 [RequireAdminNetwork]
 [Route("[controller]/[action]")]
-public sealed class AdministrationController(AdministrationApplicationService administration) : Controller, IInvalidModelStateHandler
+public sealed class AdministrationController(AdministrationApplicationService administration, ScreenQueryApplicationService screens) : Controller, IInvalidModelStateHandler
 {
 	// Every administration form posts back to the Index page.
 	async Task<IActionResult?> IInvalidModelStateHandler.HandleInvalidModelStateAsync(ActionExecutingContext context) =>
@@ -18,7 +17,7 @@ public sealed class AdministrationController(AdministrationApplicationService ad
 	[HttpGet]
 	public async Task<IActionResult> Index(CancellationToken cancellationToken)
 	{
-		try { return View(ToModel(await administration.GetSnapshotAsync(StaffId(), cancellationToken))); }
+		try { return View(ToModel(await screens.GetAdministrationAsync(StaffId(), cancellationToken))); }
 		catch (UnauthorizedAccessException) { return Forbid(); }
 	}
 
@@ -75,7 +74,7 @@ public sealed class AdministrationController(AdministrationApplicationService ad
 	private async Task<IActionResult> BadFormAsync(CancellationToken cancellationToken)
 	{
 		Response.StatusCode = StatusCodes.Status400BadRequest;
-		return View(nameof(Index), ToModel(await administration.GetSnapshotAsync(StaffId(), cancellationToken)));
+		return View(nameof(Index), ToModel(await screens.GetAdministrationAsync(StaffId(), cancellationToken)));
 	}
-	private static AdministrationViewModel ToModel(ApexPostSnapshot snapshot) => new() { Branches = snapshot.Branches, Staff = snapshot.Staff, Products = snapshot.Products };
+	private static AdministrationViewModel ToModel(AdministrationScreen screen) => new() { Branches = screen.Branches, Staff = screen.Staff, Products = screen.Products };
 }

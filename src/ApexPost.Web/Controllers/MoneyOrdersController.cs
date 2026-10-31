@@ -6,7 +6,8 @@ namespace ApexPost.Web.Controllers;
 [Authorize(Policy = ApexPostPolicies.BranchManagerOnly)]
 [Route("[controller]/[action]")]
 public sealed class MoneyOrdersController(
-	MoneyOrderApplicationService moneyOrders) : Controller
+	MoneyOrderApplicationService moneyOrders,
+	ScreenQueryApplicationService screens) : Controller
 {
 	[HttpGet]
 	public async Task<IActionResult> Index(
@@ -21,10 +22,10 @@ public sealed class MoneyOrdersController(
 		if (string.IsNullOrWhiteSpace(staffId))
 			return Forbid();
 
-		IReadOnlyList<MoneyOrder> orders;
+		IReadOnlyList<ApexPost.Application.Persistence.MoneyOrderRow> orders;
 		try
 		{
-			orders = await moneyOrders.GetMoneyOrdersAsync(
+			orders = await screens.GetMoneyOrdersAsync(
 				staffId, cancellationToken);
 		}
 		catch (UnauthorizedAccessException)
@@ -33,14 +34,14 @@ public sealed class MoneyOrdersController(
 		}
 
 		return View(orders.Select(order => new MoneyOrderListItemViewModel(
-			order.Amount.Amount,
-			order.Amount.Currency,
+			order.Amount,
+			order.Currency,
 			order.Sender,
 			order.Recipient,
-			order.Fee.Amount,
-			order.IdentityVerification?.DocumentType,
-			order.IdentityVerification?.MaskedDocumentIdentifier,
-			order.IdentityVerification?.IsSuccessful,
+			order.Fee,
+			order.DocumentType,
+			order.MaskedDocumentIdentifier,
+			order.IsSuccessful,
 			order.Status)).ToArray());
 	}
 }

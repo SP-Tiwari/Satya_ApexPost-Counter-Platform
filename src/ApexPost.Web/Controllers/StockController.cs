@@ -6,7 +6,8 @@ namespace ApexPost.Web.Controllers;
 [Authorize(Policy = ApexPostPolicies.BranchManagerOnly)]
 [Route("[controller]/[action]")]
 public sealed class StockController(
-	StockAdjustmentApplicationService stockAdjustments)
+	StockAdjustmentApplicationService stockAdjustments,
+	ScreenQueryApplicationService screens)
 	: Controller, IInvalidModelStateHandler
 {
 	[HttpGet]
@@ -19,7 +20,7 @@ public sealed class StockController(
 
 		try
 		{
-			var catalog = await stockAdjustments.GetCatalogAsync(
+			var catalog = await screens.GetStockAsync(
 				staffId, cancellationToken);
 			return View(CreateViewModel(catalog));
 		}
@@ -127,11 +128,11 @@ public sealed class StockController(
 
 		try
 		{
-			var catalog = await stockAdjustments.GetCatalogAsync(
+			var catalog = await screens.GetStockAsync(
 				staffId, cancellationToken);
 			model.BranchName = catalog.Branch.Name;
-			model.BranchCode = catalog.Branch.Code.Value;
-			model.BranchStocks = catalog.BranchStocks;
+			model.BranchCode = catalog.Branch.Code;
+			model.BranchStocks = catalog.Stock;
 			Response.StatusCode = statusCode;
 			return View(nameof(Adjust), model);
 		}
@@ -146,11 +147,11 @@ public sealed class StockController(
 	}
 
 	private static StockAdjustmentViewModel CreateViewModel(
-		StockAdjustmentCatalog catalog) =>
+		StockScreen catalog) =>
 		new()
 		{
 			BranchName = catalog.Branch.Name,
-			BranchCode = catalog.Branch.Code.Value,
-			BranchStocks = catalog.BranchStocks
+			BranchCode = catalog.Branch.Code,
+			BranchStocks = catalog.Stock
 		};
 }

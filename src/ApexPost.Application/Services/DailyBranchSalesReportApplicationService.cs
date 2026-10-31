@@ -10,16 +10,21 @@ public sealed class DailyBranchSalesReportApplicationService
 
 	private readonly IStaffRepository _staff;
 	private readonly ICounterTransactionRepository _transactions;
+	private readonly IReportQueryService? _queries;
 	private readonly DailySalesReportService _reportService = new();
 
+	// Without it, the report is calculated from repository reads, which is what
+	// the unit tests use with their in-memory fakes.
 	public DailyBranchSalesReportApplicationService(
 		IStaffRepository staff,
-		ICounterTransactionRepository transactions)
+		ICounterTransactionRepository transactions,
+		IReportQueryService? queries = null)
 	{
 		ArgumentNullException.ThrowIfNull(staff);
 		ArgumentNullException.ThrowIfNull(transactions);
 		_staff = staff;
 		_transactions = transactions;
+		_queries = queries;
 	}
 
 	public async Task<IReadOnlyList<DailySalesReportRow>> GetReportAsync(
@@ -36,6 +41,16 @@ public sealed class DailyBranchSalesReportApplicationService
 			throw new UnauthorizedAccessException(DeniedMessage);
 
 		var branchCode = staff.HomeBranchCode;
+		if (_queries is not null)
+		{
+			var lines = await _queries
+				.GetPaidSaleLinesAsync(branchCode, businessDate, cancellationToken)
+				.ConfigureAwait(false);
+			return PaidSalesSummary.From(branchCode, businessDate, lines).Totals is { } totals
+				? [totals]
+				: [];
+		}
+
 		var baskets = await _transactions
 			.GetForBranchAsync(branchCode, cancellationToken)
 			.ConfigureAwait(false);

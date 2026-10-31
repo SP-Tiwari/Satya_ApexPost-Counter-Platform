@@ -11,18 +11,22 @@ namespace ApexPost.Web.Controllers;
 public sealed class TransactionsController : Controller, IInvalidModelStateHandler
 {
 	private readonly TransactionApplicationService _transactions;
+	private readonly ScreenQueryApplicationService _screens;
 	private readonly MixedBasketApplicationService _mixedBaskets;
 	private readonly IAuthorizationService _authorization;
 
 	public TransactionsController(
 		TransactionApplicationService transactions,
+		ScreenQueryApplicationService screens,
 		MixedBasketApplicationService mixedBaskets,
 		IAuthorizationService authorization)
 	{
 		ArgumentNullException.ThrowIfNull(transactions);
+		ArgumentNullException.ThrowIfNull(screens);
 		ArgumentNullException.ThrowIfNull(mixedBaskets);
 		ArgumentNullException.ThrowIfNull(authorization);
 		_transactions = transactions;
+		_screens = screens;
 		_mixedBaskets = mixedBaskets;
 		_authorization = authorization;
 	}
@@ -45,10 +49,10 @@ public sealed class TransactionsController : Controller, IInvalidModelStateHandl
 		if (string.IsNullOrWhiteSpace(staffId))
 			return Forbid();
 
-		IReadOnlyList<TransactionBasketSnapshot> transactions;
+		IReadOnlyList<ApexPost.Application.Persistence.TransactionDetail> transactions;
 		try
 		{
-			transactions = await _transactions.GetTransactionBasketsAsync(
+			transactions = await _screens.GetTransactionsAsync(
 				staffId, cancellationToken);
 		}
 		catch (UnauthorizedAccessException)
@@ -67,9 +71,9 @@ public sealed class TransactionsController : Controller, IInvalidModelStateHandl
 			.Select(basket => new TransactionListViewModel(
 				basket.Id,
 				basket.PaymentStatus,
-				basket.Total.Amount,
+				basket.Total,
 				basket.Currency,
-				basket.BranchCode?.Value))
+				basket.BranchCode))
 			.ToArray();
 		return View(model);
 	}
@@ -356,22 +360,22 @@ public sealed class TransactionsController : Controller, IInvalidModelStateHandl
 
 		try
 		{
-			var basket = await _transactions.GetTransactionBasketAsync(
+			var basket = await _screens.GetTransactionAsync(
 				transactionId, staffId, cancellationToken);
-			if (!await IsSameBranchAsync(basket.BranchCode?.Value))
+			if (!await IsSameBranchAsync(basket.BranchCode))
 				return Forbid();
 
-			var labels = basket.LineItems
-				.Select(item => item.ShippingItem)
-				.OfType<ShippingItem>()
+			var labels = basket.Lines
+				.Select(item => item.Shipment)
+				.OfType<ApexPost.Application.Persistence.ShipmentDetail>()
 				.Select(item => new ShippingLabelItemViewModel(
-					item.Id,
+					item.ShipmentId,
 					item.Type,
 					item.ServiceLevel,
-					item.Weight.Kilograms,
-					item.Dimensions.LengthCm,
-					item.Dimensions.WidthCm,
-					item.Dimensions.HeightCm,
+					item.WeightKilograms,
+					item.LengthCm,
+					item.WidthCm,
+					item.HeightCm,
 					item.DestinationZone))
 				.ToArray();
 			if (labels.Length == 0)
@@ -380,7 +384,7 @@ public sealed class TransactionsController : Controller, IInvalidModelStateHandl
 			return View(new ShippingLabelViewModel(
 				basket.Id,
 				basket.PaymentStatus,
-				basket.BranchCode!.Value,
+				basket.BranchCode!,
 				basket.OccurredAtUtc,
 				labels));
 		}
@@ -593,51 +597,42 @@ public sealed class TransactionsController : Controller, IInvalidModelStateHandl
 		string staffId,
 		CancellationToken cancellationToken)
 	{
-		var basket = await _transactions.GetTransactionBasketAsync(
+		var basket = await _screens.GetTransactionAsync(
 			transactionId,
 			staffId,
 			cancellationToken);
 		return new TransactionDetailsViewModel(
 			basket.Id,
 			basket.PaymentStatus,
-			basket.Subtotal.Amount,
-			basket.Tax.Amount,
-			basket.Total.Amount,
+			basket.Subtotal,
+			basket.Tax,
+			basket.Total,
 			basket.Currency,
-			basket.BranchCode?.Value,
-			basket.LineItems.Select(item => new TransactionLineViewModel(
+			basket.BranchCode,
+			basket.Lines.Select(item => new TransactionLineViewModel(
 				item.Description,
 				item.Type,
-				item.UnitPrice.Amount,
+				item.UnitPrice,
 				item.Quantity,
-				item.Subtotal.Amount,
-				item.UnitPrice.Currency,
-				item.ShippingItem is null
+				item.Subtotal,
+				item.Currency,
+				item.Shipment is null
 					? null
-					: $"{item.ShippingItem.Type}; {item.ShippingItem.Weight.Kilograms} kg; " +
-						$"{item.ShippingItem.Dimensions.LengthCm} x " +
-						$"{item.ShippingItem.Dimensions.WidthCm} x " +
-						$"{item.ShippingItem.Dimensions.HeightCm} cm; " +
-						$"{item.ShippingItem.DestinationZone}; " +
-						$"{item.ShippingItem.ServiceLevel}")).ToArray(),
-			basket.Notifications.Select(notification =>
-				new TransactionNotificationViewModel(
-					notification switch
-					{
-						TransactionVoidedNotification => "Voided",
-						TransactionRefundedNotification => "Refunded",
-						_ => notification.GetType().Name
-					},
-					notification switch
-					{
-						TransactionVoidedNotification voided => voided.Reason,
-						TransactionRefundedNotification refunded => refunded.Reason,
-						_ => string.Empty
-					})).ToArray(),
+					: $"{item.Shipment.Type}; {item.Shipment.WeightKilograms} kg; " +
+						$"{item.Shipment.LengthCm} x " +
+						$"{item.Shipment.WidthCm} x " +
+						$"{item.Shipment.HeightCm} cm; " +
+						$"{item.Shipment.DestinationZone}; " +
+						$"{item.Shipment.ServiceLevel}")).ToArray(),
+			basket.ReversalReason is { } reason
+				? [new TransactionNotificationViewModel(
+					basket.PaymentStatus.ToString(), reason)]
+				: [],
 			basket.OccurredAtUtc,
-			basket.SaleDetails?.CounterTerminalId,
-			basket.SaleDetails?.ClerkStaffId,
-			basket.SaleDetails?.PaymentMethod);
+			basket.CounterTerminalId,
+			basket.ClerkStaffId,
+			basket.PaymentMethod);
+
 	}
 
 	private async Task<CreateTransactionViewModel> BuildCreateViewModelAsync(
@@ -645,15 +640,13 @@ public sealed class TransactionsController : Controller, IInvalidModelStateHandl
 		string staffId,
 		CancellationToken cancellationToken)
 	{
-		var catalog = await _mixedBaskets.GetCatalogAsync(
+		var catalog = await _mixedBaskets.GetSaleFormAsync(
 			staffId, cancellationToken);
 		model.Products = catalog.Products;
 		model.Branch = catalog.Branch;
 		model.ShippingRates = catalog.ShippingRates;
 		model.MoneyOrders = catalog.MoneyOrders;
-		model.CounterTerminals = catalog.Branch.CounterTerminals
-			.Where(terminal => terminal.IsActive)
-			.ToArray();
+		model.CounterTerminals = catalog.Branch.ActiveCounters;
 		model.PaymentMethods = _mixedBaskets.PaymentMethods;
 		model.CanSubmit = _mixedBaskets.HasTaxRates &&
 			model.CounterTerminals.Count > 0 &&

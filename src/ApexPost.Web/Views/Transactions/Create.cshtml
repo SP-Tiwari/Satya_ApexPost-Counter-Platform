@@ -35,7 +35,7 @@
 
     @if (Model.Branch is not null)
     {
-        <p>Processing branch: @Model.Branch.Name (@Model.Branch.Code.Value)</p>
+        <p>Processing branch: @Model.Branch.Name (@Model.Branch.Code)</p>
     }
 
     <fieldset class="mb-4">
@@ -90,8 +90,8 @@
                             <option value="">No product</option>
                             @foreach (var product in Model.Products)
                             {
-                                <option value="@product.Sku.Value" selected="@(product.Sku.Value == selectedSku)">
-                                    @product.Name (@product.UnitPrice.Amount @product.UnitPrice.Currency)
+                                <option value="@product.Sku" selected="@(product.Sku == selectedSku)">
+                                    @product.Name (@product.UnitPrice @product.Currency)
                                 </option>
                             }
                         </select>
@@ -188,8 +188,8 @@
                 {
                     <li>
                         @rate.DestinationZone / @rate.ServiceLevel:
-                        @rate.BasePrice.Amount @rate.BasePrice.Currency base +
-                        @rate.PerKilogramCharge.Amount @rate.PerKilogramCharge.Currency per kg
+                        @rate.BasePrice @rate.BasePriceCurrency base +
+                        @rate.PerKilogramCharge @rate.PerKilogramChargeCurrency per kg
                     </li>
                 }
             </ul>
@@ -207,14 +207,14 @@
                 </label>
             </div>
             <p>
-                Fee: @moneyOrderTerms.Fee.Amount @moneyOrderTerms.Fee.Currency.
-                Amounts above @moneyOrderTerms.HighValueThreshold.Amount
-                @moneyOrderTerms.HighValueThreshold.Currency require a successful
+                Fee: @moneyOrderTerms.Fee @moneyOrderTerms.Currency.
+                Amounts above @moneyOrderTerms.HighValueThreshold
+                @moneyOrderTerms.Currency require a successful
                 identity verification, which the system performs.
             </p>
             <div class="mb-3">
                 <label asp-for="MoneyOrderAmount" class="form-label">
-                    Amount (@moneyOrderTerms.HighValueThreshold.Currency)
+                    Amount (@moneyOrderTerms.Currency)
                 </label>
                 <input asp-for="MoneyOrderAmount" type="number" min="0.01" step="0.01" class="form-control" />
                 <span asp-validation-for="MoneyOrderAmount" class="text-danger"></span>

@@ -17,7 +17,8 @@ public sealed record ParcelStatus(
 
 public sealed class ParcelStatusApplicationService(
 	ICounterTransactionRepository transactions,
-	ICourierTrackingService? courier = null)
+	ICourierTrackingService? courier = null,
+	IScreenQueryService? queries = null)
 {
 	private readonly ICounterTransactionRepository _transactions = transactions
 		?? throw new ArgumentNullException(nameof(transactions));
@@ -28,6 +29,10 @@ public sealed class ParcelStatusApplicationService(
 		CancellationToken cancellationToken = default)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(shipmentId);
+
+		if (queries is not null)
+			return await GetProjectedStatusAsync(queries, shipmentId, cancellationToken)
+				.ConfigureAwait(false);
 
 		var basket = await _transactions
 			.FindByShipmentIdAsync(shipmentId, cancellationToken)
@@ -52,6 +57,36 @@ public sealed class ParcelStatusApplicationService(
 			shipment.DestinationZone,
 			basket.OccurredAtUtc,
 			basket.PaymentStatus,
+			courierResult);
+	}
+
+	// The ID column ignores case and shipment IDs do not, so it is compared
+	// again after the query.
+	private async Task<ParcelStatus?> GetProjectedStatusAsync(
+		IScreenQueryService queries,
+		string shipmentId,
+		CancellationToken cancellationToken)
+	{
+		var parcel = await queries.FindParcelAsync(shipmentId, cancellationToken)
+			.ConfigureAwait(false);
+		if (parcel is null ||
+			!string.Equals(parcel.ShipmentId, shipmentId, StringComparison.Ordinal))
+		{
+			return null;
+		}
+
+		var courierResult = courier is null
+			? null
+			: await courier.GetTrackingAsync(parcel.ShipmentId, cancellationToken)
+				.ConfigureAwait(false);
+
+		return new ParcelStatus(
+			parcel.ShipmentId,
+			parcel.Type,
+			parcel.ServiceLevel,
+			parcel.DestinationZone,
+			parcel.AcceptedAtUtc,
+			parcel.TransactionStatus,
 			courierResult);
 	}
 }

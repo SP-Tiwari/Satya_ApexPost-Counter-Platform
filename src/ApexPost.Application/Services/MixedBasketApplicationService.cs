@@ -37,6 +37,17 @@ public sealed record MixedBasketCatalog(
 	IReadOnlyList<ShippingRate> ShippingRates,
 	MoneyOrderBasketSettings? MoneyOrders = null);
 
+public sealed record SaleFormMoneyOrderTerms(
+	decimal Fee,
+	decimal HighValueThreshold,
+	string Currency);
+
+public sealed record SaleForm(
+	SaleFormBranch Branch,
+	IReadOnlyList<SaleFormProduct> Products,
+	IReadOnlyList<SaleFormShippingRate> ShippingRates,
+	SaleFormMoneyOrderTerms? MoneyOrders);
+
 public sealed class MixedBasketApplicationService
 {
 	private const int MaximumSkuLength = 30;
@@ -60,6 +71,7 @@ public sealed class MixedBasketApplicationService
 	private readonly DomainEventPublisher? _events;
 	private readonly int? _lowStockThreshold;
 	private readonly IReadOnlyList<string> _paymentMethods;
+	private readonly IScreenQueryService? _queries;
 
 	public MixedBasketApplicationService(
 		IStaffRepository staff,
@@ -76,7 +88,8 @@ public sealed class MixedBasketApplicationService
 		IIdentityVerificationService? identityVerification = null,
 		DomainEventPublisher? events = null,
 		int? lowStockThreshold = null,
-		IReadOnlyCollection<string>? paymentMethods = null)
+		IReadOnlyCollection<string>? paymentMethods = null,
+		IScreenQueryService? queries = null)
 	{
 		ArgumentNullException.ThrowIfNull(staff);
 		ArgumentNullException.ThrowIfNull(branches);
@@ -92,6 +105,7 @@ public sealed class MixedBasketApplicationService
 		_stock = stock;
 		_transactions = transactions;
 		_unitOfWork = unitOfWork;
+		_queries = queries;
 		_timeProvider = timeProvider ?? TimeProvider.System;
 		var validatedTaxRates = new Dictionary<TaxCategory, decimal>();
 		foreach (var (category, rate) in taxRates)
@@ -208,6 +222,45 @@ public sealed class MixedBasketApplicationService
 					_taxRates.ContainsKey(_shippingTaxCategory.Value))
 				.ToArray()),
 			MoneyOrdersAvailable ? _moneyOrderSettings : null);
+	}
+
+	// The same access checks and filters as GetCatalogAsync, as DTOs.
+	public async Task<SaleForm> GetSaleFormAsync(
+		string staffId,
+		CancellationToken cancellationToken = default)
+	{
+		var queries = _queries ?? throw new InvalidOperationException(
+			"The sale form needs a screen query service.");
+		var staff = await FindActiveSalesStaffAsync(staffId, cancellationToken)
+			.ConfigureAwait(false);
+		var branch = await queries
+			.FindSaleBranchAsync(staff.HomeBranchCode, cancellationToken)
+			.ConfigureAwait(false)
+			?? throw new KeyNotFoundException(
+				$"Branch '{staff.HomeBranchCode}' was not found.");
+		if (!branch.IsActive)
+			throw new InvalidOperationException(
+				"Transactions cannot be processed at an inactive branch.");
+
+		var products = await queries.GetSaleProductsAsync(cancellationToken)
+			.ConfigureAwait(false);
+		var shippingRates = await queries.GetSaleShippingRatesAsync(cancellationToken)
+			.ConfigureAwait(false);
+		return new SaleForm(
+			branch,
+			Array.AsReadOnly(products
+				.Where(product => _taxRates.ContainsKey(product.TaxCategory))
+				.ToArray()),
+			Array.AsReadOnly(shippingRates
+				.Where(_ => _shippingTaxCategory is not null &&
+					_taxRates.ContainsKey(_shippingTaxCategory.Value))
+				.ToArray()),
+			MoneyOrdersAvailable
+				? new SaleFormMoneyOrderTerms(
+					_moneyOrderSettings!.Fee.Amount,
+					_moneyOrderSettings.HighValueThreshold.Amount,
+					_moneyOrderSettings.HighValueThreshold.Currency)
+				: null);
 	}
 
 	// Records no counter, clerk, or payment method; counter sales use the

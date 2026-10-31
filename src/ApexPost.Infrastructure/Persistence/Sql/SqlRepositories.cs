@@ -21,6 +21,7 @@ public sealed class SqlBranchRepository(ApexPostDbContext database)
 	public async Task<IReadOnlyList<Branch>> GetBranchesAsync(
 		CancellationToken cancellationToken = default) =>
 		await database.Branches
+			.AsNoTracking()
 			.Include(branch => branch.CounterTerminals)
 			.ToArrayAsync(cancellationToken)
 			.ConfigureAwait(false);
@@ -50,12 +51,14 @@ public sealed class SqlProductRepository(ApexPostDbContext database)
 	public async Task<IReadOnlyList<Product>> GetProductsAsync(
 		CancellationToken cancellationToken = default) =>
 		await database.Products
+			.AsNoTracking()
 			.ToArrayAsync(cancellationToken)
 			.ConfigureAwait(false);
 
 	public async Task<IReadOnlyList<ShippingRate>> GetShippingRatesAsync(
 		CancellationToken cancellationToken = default) =>
 		await database.ShippingRates
+			.AsNoTracking()
 			.ToArrayAsync(cancellationToken)
 			.ConfigureAwait(false);
 
@@ -96,6 +99,7 @@ public sealed class SqlStockRepository(ApexPostDbContext database)
 		BranchCode branchCode,
 		CancellationToken cancellationToken = default) =>
 		await database.BranchStock
+			.AsNoTracking()
 			.Where(stock => stock.BranchCode == branchCode)
 			.ToArrayAsync(cancellationToken)
 			.ConfigureAwait(false);
@@ -140,11 +144,28 @@ public sealed class SqlCounterTransactionRepository(ApexPostDbContext database)
 		return basket;
 	}
 
+	public async Task<TransactionBasket?> FindForReadAsync(
+		Guid transactionId,
+		CancellationToken cancellationToken = default)
+	{
+		var basket = await WholeBaskets()
+			.AsNoTracking()
+			.SingleOrDefaultAsync(
+				candidate => candidate.Id == transactionId, cancellationToken)
+			.ConfigureAwait(false);
+		if (basket is not null)
+			await RestoreVerificationsAsync(MoneyOrdersOf([basket]), cancellationToken)
+				.ConfigureAwait(false);
+
+		return basket;
+	}
+
 	public async Task<IReadOnlyList<TransactionBasket>> GetForBranchAsync(
 		BranchCode branchCode,
 		CancellationToken cancellationToken = default)
 	{
 		var baskets = await WholeBaskets()
+			.AsNoTracking()
 			.Where(basket => basket.BranchCode == branchCode)
 			.ToArrayAsync(cancellationToken)
 			.ConfigureAwait(false);
@@ -158,6 +179,7 @@ public sealed class SqlCounterTransactionRepository(ApexPostDbContext database)
 		CancellationToken cancellationToken = default)
 	{
 		var moneyOrders = await database.MoneyOrders
+			.AsNoTracking()
 			.Where(order => order.ProcessingBranchCode == branchCode)
 			.ToArrayAsync(cancellationToken)
 			.ConfigureAwait(false);
@@ -170,6 +192,7 @@ public sealed class SqlCounterTransactionRepository(ApexPostDbContext database)
 		CancellationToken cancellationToken = default)
 	{
 		var moneyOrders = await database.MoneyOrders
+			.AsNoTracking()
 			.ToArrayAsync(cancellationToken)
 			.ConfigureAwait(false);
 		await RestoreVerificationsAsync(moneyOrders, cancellationToken)
@@ -180,6 +203,7 @@ public sealed class SqlCounterTransactionRepository(ApexPostDbContext database)
 	public async Task<IReadOnlyList<ShippingItem>> GetShipmentsAsync(
 		CancellationToken cancellationToken = default) =>
 		await database.Shipments
+			.AsNoTracking()
 			.ToArrayAsync(cancellationToken)
 			.ConfigureAwait(false);
 
@@ -188,6 +212,7 @@ public sealed class SqlCounterTransactionRepository(ApexPostDbContext database)
 		CancellationToken cancellationToken = default)
 	{
 		var basket = await WholeBaskets()
+			.AsNoTracking()
 			.SingleOrDefaultAsync(
 				candidate => candidate.LineItems.Any(
 					line => line.ShippingItem!.Id == shipmentId),
@@ -284,6 +309,7 @@ public sealed class SqlStaffRepository(ApexPostDbContext database)
 	public async Task<IReadOnlyList<Staff>> GetStaffAsync(
 		CancellationToken cancellationToken = default) =>
 		await database.Staff
+			.AsNoTracking()
 			.ToArrayAsync(cancellationToken)
 			.ConfigureAwait(false);
 

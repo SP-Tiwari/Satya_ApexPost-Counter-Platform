@@ -12,6 +12,12 @@ public interface ICounterTransactionRepository
 		Guid transactionId,
 		CancellationToken cancellationToken = default);
 
+	// For read screens: the same transaction, not tracked for changes.
+	Task<TransactionBasket?> FindForReadAsync(
+		Guid transactionId,
+		CancellationToken cancellationToken = default) =>
+		FindAsync(transactionId, cancellationToken);
+
 	Task<IReadOnlyList<TransactionBasket>> GetForBranchAsync(
 		BranchCode branchCode,
 		CancellationToken cancellationToken = default);

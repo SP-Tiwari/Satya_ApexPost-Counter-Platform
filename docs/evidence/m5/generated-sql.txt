@@ -1,0 +1,71 @@
+-- PaidSaleLines (daily sales and dashboard)
+DECLARE @branchCode varchar(10) = 'DM01';
+DECLARE @start datetime2 = '2026-10-31T00:00:00.0000000Z';
+DECLARE @end datetime2 = '2026-11-01T00:00:00.0000000Z';
+
+SELECT [c].[TransactionId], [c].[Currency], [t].[LineType], [t].[UnitPrice], [t].[Quantity], (
+    SELECT TOP(1) [t0].[Rate]
+    FROM [TransactionTaxRates] AS [t0]
+    WHERE [c].[TransactionId] = [t0].[TransactionId] AND [t0].[TaxCategory] = [t].[TaxCategory]), [t].[ShipmentId]
+FROM [CounterTransactions] AS [c]
+INNER JOIN [TransactionLines] AS [t] ON [c].[TransactionId] = [t].[TransactionId]
+WHERE [c].[BranchCode] = @branchCode AND [c].[Status] = 'Paid' AND [c].[OccurredAtUtc] >= @start AND [c].[OccurredAtUtc] < @end
+ORDER BY [c].[OccurredAtUtc] DESC, [c].[TransactionId], [t].[TransactionLineId]
+
+-- ShippingVolume
+SELECT [s].[ZoneCode], [s].[ServiceLevel], COUNT(*)
+FROM [Shipments] AS [s]
+GROUP BY [s].[ZoneCode], [s].[ServiceLevel]
+
+-- BranchAuditorReport
+SELECT [m].[ProcessingBranchCode], COUNT(*), COUNT(CASE
+    WHEN [i].[IsSuccessful] IS NOT NULL THEN 1
+END), COUNT(CASE
+    WHEN [i].[IsSuccessful] = CAST(1 AS bit) THEN 1
+END), COUNT(CASE
+    WHEN [i].[IsSuccessful] = CAST(0 AS bit) THEN 1
+END), COUNT(CASE
+    WHEN [m].[Status] = 'Cancelled' THEN 1
+END)
+FROM [MoneyOrders] AS [m]
+LEFT JOIN [IdentityVerifications] AS [i] ON [m].[MoneyOrderId] = [i].[MoneyOrderId]
+GROUP BY [m].[ProcessingBranchCode]
+
+-- Transaction (transaction detail)
+DECLARE @transactionId uniqueIdentifier = '00000000-0000-0000-0000-000000000000';
+
+SELECT [c].[TransactionId], [c].[Currency], [c].[BranchCode], [c].[Status], [c].[ReversalReason], [c].[OccurredAtUtc], [c].[CounterId], [c].[ClerkStaffId], [c].[PaymentMethod], [s0].[Description], [s0].[LineType], [s0].[UnitPrice], [s0].[Currency], [s0].[Quantity], [s0].[c], [s0].[c0], [s0].[ShipmentId], [s0].[ShipmentType], [s0].[ServiceLevel], [s0].[WeightKg], [s0].[LengthCm], [s0].[WidthCm], [s0].[HeightCm], [s0].[ZoneCode], [s0].[TransactionLineId]
+FROM [CounterTransactions] AS [c]
+OUTER APPLY (
+    SELECT [t].[Description], [t].[LineType], [t].[UnitPrice], [t].[Currency], [t].[Quantity], (
+        SELECT TOP(1) [t0].[Rate]
+        FROM [TransactionTaxRates] AS [t0]
+        WHERE [c].[TransactionId] = [t0].[TransactionId] AND [t0].[TaxCategory] = [t].[TaxCategory]) AS [c], CASE
+        WHEN [s].[ShipmentId] IS NULL THEN CAST(1 AS bit)
+        ELSE CAST(0 AS bit)
+    END AS [c0], [s].[ShipmentId], [s].[ShipmentType], [s].[ServiceLevel], [s].[WeightKg], [s].[LengthCm], [s].[WidthCm], [s].[HeightCm], [s].[ZoneCode], [t].[TransactionLineId]
+    FROM [TransactionLines] AS [t]
+    LEFT JOIN [Shipments] AS [s] ON [t].[ShipmentId] = [s].[ShipmentId]
+    WHERE [c].[TransactionId] = [t].[TransactionId]
+) AS [s0]
+WHERE [c].[TransactionId] = @transactionId
+ORDER BY [c].[TransactionId], [s0].[TransactionLineId]
+
+-- MoneyOrders
+DECLARE @branchCode varchar(10) = 'DM01';
+
+SELECT [m].[Amount], [m].[Currency], [m].[Sender], [m].[Recipient], [m].[Fee], [i].[DocumentType], [i].[MaskedDocumentIdentifier], [i].[IsSuccessful], [m].[Status]
+FROM [MoneyOrders] AS [m]
+LEFT JOIN [IdentityVerifications] AS [i] ON [m].[MoneyOrderId] = [i].[MoneyOrderId]
+WHERE [m].[ProcessingBranchCode] = @branchCode
+ORDER BY [m].[MoneyOrderId]
+
+-- Parcel
+DECLARE @shipmentId varchar(50) = 'SHIP-1';
+
+SELECT [s].[ShipmentId], [s].[ShipmentType], [s].[ServiceLevel], [s].[ZoneCode], [c].[OccurredAtUtc], [c].[Status]
+FROM [CounterTransactions] AS [c]
+INNER JOIN [TransactionLines] AS [t] ON [c].[TransactionId] = [t].[TransactionId]
+LEFT JOIN [Shipments] AS [s] ON [t].[ShipmentId] = [s].[ShipmentId]
+WHERE [t].[ShipmentId] = @shipmentId
+

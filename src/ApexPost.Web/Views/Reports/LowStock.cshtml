@@ -1,4 +1,4 @@
-@model IReadOnlyList<ApexPost.Domain.Reporting.LowStockReportRow>
+@model IReadOnlyList<ApexPost.Web.Models.LowStockRowViewModel>
 
 @{
     ViewData["Title"] = "Low-stock report";
@@ -26,8 +26,8 @@ else
             @foreach (var row in Model)
             {
                 <tr>
-                    <td>@row.BranchCode.Value</td>
-                    <td>@row.ProductSku.Value</td>
+                    <td>@row.BranchCode</td>
+                    <td>@row.Sku</td>
                     <td>@row.Quantity</td>
                     <td>@row.Threshold</td>
                 </tr>

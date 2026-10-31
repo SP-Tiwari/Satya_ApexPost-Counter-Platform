@@ -33,7 +33,7 @@
 
 **Migrated in M3, with the minimum change:** the report services, `BranchDashboardApplicationService`, `ParcelStatusApplicationService` and `ReferenceDataCache`.
 
-**Where direct `DbContext` use is acceptable:** only in Infrastructure. M5's query services may project directly from the `DbContext`, behind Application interfaces.
+**Where direct `DbContext` use is acceptable:** only in Infrastructure. `SqlReportQueryService` projects directly from the `DbContext`, behind `IReportQueryService`, and returns rows, never `IQueryable`.
 
 **Recording money movements (`Payments`):** this section separates what the brief requires from what the code does.
 
@@ -68,5 +68,5 @@ Voiding an open basket writes nothing. A basket without sale details, or with a 
 ## Consequences
 
 - A catalogue page reads sequentially instead of in parallel, because a `DbContext` cannot run two operations at once.
-- Reports, the dashboard and parcel status load whole lists through repositories and calculate in memory. M5 replaces these with optimized query services. See the plan.
+- Reports and the dashboard use query services since M5 ([DESIGN.md section 4.8](../../DESIGN.md#48-query-services-and-read-projections)). Parcel status still loads its transaction, untracked, through the repository.
 - `IApexPostRepository`, `ApexPostSnapshot` and the JSON stores remain, unused by the application, because existing tests compile against them. `AdministrationApplicationService.GetSnapshotAsync` still returns `ApexPostSnapshot` as a simple container.

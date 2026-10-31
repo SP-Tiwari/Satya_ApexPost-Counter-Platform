@@ -152,6 +152,8 @@ The original conditions moved, because M2 kept the Web application on JSON and d
 
 **Done when:** reports return expected totals through real SQL, and `ToQueryString()` output is saved for 3+ queries.
 
+**M5 result:** see [DESIGN.md section 4.8](../DESIGN.md#48-query-services-and-read-projections) and [PERFORMANCE.md](../PERFORMANCE.md). `PERFORMANCE.md` starts here with the N+1 and generated SQL evidence, and M6 adds the rest.
+
 ### M6: Performance evidence (Part C): 15 marks
 
 - Build a separate `ApexPostDb_Perf` database **on E:** with a repeatable set-based data generator, sized for millions of rows.

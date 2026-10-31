@@ -21,8 +21,8 @@
             <option value="">Select a product</option>
             @foreach (var stock in Model.BranchStocks)
             {
-                <option value="@stock.ProductSku.Value">
-                    @stock.ProductSku.Value (current quantity: @stock.Quantity)
+                <option value="@stock.Sku">
+                    @stock.Sku (current quantity: @stock.Quantity)
                 </option>
             }
         </select>
@@ -57,7 +57,7 @@ else
             @foreach (var stock in Model.BranchStocks)
             {
                 <tr>
-                    <td>@stock.ProductSku.Value</td>
+                    <td>@stock.Sku</td>
                     <td>@stock.Quantity</td>
                 </tr>
             }

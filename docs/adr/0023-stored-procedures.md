@@ -61,13 +61,13 @@ A test runs a real sale and `usp_AdjustStock` as a user holding only this role, 
 
 ## Alternatives considered
 
-- **LINQ for all three.** Reports could be LINQ, and M5 still may use it for others, but Part D requires these procedures, and LINQ gives no `EXECUTE`-only boundary for non-application callers.
+- **LINQ for all three.** Reports can be LINQ, and M5 uses it for three of them, but Part D requires these procedures, and LINQ gives no `EXECUTE`-only boundary for non-application callers.
 - **Route the stock screen through `usp_AdjustStock`.** Not done. `StockAdjustmentApplicationService` raises the low-stock event from the domain, which a procedure cannot do, and M4 must keep existing behaviour.
 
 ## Consequences
 
 - **The adjustment rules exist twice:** in the domain and in `usp_AdjustStock`. Tests cover each rule in the procedure, but a change to the rule must be made in both places.
-- **No screen uses the procedures yet.** M5 decides how reports use `usp_DailyBranchSales` and `usp_LowStockReport`. The stock screen stays on the domain path.
+- **Screen use since M5.** `usp_LowStockReport` backs the low-stock report and dashboard. `usp_DailyBranchSales` is not on a screen, because it rounds and those pages show unrounded amounts. The stock screen stays on the domain path, so `usp_AdjustStock` is not on one either.
 - **`usp_AdjustStock` raises no low-stock event.**
 - **A retry risk for `usp_AdjustStock`:** the call goes through the context's execution strategy. If a connection failed after the commit and before the reply, a transient-failure retry could apply it twice. It has no idempotency key because its parameters are fixed by the brief. A caller should check `StockAdjustments` after a connection failure.
 - An EF Core read taken before `usp_AdjustStock` becomes stale, because the rowversion changes, so a later `SaveChanges` gets the normal conflict. A test covers this.

@@ -26,7 +26,7 @@ public sealed class ReportsController(
 				reportDate,
 				cancellationToken);
 			ViewData["BusinessDate"] = reportDate;
-			return View(report);
+			return View(report.Select(DailySalesRowViewModel.From).ToArray());
 		}
 		catch (UnauthorizedAccessException)
 		{
@@ -48,7 +48,7 @@ public sealed class ReportsController(
 		{
 			var report = await branchAuditorReports.GetReportAsync(
 				staffId, cancellationToken);
-			return View(report);
+			return View(report.Select(BranchAuditorRowViewModel.From).ToArray());
 		}
 		catch (UnauthorizedAccessException)
 		{
@@ -70,7 +70,7 @@ public sealed class ReportsController(
 		{
 			var report = await shippingVolumeReports.GetReportAsync(
 				staffId, cancellationToken);
-			return View(report);
+			return View(report.Select(ShippingVolumeRowViewModel.From).ToArray());
 		}
 		catch (UnauthorizedAccessException)
 		{
@@ -91,7 +91,7 @@ public sealed class ReportsController(
 		{
 			var report = await lowStockReports.GetReportAsync(
 				staffId, cancellationToken);
-			return View(report);
+			return View(report.Select(LowStockRowViewModel.From).ToArray());
 		}
 		catch (UnauthorizedAccessException)
 		{

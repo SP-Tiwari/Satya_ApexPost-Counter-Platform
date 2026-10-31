@@ -252,22 +252,24 @@ builder.Services.AddScoped<LowStockReportApplicationService>(services =>
 	new LowStockReportApplicationService(
 		services.GetRequiredService<IStaffRepository>(),
 		services.GetRequiredService<IStockRepository>(),
-		lowStockThreshold));
+		lowStockThreshold,
+		services.GetRequiredService<IReportQueryService>()));
 builder.Services.AddScoped<BranchDashboardApplicationService>(services =>
 	new BranchDashboardApplicationService(
 		services.GetRequiredService<IStaffRepository>(),
-		services.GetRequiredService<IBranchRepository>(),
-		services.GetRequiredService<IStockRepository>(),
-		services.GetRequiredService<ICounterTransactionRepository>(),
+		services.GetRequiredService<IReportQueryService>(),
+		services.GetRequiredService<IScreenQueryService>(),
 		services.GetRequiredService<ReferenceDataCache>(),
 		services.GetRequiredService<TimeProvider>(),
 		lowStockThreshold,
 		services.GetService<ICourierTrackingService>()));
 builder.Services.AddScoped<ProductCatalogueApplicationService>();
+builder.Services.AddScoped<ScreenQueryApplicationService>();
 builder.Services.AddScoped<ParcelStatusApplicationService>(services =>
 	new ParcelStatusApplicationService(
 		services.GetRequiredService<ICounterTransactionRepository>(),
-		services.GetService<ICourierTrackingService>()));
+		services.GetService<ICourierTrackingService>(),
+		services.GetRequiredService<IScreenQueryService>()));
 builder.Services.AddScoped<ShippingVolumeReportApplicationService>();
 builder.Services.AddScoped<BranchAuditorReportApplicationService>();
 builder.Services.AddScoped<DailyBranchSalesReportApplicationService>();
@@ -468,7 +470,8 @@ builder.Services.AddScoped<MixedBasketApplicationService>(services =>
 		services.GetService<IIdentityVerificationService>(),
 		services.GetRequiredService<DomainEventPublisher>(),
 		lowStockThreshold,
-		configuredPaymentMethods));
+		configuredPaymentMethods,
+		services.GetRequiredService<IScreenQueryService>()));
 
 var signInPermitLimit = builder.Configuration.GetValue<int>(
 	"Authentication:SignInRateLimit:PermitLimit", 5);

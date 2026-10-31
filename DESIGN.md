@@ -570,7 +570,7 @@ Week 3 M3 moved the Web application from JSON to SQL Server. `Program.cs` requir
 
 | Concern | Implementation |
 |---|---|
-| Reports, dashboard, parcel status | The Domain report classes are unchanged, and now read through repositories, calculating in memory. M5 replaces these with optimized query services |
+| Reports, dashboard, parcel status | The Domain report classes are unchanged. M3 read through repositories and calculated in memory; M5 moved production reads to query services ([section 4.8](#48-query-services-and-read-projections)) |
 | Added repository reads | `GetMoneyOrdersAsync`, `GetShipmentsAsync`, `FindByShipmentIdAsync` |
 | `ReferenceDataCache` | Loads through `IReferenceDataSource`. `SqlReferenceDataSource` opens a short-lived scope, because the cache is a singleton |
 | Audit | `SqlAuditStore`, in its own scope and commit ([ADR 0022](docs/adr/0022-audit-store-and-unit-of-work.md)) |
@@ -600,7 +600,7 @@ Verified on 2026-10-31 by running the real application over HTTPS against a disp
 
 ### 4.7 T-SQL reports, procedures and concurrency
 
-M4 adds the hand-written T-SQL. It changes no screen: the application still uses the reads from M3, and M5 moves reports to query services or procedures.
+M4 adds the hand-written T-SQL. It changed no screen. [Section 4.8](#48-query-services-and-read-projections) covers how M5 uses it.
 
 | Folder | Contents |
 |---|---|
@@ -655,6 +655,65 @@ Evidence is saved in [docs/evidence/m4](docs/evidence/m4/README.md). Tests are i
 | E: follow-up migration | `20261031124843_AddStoredProcedures` | ADR 0023 | Applied by every SQL test; idempotent script applied twice (`schema.txt`); `Procedures_AreDeployedByTheMigrationFromTheRepositoryFiles` |
 
 **Test status after M4:** the whole solution builds with 0 warnings, and all 662 tests pass: Domain 224, Application 120, Infrastructure 114, Web 204.
+
+### 4.8 Query services and read projections
+
+**Query and command separation.** Reports and dashboard reads go through `IReportQueryService` (Application) and `SqlReportQueryService` (Infrastructure). Writes go through the application services, with repositories and the unit of work. Both use the same `ApexPostDb` database: **no separate databases are required.**
+
+| Read | Path | Why |
+|---|---|---|
+| Daily sales, dashboard sales | `PaidSaleLines`: an `AsNoTracking` projection of paid lines, totalled by `PaidSalesSummary` | Amounts on these pages are unrounded, so `usp_DailyBranchSales`, which rounds, would change what users see. Summing in C# keeps the exact decimals and the existing rules |
+| Low stock, dashboard low stock | `usp_LowStockReport` through `IStoredProcedures` | The same rule as the Domain report, with a plan suited to the branch filter ([ADR 0023](docs/adr/0023-stored-procedures.md)) |
+| Shipping volume | `ShippingVolume`: `GROUP BY` projection | SQL counts, so no shipment is loaded |
+| Branch auditor | `BranchAuditorReport`: `LeftJoin` and `GROUP BY` projection | SQL counts, so no money order is loaded |
+
+The services keep their authorization checks and return the same report rows, so controllers and views did not change.
+
+**Working screens** read through `ScreenQueryApplicationService` and `IScreenQueryService` (`SqlScreenQueryService`). The service applies the same access checks and errors as the service that owns each screen's commands, then returns DTOs. Controllers and views use only those DTOs.
+
+| Screen | Projection |
+|---|---|
+| Catalogue | `Stock` and `FindBranchAsync`. Product details still come from the reference-data cache, and are copied into `CatalogueScreenRow` |
+| Stock adjustment | `Stock` and `FindBranchAsync` |
+| Money orders | `MoneyOrders`: a `LeftJoin` to `IdentityVerifications`, reading the stored mask only |
+| Transaction detail, label, JSON summary | `Transaction`: one `Select`, with lines, shipment columns and a scalar tax-rate subquery. `TransactionDetail` calculates totals by the basket's rules |
+| Transaction list | `Transactions`: the same projection with `AsSplitQuery`, because a list would otherwise repeat each transaction for every line |
+| Administration | `GetBranchesAsync`, `GetStaffAsync`, `GetProductsAsync` |
+| Parcel status | `Parcel`, through the existing `ParcelStatusApplicationService` and its `ParcelStatus` record |
+| Sale form | `FindSaleBranchAsync`, `GetSaleProductsAsync`, `GetSaleShippingRatesAsync`, through `MixedBasketApplicationService.GetSaleFormAsync`, which applies the same access checks and tax filters as `GetCatalogAsync` |
+| Dashboard branch | `FindDashboardBranchAsync`, which counts counters in SQL. `BranchDashboardApplicationService` now reads only through query services, and `HomeController` maps its result to `DashboardViewModel` |
+| Report pages | The report services keep their signatures and Domain rows. `ReportsController` maps each row to a presentation DTO in `ReportViewModels.cs` |
+
+`TransactionAccessRule` gained a `CanView` overload that takes a transaction's stored facts, so the rule is applied without loading a basket. The rule itself did not change.
+
+**Domain read methods kept for the unit tests.** Tests call `GetCatalogueAsync`, both `GetCatalogAsync` methods, `GetMoneyOrdersAsync`, `GetTransactionBasketAsync`, `GetTransactionBasketsAsync`, `GetSnapshotAsync` and the repository path of `GetStatusAsync`, so they remain. No controller calls them.
+
+**Every view now binds to a DTO or view model.** Repository lists stay `AsNoTracking` for the kept methods. Product details in the catalogue still come from the reference-data cache, and are copied into DTOs.
+
+| Repository reads | Change |
+|---|---|
+| `GetBranchesAsync`, `GetProductsAsync`, `GetShippingRatesAsync`, stock `GetForBranchAsync`, transaction `GetForBranchAsync`, `GetMoneyOrdersForBranchAsync`, `GetMoneyOrdersAsync`, `GetShipmentsAsync`, `FindByShipmentIdAsync`, `GetStaffAsync`, `FindForReadAsync` | `AsNoTracking`. `FindAsync` stays tracked, because void, refund and sale processing change what it loads |
+
+**Tracked queries that stay.** `Include` remains only for whole aggregates. Commands need tracking, and `FindByIdAsync` and `FindByCodeAsync` are shared by commands and permission checks, so each request still tracks its staff row, and the dashboard its branch and counters.
+
+**Split queries.** `WholeBaskets()` uses `AsSplitQuery`, because a transaction joins lines, shipments and money orders, which would otherwise repeat its columns for every row. Projections do not need one: `PaidSaleLines` joins one collection, and its tax rate is a scalar subquery. `GetBranchesAsync` includes a single small collection, so it stays one query.
+
+**N+1.** `appsettings.Development.json` logs `Microsoft.EntityFrameworkCore.Database.Command` at Information level. [PERFORMANCE.md](PERFORMANCE.md#the-n1-problem-and-how-it-is-resolved) has the demonstration: 55 commands for a naive loop, 4 for the real read, with the same result.
+
+#### M5 traceability
+
+| Assignment requirement | Implementation | Documentation | Verification evidence |
+|---|---|---|---|
+| E: `AsNoTracking` projections | `SqlReportQueryService`, `SqlScreenQueryService`, repository read lists | This section | [query-counts.txt](docs/evidence/m5/query-counts.txt), [screen-parity.txt](docs/evidence/m5/screen-parity.txt): tracked entries fall to the one staff row, and output matches |
+| E: `Include` only for aggregates | `WholeBaskets()`, `SqlBranchRepository` | This section | Code review of `SqlRepositories.cs` |
+| E: `AsSplitQuery` | `WholeBaskets()`, `Transactions` | This section | 4 commands for 42 sales; 3 for the 42-row transaction list |
+| E: no N+1, proven by logging | `appsettings.Development.json` | PERFORMANCE.md | 55 commands against 4 |
+| E: `ToQueryString()` for 3+ queries | `PaidSaleLines`, `ShippingVolume`, `BranchAuditorReport` | PERFORMANCE.md | [generated-sql.txt](docs/evidence/m5/generated-sql.txt) |
+| F: query and command separation, no separate databases | `IReportQueryService` | This section, [ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md) | Stated above |
+| G: reports use query services or procedures | The four report services and the dashboard | This section | Web report tests pass on the new path; old and new output identical |
+| F: response DTOs for every screen | `IScreenQueryService`, `ScreenQueryApplicationService` | This section | Nine reads compared with the old path: same output |
+
+**Test status after M5:** the whole solution builds with 0 warnings, and all 662 tests pass with no test file changed.
 
 ## 5. HTTP pipeline
 
@@ -839,7 +898,9 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 - **Single-process persistence:** the persistence lock and partner rate limiting are single-process, and there is one shared partner key.
 - **Audit gaps:** the audit omits pre-MVC rejections (authorization, antiforgery, rate limit, IP checks); the framework logs them instead.
 - **No measurements:** none are recorded for the cache or dashboard.
-- **Stored procedures are not on a screen yet:** they are tested and callable through `IStoredProcedures`, but no screen uses them ([ADR 0023](docs/adr/0023-stored-procedures.md)). `usp_AdjustStock` repeats the domain's adjustment rules and raises no low-stock event.
+- **Two stored procedures are not on a screen:** `usp_LowStockReport` backs the low-stock report and dashboard, but `usp_DailyBranchSales` and `usp_AdjustStock` are only callable through `IStoredProcedures` ([ADR 0023](docs/adr/0023-stored-procedures.md)). `usp_AdjustStock` repeats the domain's adjustment rules and raises no low-stock event.
+- **Domain read methods are kept for tests:** see [section 4.8](#48-query-services-and-read-projections). Web tests cover the DTO paths, and the unit tests still cover the kept methods.
+- **Two read paths in the report services:** without `IReportQueryService`, a report service still calculates from repository reads. Only the unit tests use that path, so production query code is covered by the Web tests.
 - **Refund amounts can differ from payments:** on SQL Server, a `Refund` entry for a sale with a shipping price of more than 2 decimals can differ from its `Payment` entry by about one minor currency unit. `KnownDefect_RefundOfASaleWithShippingCanDifferFromItsPayment` pins it. The fix waits for trainer confirmation of the `Refund` entries ([ADR 0017](docs/adr/0017-money-precision-and-rounding.md)).
 
 ## 15. Decision records

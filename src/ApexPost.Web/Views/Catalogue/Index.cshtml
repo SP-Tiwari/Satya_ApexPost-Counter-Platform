@@ -1,4 +1,4 @@
-@model ApexPost.Application.Services.ProductCatalogue
+@model ApexPost.Application.Services.CatalogueScreen
 @{
     ViewData["Title"] = "Product catalogue";
 }
@@ -27,11 +27,11 @@ else
             @foreach (var row in Model.Rows)
             {
                 <tr>
-                    <td>@row.Product.Sku</td>
-                    <td>@row.Product.Name</td>
-                    <td>@row.Product.Category</td>
-                    <td>@row.Product.UnitPrice.Amount @row.Product.UnitPrice.Currency</td>
-                    <td>@row.Product.TaxCategory</td>
+                    <td>@row.Sku</td>
+                    <td>@row.Name</td>
+                    <td>@row.Category</td>
+                    <td>@row.UnitPrice @row.Currency</td>
+                    <td>@row.TaxCategory</td>
                     <td>@(row.QuantityOnHand?.ToString() ?? "Not stocked")</td>
                 </tr>
             }

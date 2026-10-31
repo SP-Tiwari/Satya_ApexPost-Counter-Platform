@@ -9,16 +9,21 @@ public sealed class ShippingVolumeReportApplicationService
 
 	private readonly IStaffRepository _staff;
 	private readonly ICounterTransactionRepository _transactions;
+	private readonly IReportQueryService? _queries;
 	private readonly ShippingVolumeReportService _reportService = new();
 
+	// Without it, the report is calculated from repository reads, which is what
+	// the unit tests use with their in-memory fakes.
 	public ShippingVolumeReportApplicationService(
 		IStaffRepository staff,
-		ICounterTransactionRepository transactions)
+		ICounterTransactionRepository transactions,
+		IReportQueryService? queries = null)
 	{
 		ArgumentNullException.ThrowIfNull(staff);
 		ArgumentNullException.ThrowIfNull(transactions);
 		_staff = staff;
 		_transactions = transactions;
+		_queries = queries;
 	}
 
 	public async Task<IReadOnlyList<ShippingVolumeReportRow>> GetReportAsync(
@@ -38,6 +43,9 @@ public sealed class ShippingVolumeReportApplicationService
 		{
 			throw new UnauthorizedAccessException(DeniedMessage);
 		}
+
+		if (_queries is not null)
+			return await _queries.GetShippingVolumeAsync(cancellationToken).ConfigureAwait(false);
 
 		var shipments = await _transactions.GetShipmentsAsync(cancellationToken)
 			.ConfigureAwait(false);

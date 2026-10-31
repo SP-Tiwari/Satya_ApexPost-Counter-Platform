@@ -40,11 +40,11 @@ public sealed class CreateTransactionViewModel
 	[StringLength(100)]
 	public string? MoneyOrderDocumentIdentifier { get; set; }
 
-	public IReadOnlyList<Product> Products { get; set; } = [];
-	public Branch? Branch { get; set; }
-	public IReadOnlyList<ShippingRate> ShippingRates { get; set; } = [];
-	public MoneyOrderBasketSettings? MoneyOrders { get; set; }
-	public IReadOnlyList<CounterTerminal> CounterTerminals { get; set; } = [];
+	public IReadOnlyList<ApexPost.Application.Persistence.SaleFormProduct> Products { get; set; } = [];
+	public ApexPost.Application.Persistence.SaleFormBranch? Branch { get; set; }
+	public IReadOnlyList<ApexPost.Application.Persistence.SaleFormShippingRate> ShippingRates { get; set; } = [];
+	public SaleFormMoneyOrderTerms? MoneyOrders { get; set; }
+	public IReadOnlyList<ApexPost.Application.Persistence.SaleFormCounter> CounterTerminals { get; set; } = [];
 	public IReadOnlyList<string> PaymentMethods { get; set; } = [];
 	public bool CanSubmit { get; set; }
 }

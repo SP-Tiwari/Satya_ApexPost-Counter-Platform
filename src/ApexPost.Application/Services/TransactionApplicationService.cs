@@ -73,8 +73,11 @@ public sealed class TransactionApplicationService
 
 		var staff = await FindActiveTransactionViewerAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		var basket = await FindBasketAsync(transactionId, cancellationToken)
-			.ConfigureAwait(false);
+		var basket = await _transactions
+			.FindForReadAsync(transactionId, cancellationToken)
+			.ConfigureAwait(false)
+			?? throw new KeyNotFoundException(
+				$"Transaction '{transactionId}' was not found.");
 		if (!_accessRule.CanView(staff, basket))
 			throw new KeyNotFoundException(
 				$"Transaction '{transactionId}' was not found.");
