@@ -110,6 +110,31 @@ classDiagram
         string MaskedDocumentIdentifier
         bool IsSuccessful
     }
+    class TransactionTaxRate {
+        TaxCategory Category
+        decimal Rate
+    }
+    class Payment {
+        Guid Id
+        Guid TransactionId
+        PaymentEntryType Type
+        Money Amount
+        string PaymentMethod
+        DateTimeOffset RecordedAtUtc
+    }
+    class ShippingZone {
+        string Code
+        string Name
+    }
+    class StockAdjustment {
+        Guid Id
+        BranchCode BranchCode
+        Sku ProductSku
+        int Delta
+        string Reason
+        string ChangedByStaffId
+        DateTimeOffset OccurredAtUtc
+    }
     Branch "1" *-- "1..*" CounterTerminal
     Staff --> Branch : home branch
     BranchStock --> Branch
@@ -120,10 +145,16 @@ classDiagram
     TransactionLineItem o-- "0..1" ShippingItem : shipping
     TransactionLineItem o-- "0..1" MoneyOrder : money order
     MoneyOrder o-- "0..1" IdentityVerification
+    TransactionBasket "1" *-- "0..*" TransactionTaxRate : rates captured at sale
+    Payment --> TransactionBasket : by TransactionId
+    ShippingItem --> ShippingZone : by zone code
+    StockAdjustment --> BranchStock : by BranchCode and Sku
+    StockAdjustment --> Staff : by ChangedByStaffId
 ```
 
-- **Entities** have identity and a lifecycle: `Branch`, `Staff`, `Product`, `BranchStock`, `TransactionBasket`, `TransactionLineItem`, `ShippingItem`, `MoneyOrder`.
-- **Value objects** are immutable `sealed record`s that validate on construction: `Money`, `Sku`, `BranchCode`, `Weight`, `Dimensions`, `ShippingRate`, `IdentityVerification` (holds only the masked identifier), and `CounterSaleDetails`.
+- **Entities** have identity and a lifecycle: `Branch`, `Staff`, `Product`, `BranchStock`, `TransactionBasket`, `TransactionLineItem`, `ShippingItem`, `MoneyOrder`, `Payment`, `ShippingZone`, `StockAdjustment`.
+- **Value objects** are immutable `sealed record`s that validate on construction: `Money`, `Sku`, `BranchCode`, `Weight`, `Dimensions`, `ShippingRate`, `IdentityVerification` (holds only the masked identifier), `CounterSaleDetails`, and `TransactionTaxRate`.
+- **References by ID:** `Payment` and `StockAdjustment` hold IDs and codes, not object references. `ShippingItem` and `ShippingRate` refer to a `ShippingZone` by its code in `DestinationZone`. The database enforces these links with foreign keys. No application service creates `Payment` or `StockAdjustment` objects yet; that starts in M2.
 - **The mixed basket uses composition, not inheritance.** A basket holds `TransactionLineItem`s, each with a `TransactionItemType` (`Goods`, `Service`, `MoneyOrder`) and at most one attached shipping item or money order. Rules that differ by line type are `switch` expressions on that type, for example money-order lines carry no tax. This keeps one totals calculation and one lifecycle for every kind of sale.
 - **Basket lifecycle:** Open → Paid, Open → Voided, Paid → Voided, and Paid → Refunded. Voiding or refunding a paid sale returns its stock and cancels its money orders exactly once (`SaleReversalService`, [ADR 0011](docs/adr/0011-void-and-refund-of-completed-sales.md)).
 
@@ -458,7 +489,7 @@ Verification ran on 2026-10-31 on SQL Server 2025 (17.0) Enterprise Evaluation, 
 | A: CHECK constraints | `HasCheckConstraint` in each configuration | Constraints table | Negative stock, invalid status, zero amount, zero weight, unmasked document and a reason on a paid sale each rejected |
 | A: DEFAULT and audit columns | `MappingExtensions.HasAuditColumns`, `IsActiveFlag` | Constraints table | Every table has all three audit columns; 43 defaults |
 | A: rowversion | `BranchStockConfiguration`, `CounterTransactionConfiguration` | Constraints table | Both `NOT NULL`. Two contexts selling the same stock: the second got `DbUpdateConcurrencyException`, and stock stayed at 0 |
-| A: data types | `MappingExtensions` | Mapping reference, ADR 0017 | Catalog query: 70 `varchar`/`char` columns, money `decimal(18,2)`; the 18 `nvarchar` columns are all names or free text |
+| A: data types | `MappingExtensions` | Mapping reference, ADR 0017 | Catalog query: 70 `varchar`/`char` columns, money `decimal(18,2)`; the 19 `nvarchar` columns are all names or free text, counted from `InitialCreate` after `Payments.PaymentMethod` was added |
 | A: masked documents | `IdentityVerification`, `IdentityVerificationMapper`, `IdentityVerificationConfiguration` | ADR 0019 | `ABCDEFGH1234` stored as `****1234`; an unmasked value and an over-long value were rejected |
 | A: ER diagram, three anomalies | This section | This section | Review |
 | A: idempotent script | `sql/schema/ApexPostDb-idempotent.sql` | Migrations table | Applied twice to one database: both runs exited 0, and one history row was recorded |

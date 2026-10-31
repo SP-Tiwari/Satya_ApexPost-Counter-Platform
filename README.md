@@ -6,7 +6,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 
 - `src/ApexPost.Domain` — entities, value objects, rules, and reporting.
 - `src/ApexPost.Application` — use cases and persistence/security/audit abstractions.
-- `src/ApexPost.Infrastructure` — JSON persistence and audit implementations.
+- `src/ApexPost.Infrastructure` — JSON persistence and audit implementations, which the application uses today, and the EF Core SQL Server persistence layer (`ApexPostDbContext`, mappings and migrations), which it does not use until Week 3 M3.
 - `src/ApexPost.Web` — MVC controllers and views, authentication, middleware, and composition root.
 - `tests/*` — Domain, Application, Infrastructure, and Web integration tests.
 
@@ -122,7 +122,7 @@ The script:
 
 ### Set up the database with SSMS instead
 
-Use these steps if you prefer SQL Server Management Studio to the script. They produce the same result.
+Use these steps if you prefer SQL Server Management Studio to the script. **These instructions have not yet been independently tested**: `ApexPostDb` was created with the script above, not through SSMS.
 
 1. Create the folder `E:\SqlData\ApexPost`. In its **Properties** > **Security** tab, give `NT Service\MSSQLSERVER` **Modify** access.
 2. In SSMS, connect to server `.` with **Windows Authentication**. If the connection fails with a certificate error, tick **Trust server certificate**.
