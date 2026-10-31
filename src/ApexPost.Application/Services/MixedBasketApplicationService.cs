@@ -18,15 +18,15 @@ public sealed record ShippingBasketRequest(
 	decimal LengthCm,
 	decimal WidthCm,
 	decimal HeightCm,
-	[property: NotBlank] string DestinationZone,
+	[property: NotBlank, MaximumLength(InputLimits.ZoneCode)] string DestinationZone,
 	[property: DefinedEnum] ShippingServiceLevel ServiceLevel);
 
 // A complete counter sale from the transaction screen: any number of goods,
 // shipping and money-order lines, taken at one counter with one payment method.
 public sealed record CounterBasketRequest(
 	Guid TransactionId,
-	[property: NotBlank] string CounterTerminalId,
-	[property: NotBlank] string PaymentMethod,
+	[property: NotBlank, MaximumLength(InputLimits.CounterId)] string CounterTerminalId,
+	[property: NotBlank, MaximumLength(InputLimits.PaymentMethod)] string PaymentMethod,
 	IReadOnlyList<GoodsBasketRequest> Goods,
 	IReadOnlyList<ShippingBasketRequest> Shipments,
 	IReadOnlyList<MoneyOrderBasketRequest> MoneyOrders);
@@ -39,7 +39,14 @@ public sealed record MixedBasketCatalog(
 
 public sealed class MixedBasketApplicationService
 {
-	private readonly IApexPostRepository _repository;
+	private const int MaximumSkuLength = 30;
+
+	private readonly IStaffRepository _staff;
+	private readonly IBranchRepository _branches;
+	private readonly IProductRepository _products;
+	private readonly IStockRepository _stock;
+	private readonly ICounterTransactionRepository _transactions;
+	private readonly IUnitOfWork _unitOfWork;
 	private readonly IReadOnlyDictionary<TaxCategory, decimal> _taxRates;
 	private readonly IReadOnlyDictionary<ShippingServiceLevel, Weight>
 		_maximumParcelWeights;
@@ -54,6 +61,7 @@ public sealed class MixedBasketApplicationService
 	private readonly int? _lowStockThreshold;
 	private readonly IReadOnlyList<string> _paymentMethods;
 
+	// JSON persistence, until the SQL Server cutover in M3.
 	public MixedBasketApplicationService(
 		IApexPostRepository repository,
 		IReadOnlyDictionary<TaxCategory, decimal> taxRates,
@@ -65,11 +73,81 @@ public sealed class MixedBasketApplicationService
 		DomainEventPublisher? events = null,
 		int? lowStockThreshold = null,
 		IReadOnlyCollection<string>? paymentMethods = null)
+		: this(
+			new SnapshotStore(repository),
+			taxRates,
+			maximumParcelWeights,
+			shippingTaxCategory,
+			timeProvider,
+			moneyOrderSettings,
+			identityVerification,
+			events,
+			lowStockThreshold,
+			paymentMethods)
 	{
-		ArgumentNullException.ThrowIfNull(repository);
+	}
+
+	private MixedBasketApplicationService(
+		SnapshotStore store,
+		IReadOnlyDictionary<TaxCategory, decimal> taxRates,
+		IReadOnlyDictionary<ShippingServiceLevel, Weight> maximumParcelWeights,
+		TaxCategory? shippingTaxCategory,
+		TimeProvider? timeProvider,
+		MoneyOrderBasketSettings? moneyOrderSettings,
+		IIdentityVerificationService? identityVerification,
+		DomainEventPublisher? events,
+		int? lowStockThreshold,
+		IReadOnlyCollection<string>? paymentMethods)
+		: this(
+			store,
+			store,
+			store,
+			store,
+			store,
+			store,
+			taxRates,
+			maximumParcelWeights,
+			shippingTaxCategory,
+			timeProvider,
+			moneyOrderSettings,
+			identityVerification,
+			events,
+			lowStockThreshold,
+			paymentMethods)
+	{
+	}
+
+	public MixedBasketApplicationService(
+		IStaffRepository staff,
+		IBranchRepository branches,
+		IProductRepository products,
+		IStockRepository stock,
+		ICounterTransactionRepository transactions,
+		IUnitOfWork unitOfWork,
+		IReadOnlyDictionary<TaxCategory, decimal> taxRates,
+		IReadOnlyDictionary<ShippingServiceLevel, Weight> maximumParcelWeights,
+		TaxCategory? shippingTaxCategory = null,
+		TimeProvider? timeProvider = null,
+		MoneyOrderBasketSettings? moneyOrderSettings = null,
+		IIdentityVerificationService? identityVerification = null,
+		DomainEventPublisher? events = null,
+		int? lowStockThreshold = null,
+		IReadOnlyCollection<string>? paymentMethods = null)
+	{
+		ArgumentNullException.ThrowIfNull(staff);
+		ArgumentNullException.ThrowIfNull(branches);
+		ArgumentNullException.ThrowIfNull(products);
+		ArgumentNullException.ThrowIfNull(stock);
+		ArgumentNullException.ThrowIfNull(transactions);
+		ArgumentNullException.ThrowIfNull(unitOfWork);
 		ArgumentNullException.ThrowIfNull(taxRates);
 		ArgumentNullException.ThrowIfNull(maximumParcelWeights);
-		_repository = repository;
+		_staff = staff;
+		_branches = branches;
+		_products = products;
+		_stock = stock;
+		_transactions = transactions;
+		_unitOfWork = unitOfWork;
 		_timeProvider = timeProvider ?? TimeProvider.System;
 		var validatedTaxRates = new Dictionary<TaxCategory, decimal>();
 		foreach (var (category, rate) in taxRates)
@@ -164,20 +242,24 @@ public sealed class MixedBasketApplicationService
 		string staffId,
 		CancellationToken cancellationToken = default)
 	{
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		var staff = await FindActiveSalesStaffAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		var staff = FindActiveSalesStaff(snapshot, staffId);
-		var branch = FindBranch(snapshot, staff.HomeBranchCode);
+		var branch = await FindBranchAsync(staff.HomeBranchCode, cancellationToken)
+			.ConfigureAwait(false);
 		if (!branch.IsActive)
 			throw new InvalidOperationException(
 				"Transactions cannot be processed at an inactive branch.");
 
+		var products = await _products.GetProductsAsync(cancellationToken)
+			.ConfigureAwait(false);
+		var shippingRates = await _products.GetShippingRatesAsync(cancellationToken)
+			.ConfigureAwait(false);
 		return new MixedBasketCatalog(
-			Array.AsReadOnly(snapshot.Products
+			Array.AsReadOnly(products
 				.Where(product => _taxRates.ContainsKey(product.TaxCategory))
 				.ToArray()),
 			branch,
-			Array.AsReadOnly(snapshot.ShippingRates
+			Array.AsReadOnly(shippingRates
 				.Where(_ => _shippingTaxCategory is not null &&
 					_taxRates.ContainsKey(_shippingTaxCategory.Value))
 				.ToArray()),
@@ -245,8 +327,18 @@ public sealed class MixedBasketApplicationService
 		RequestValidator.ValidateAll(goods);
 		RequestValidator.ValidateAll(shipments);
 		RequestValidator.ValidateAll(moneyOrders);
+		foreach (var shipment in shipments)
+		{
+			InputLimits.Ensure(
+				shipment.WeightKilograms, InputLimits.WeightKilograms, "Weight");
+			InputLimits.Ensure(shipment.LengthCm, InputLimits.DimensionCm, "Length");
+			InputLimits.Ensure(shipment.WidthCm, InputLimits.DimensionCm, "Width");
+			InputLimits.Ensure(shipment.HeightCm, InputLimits.DimensionCm, "Height");
+		}
 		foreach (var moneyOrder in moneyOrders)
 		{
+			InputLimits.Ensure(
+				moneyOrder.Amount, InputLimits.MoneyAmount, "Money order amount");
 			// A cross-field rule, so it stays explicit rather than an attribute.
 			if (string.IsNullOrWhiteSpace(moneyOrder.DocumentType) !=
 				string.IsNullOrWhiteSpace(moneyOrder.DocumentIdentifier))
@@ -261,30 +353,42 @@ public sealed class MixedBasketApplicationService
 				"Money orders are not configured.");
 
 		// The verification provider is asynchronous and possibly slow, so it
-		// runs before the repository lock is taken. The decision is applied
-		// inside the atomic update below.
+		// runs before the transaction starts. The decision is applied inside
+		// the unit of work below, and a retry keeps it: it comes from the
+		// provider, not from the database state that a conflict makes stale.
 		var verificationResults = await VerifyIdentitiesAsync(
 			staffId, moneyOrders, cancellationToken).ConfigureAwait(false);
 
-		// Collected inside the update; published only once it has been saved.
+		// Replaced on every attempt; published only once a commit has succeeded.
 		IReadOnlyList<DomainEvent> committedEvents = [];
-		await _repository.UpdateAsync(snapshot =>
+		await _unitOfWork.ExecuteInTransactionAsync(async token =>
 		{
-			if (snapshot.TransactionBaskets.Any(
-					basket => basket.Id == transactionId))
+			if (await _transactions.ExistsAsync(transactionId, token)
+				.ConfigureAwait(false))
 			{
 				throw new InvalidOperationException(
 					"This transaction submission has already been processed.");
 			}
 
-			var staff = FindActiveSalesStaff(snapshot, staffId);
-			var branch = FindBranch(snapshot, staff.HomeBranchCode);
+			var staff = await FindActiveSalesStaffAsync(staffId, token)
+				.ConfigureAwait(false);
+			var branch = await FindBranchAsync(staff.HomeBranchCode, token)
+				.ConfigureAwait(false);
+			var catalogue = await _products.FindBySkusAsync(
+				goods.Select(request => ToSkuOrNull(request.Sku))
+					.OfType<Sku>()
+					.Distinct()
+					.ToArray(),
+				token).ConfigureAwait(false);
+			var shippingRates = await _products.GetShippingRatesAsync(token)
+				.ConfigureAwait(false);
 			var occurredAtUtc = _timeProvider.GetUtcNow();
 			// The clerk is the authenticated staff member; the domain rule
 			// checks the counter belongs to their branch and is active.
 			var basket = new TransactionBasket(
 				transactionId,
-				ResolveCurrency(snapshot, goods, shipments, moneyOrders),
+				ResolveCurrency(
+					catalogue, shippingRates, goods, shipments, moneyOrders),
 				_taxRates,
 				staff.HomeBranchCode,
 				occurredAtUtc,
@@ -312,13 +416,12 @@ public sealed class MixedBasketApplicationService
 
 			foreach (var goodsRequest in goods)
 			{
-				var product = FindProduct(snapshot, goodsRequest.Sku);
+				var product = FindProduct(catalogue, goodsRequest.Sku);
 				basket.AddLineItem(new TransactionLineItem(
 					product, goodsRequest.Quantity));
 			}
 
-			var pricingService = new ShippingPricingService(
-				snapshot.ShippingRates);
+			var pricingService = new ShippingPricingService(shippingRates);
 			var shippingItems = new List<ShippingItem>(shipments.Count);
 			var weightRule = new ShippingWeightLimitRule(
 				_maximumParcelWeights);
@@ -359,38 +462,44 @@ public sealed class MixedBasketApplicationService
 				shippingItems.Add(shippingItem);
 			}
 
+			var soldSkus = basket.LineItems
+				.Select(lineItem => lineItem.ProductSku)
+				.OfType<Sku>()
+				.Distinct()
+				.ToArray();
+			var branchStocks = await _stock
+				.GetForProductsAsync(branch.Code, soldSkus, token)
+				.ConfigureAwait(false);
 			var quantitiesBefore = LowStockEvents.CaptureQuantities(
-				snapshot.BranchStocks,
-				branch.Code,
-				basket.LineItems
-					.Select(lineItem => lineItem.ProductSku)
-					.OfType<Sku>());
-			_processingRule.Process(
-				staff, branch, basket, snapshot.BranchStocks);
+				branchStocks, branch.Code, soldSkus);
+			_processingRule.Process(staff, branch, basket, branchStocks);
 			var basketTotal = basket.Total;
 			if (basketTotal.Amount <= 0m)
 				throw new InvalidOperationException(
 					"Transaction total must be greater than zero.");
+			InputLimits.Ensure(
+				basketTotal.Amount, InputLimits.MoneyAmount, "Transaction total");
 
 			committedEvents = CreateSaleEvents(
 				basket,
 				staffId,
 				issuedMoneyOrders,
-				snapshot.BranchStocks,
+				branchStocks,
 				quantitiesBefore,
 				occurredAtUtc);
-			return new ApexPostSnapshot(
-				snapshot.Branches,
-				snapshot.Staff,
-				snapshot.Products,
-				snapshot.BranchStocks,
-				snapshot.ShippingItems.Concat(shippingItems),
-				snapshot.ShippingRates,
-				snapshot.MoneyOrders.Concat(issuedMoneyOrders),
-				snapshot.IdentityVerifications.Concat(issuedMoneyOrders
-					.Select(order => order.IdentityVerification)
-					.OfType<IdentityVerification>()),
-				snapshot.TransactionBaskets.Append(basket));
+			_transactions.Add(basket);
+			if (paymentMethod is not null)
+			{
+				_transactions.AddPayment(new Payment(
+					Guid.NewGuid(),
+					basket.Id,
+					PaymentEntryType.Payment,
+					basketTotal,
+					paymentMethod,
+					occurredAtUtc));
+			}
+
+			await _unitOfWork.SaveChangesAsync(token).ConfigureAwait(false);
 		}, cancellationToken).ConfigureAwait(false);
 
 		_events?.Publish(committedEvents);
@@ -451,10 +560,9 @@ public sealed class MixedBasketApplicationService
 				"Identity verification is not configured.");
 
 		// Only active sales staff may use the verification provider. The
-		// update re-checks staff authoritatively under the repository lock.
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		// unit of work re-checks staff authoritatively.
+		_ = await FindActiveSalesStaffAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		FindActiveSalesStaff(snapshot, staffId);
 
 		for (var index = 0; index < moneyOrders.Count; index++)
 		{
@@ -496,16 +604,24 @@ public sealed class MixedBasketApplicationService
 		return moneyOrder;
 	}
 
+	// A request can name a SKU no product could have; FindProduct then reports
+	// it as not found.
+	private static Sku? ToSkuOrNull(string sku) =>
+		string.IsNullOrWhiteSpace(sku) || sku.Trim().Length > MaximumSkuLength
+			? null
+			: new Sku(sku);
+
 	private string ResolveCurrency(
-		ApexPostSnapshot snapshot,
+		IReadOnlyList<Product> catalogue,
+		IReadOnlyList<ShippingRate> shippingRates,
 		IReadOnlyList<GoodsBasketRequest> goods,
 		IReadOnlyList<ShippingBasketRequest> shipments,
 		IReadOnlyList<MoneyOrderBasketRequest> moneyOrders)
 	{
 		var currency = goods.Count > 0
-			? FindProduct(snapshot, goods[0].Sku).UnitPrice.Currency
+			? FindProduct(catalogue, goods[0].Sku).UnitPrice.Currency
 			: shipments.Count > 0
-				? FindRate(snapshot, shipments[0]).BasePrice.Currency
+				? FindRate(shippingRates, shipments[0]).BasePrice.Currency
 				: _moneyOrderSettings!.HighValueThreshold.Currency;
 
 		if (moneyOrders.Count > 0 &&
@@ -521,7 +637,7 @@ public sealed class MixedBasketApplicationService
 		foreach (var goodsRequest in goods)
 		{
 			if (!string.Equals(
-				FindProduct(snapshot, goodsRequest.Sku).UnitPrice.Currency,
+				FindProduct(catalogue, goodsRequest.Sku).UnitPrice.Currency,
 				currency,
 				StringComparison.Ordinal))
 			{
@@ -533,7 +649,7 @@ public sealed class MixedBasketApplicationService
 		foreach (var shippingRequest in shipments)
 		{
 			if (!string.Equals(
-				FindRate(snapshot, shippingRequest).BasePrice.Currency,
+				FindRate(shippingRates, shippingRequest).BasePrice.Currency,
 				currency,
 				StringComparison.Ordinal))
 			{
@@ -546,12 +662,12 @@ public sealed class MixedBasketApplicationService
 	}
 
 	private static Product FindProduct(
-		ApexPostSnapshot snapshot,
+		IReadOnlyList<Product> catalogue,
 		string sku)
 	{
 		if (string.IsNullOrWhiteSpace(sku))
 			throw new ArgumentException("Product SKU is required.", nameof(sku));
-		var matches = snapshot.Products.Where(product =>
+		var matches = catalogue.Where(product =>
 			string.Equals(product.Sku.Value, sku, StringComparison.Ordinal))
 			.Take(2).ToArray();
 		return matches.Length switch
@@ -564,53 +680,45 @@ public sealed class MixedBasketApplicationService
 		};
 	}
 
-	private static Staff FindActiveSalesStaff(
-		ApexPostSnapshot snapshot,
-		string staffId)
+	private async Task<Staff> FindActiveSalesStaffAsync(
+		string staffId,
+		CancellationToken cancellationToken)
 	{
 		if (string.IsNullOrWhiteSpace(staffId))
 			throw new UnauthorizedAccessException(
 				"Authenticated staff are required to process transactions.");
-		var matches = snapshot.Staff.Where(person =>
-			string.Equals(person.Id, staffId, StringComparison.Ordinal))
-			.Take(2).ToArray();
-		if (matches.Length != 1 ||
-			!matches[0].IsActive ||
-			matches[0].Role is not StaffRole.CounterClerk and
-				not StaffRole.BranchManager)
+
+		var staff = await _staff.FindByIdAsync(staffId, cancellationToken)
+			.ConfigureAwait(false);
+		if (staff is not
+			{
+				IsActive: true,
+				Role: StaffRole.CounterClerk or StaffRole.BranchManager
+			})
 		{
 			throw new UnauthorizedAccessException(
 				"An active Counter Clerk or Branch Manager is required to process transactions.");
 		}
 
-		return matches[0];
+		return staff;
 	}
 
-	private static Branch FindBranch(
-		ApexPostSnapshot snapshot,
-		BranchCode branchCode)
-	{
-		var matches = snapshot.Branches.Where(branch =>
-			branch.Code == branchCode).Take(2).ToArray();
-		return matches.Length switch
-		{
-			1 => matches[0],
-			0 => throw new KeyNotFoundException(
-				$"Branch '{branchCode}' was not found."),
-			_ => throw new InvalidOperationException(
-				$"Multiple branches match '{branchCode}'.")
-		};
-	}
+	private async Task<Branch> FindBranchAsync(
+		BranchCode branchCode,
+		CancellationToken cancellationToken) =>
+		await _branches.FindByCodeAsync(branchCode, cancellationToken)
+			.ConfigureAwait(false)
+		?? throw new KeyNotFoundException($"Branch '{branchCode}' was not found.");
 
 	private static ShippingRate FindRate(
-		ApexPostSnapshot snapshot,
+		IReadOnlyList<ShippingRate> shippingRates,
 		ShippingBasketRequest request)
 	{
 		if (string.IsNullOrWhiteSpace(request.DestinationZone))
 			throw new ArgumentException(
 				"Destination zone is required.", nameof(request));
 
-		return snapshot.ShippingRates.SingleOrDefault(rate =>
+		return shippingRates.SingleOrDefault(rate =>
 			string.Equals(
 				rate.DestinationZone,
 				request.DestinationZone.Trim(),

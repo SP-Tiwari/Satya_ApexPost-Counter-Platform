@@ -13,7 +13,8 @@ sequenceDiagram
     participant C as TransactionsController
     participant S as MixedBasketApplicationService
     participant V as IIdentityVerificationService
-    participant R as JsonApexPostRepository
+    participant U as IUnitOfWork
+    participant R as Repositories
     participant P as DomainEventPublisher
     Clerk->>MW: POST /Transactions/Create (cookie, antiforgery token)
     MW->>MW: correlation ID, headers, routing, sign-in cookie, role check
@@ -21,10 +22,13 @@ sequenceDiagram
     F->>F: ValidationActionFilter (ModelState)
     F->>C: Create(model)
     C->>S: CreateAndProcessAsync(staffId, CounterBasketRequest)
-    S->>V: verify identity for money orders (with timeout), before taking the lock
-    S->>R: UpdateAsync(snapshot => ...)
-    R->>R: lock, load, apply rules, deduct stock, add lines, save to temp file, move into place
-    R-->>S: committed snapshot
+    S->>V: verify identity for money orders (with timeout), before the transaction starts
+    S->>U: ExecuteInTransactionAsync(work)
+    U->>R: work reads staff, branch, products, rates and stock
+    R-->>U: current state
+    U->>R: work applies rules, deducts stock, stages the basket and payment
+    U->>U: SaveChangesAsync once, then commit
+    U-->>S: committed
     S->>P: publish TransactionCompleted, StockLow, MoneyOrderIssued, ...
     P-->>P: SimulatedNotificationSender logs notifications
     S-->>C: transaction ID
@@ -35,8 +39,8 @@ sequenceDiagram
 
 1. **Before MVC:** middleware establishes the correlation ID, security headers and identity. `[RequireApiKey]` and `[RequireAdminNetwork]` checks also happen here, though they don't apply to this endpoint.
 2. **Validation:** filters run around the action. Invalid input is redisplayed before the action body runs.
-3. **Slow external calls:** identity verification runs before the repository lock is taken, so a slow provider never holds up other sales.
-4. **One atomic update:** every rule check and state change for the sale happens inside one `UpdateAsync` callback. If anything fails, nothing is saved and no events are published.
+3. **Slow external calls:** identity verification runs before the transaction starts, so a slow provider never holds up other sales.
+4. **One atomic use case:** every rule check and state change for the sale happens inside one `IUnitOfWork.ExecuteInTransactionAsync` call, with one save. If anything fails, nothing is saved and no events are published. Today this runs on JSON through `SnapshotStore`, which holds a gate across the use case. From M3 it runs on SQL Server through `SqlUnitOfWork` ([ADR 0020](adr/0020-repository-and-unit-of-work-boundaries.md)).
 5. **After commit:** events are published only after the save. The audit record is written after the redirect result has executed, so it records the real 302.
 
 ## Data and security boundaries

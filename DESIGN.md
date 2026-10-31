@@ -1,6 +1,6 @@
 # ApexPost Counter Platform — Design
 
-This document describes the platform as implemented on the `feature/week3-sql-persistence` branch. Where something is planned but not built, it says so. The application still runs on JSON persistence; the SQL Server schema and mapping from Week 3 M1 are described in [section 4.4](#44-sql-server-schema), and the application moves onto them in M2 and M3 ([plan](docs/week-3-plan.md)). Decisions are recorded as ADRs in [docs/adr/](docs/adr/); a short request-flow walkthrough is in [docs/architecture.md](docs/architecture.md).
+This document describes the platform as implemented on the `feature/week3-sql-persistence` branch. Where something is planned but not built, it says so. The application still runs on JSON persistence; the SQL Server schema and mapping from Week 3 M1 are described in [section 4.4](#44-sql-server-schema), and the application moves onto them in M3 ([plan](docs/week-3-plan.md)). The repositories and Unit of Work from M2 are in [section 4.5](#45-repositories-and-unit-of-work). Decisions are recorded as ADRs in [docs/adr/](docs/adr/); a short request-flow walkthrough is in [docs/architecture.md](docs/architecture.md).
 
 ## 1. Architecture
 
@@ -26,7 +26,7 @@ flowchart LR
     App --> Domain
 ```
 
-Dependencies point inward. Application owns the interfaces (`IApexPostRepository`, `IStaffCredentialRepository`, `IAuditStore`, `ICourierTrackingService`, `IIdentityVerificationService`); Infrastructure implements them; Web wires them together. Controllers translate HTTP to application calls and back. They hold no business rules, and `Program.cs` only reads configuration, registers services and builds the pipeline.
+Dependencies point inward. Application owns the interfaces (`IBranchRepository`, `IProductRepository`, `IStockRepository`, `ICounterTransactionRepository`, `IStaffRepository`, `IUnitOfWork`, `ICurrentStaffAccessor`, `IApexPostRepository`, `IStaffCredentialRepository`, `IAuditStore`, `ICourierTrackingService`, `IIdentityVerificationService`); Infrastructure implements them, except that the temporary `SnapshotStore` in Application implements the repository and unit-of-work interfaces over `IApexPostRepository` until M3 ([section 4.5](#45-repositories-and-unit-of-work)); Web wires them together. Controllers translate HTTP to application calls and back. They hold no business rules, and `Program.cs` only reads configuration, registers services and builds the pipeline.
 
 **Did the Week 1 architecture survive?** This repository starts at the ApexPost solution (first commit: "initialize ApexPost solution structure"), so the Week 1 TechNova code is not in its history. The four-layer split shown above was chosen for ApexPost from the start, with the domain rebuilt around branches, counters, a mixed basket and postal/financial services. *Author to confirm against the Week 1 submission.*
 
@@ -175,7 +175,7 @@ classDiagram
 | Parcels over the configured maximum for their service level are rejected | `ShippingWeightLimitRule` |
 | Voids and refunds need an active Branch Manager of the same branch and a reason | `TransactionVoidRefundRule` |
 | Full identity-document numbers are never stored; only the last four characters are kept | `IdentityVerification` |
-| A transaction ID can be processed once; repeated submissions do not deduct stock twice | Repository `UpdateAsync` callback in the application services |
+| A transaction ID can be processed once; repeated submissions do not deduct stock twice | `ICounterTransactionRepository.ExistsAsync` inside `IUnitOfWork.ExecuteInTransactionAsync`; on SQL Server the primary key also enforces it |
 
 ## 3. Reports, events and notifications
 
@@ -205,12 +205,12 @@ Report filters are composable specifications (`PaidTransactionSpecification`, `T
 | `TransactionVoidedEvent` | A sale is voided |
 | `TransactionRefundedEvent` | A sale is refunded |
 
-Events are collected inside the repository update and published by `DomainEventPublisher` only after the update has committed, so a rejected or rolled-back change never notifies anyone. `SimulatedNotificationSender` subscribes to the publisher's C# events and writes the four required notifications (low stock, high-value money order, void, refund) as structured warning logs prefixed `Simulated notification:`. A failing subscriber is logged and cannot undo the committed change ([ADR 0012](docs/adr/0012-committed-domain-events-and-simulated-notifications.md)).
+Events are collected inside `IUnitOfWork.ExecuteInTransactionAsync` and published by `DomainEventPublisher` only after it has committed, so a rejected or rolled-back change never notifies anyone. `SimulatedNotificationSender` subscribes to the publisher's C# events and writes the four required notifications (low stock, high-value money order, void, refund) as structured warning logs prefixed `Simulated notification:`. A failing subscriber is logged and cannot undo the committed change ([ADR 0012](docs/adr/0012-committed-domain-events-and-simulated-notifications.md)).
 
 ## 4. Persistence
 
 - **Store:** `JsonApexPostRepository` keeps one versioned `apexpost.json` snapshot in `Storage:Directory`. Infrastructure maps it through DTOs and rebuilds domain objects through their validating constructors; it never deserializes straight into entities.
-- **Concurrency:** `UpdateAsync(Func<snapshot, snapshot>)` holds a `SemaphoreSlim` across load, change and save. It writes to a temporary file in the same folder and then moves it into place. If the callback throws, nothing is saved. This is what makes concurrent sales safe within one process ([ADR 0001](docs/adr/0001-json-snapshot-persistence.md), [ADR 0004](docs/adr/0004-atomic-transaction-processing.md)).
+- **Concurrency:** the migrated services run through `SnapshotStore.ExecuteInTransactionAsync`, which holds a gate per snapshot repository across load, change and save. If the work throws, nothing is saved. The repository writes to a temporary file in the same folder and then moves it into place. Together these make concurrent sales safe within one process ([ADR 0001](docs/adr/0001-json-snapshot-persistence.md), [ADR 0004](docs/adr/0004-atomic-transaction-processing.md), [ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md)). `UpdateAsync` holds the repository's own lock in the same way; only the demo seed still calls it.
 - **Schema migration:** the current schema is 7.
 
   | Version | Change |
@@ -508,6 +508,64 @@ Verification ran on 2026-10-31 on SQL Server 2025 (17.0) Enterprise Evaluation, 
 
 **Not implemented in M1:** repositories and the Unit of Work, stamping of `ModifiedAtUtc` and the real `CreatedBy`, seed data, and automated SQL tests. Those belong to later milestones.
 
+### 4.5 Repositories and Unit of Work
+
+Week 3 M2 moves the application services onto repository and unit-of-work interfaces. **The Web application still runs on JSON**: `Program.cs` is unchanged, and services reach JSON through the temporary `SnapshotStore` bridge. The SQL Server implementations exist and are registered by `AddApexPostSqlPersistence`, which nothing calls until M3. Decisions are in [ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md) and [ADR 0021](docs/adr/0021-concurrency-strategy.md).
+
+```mermaid
+flowchart LR
+    S["Application services"] --> I["IBranchRepository, IProductRepository,<br/>IStockRepository, ICounterTransactionRepository,<br/>IStaffRepository, IUnitOfWork"]
+    I -->|"today"| B["SnapshotStore (temporary)"]
+    B --> J["IApexPostRepository (JSON)"]
+    I -->|"from M3"| E["Sql* repositories, SqlUnitOfWork"]
+    E --> D["ApexPostDbContext"]
+    R["Reports, dashboard, parcel status,<br/>ReferenceDataCache"] --> J
+```
+
+| Concern | Implementation |
+|---|---|
+| Interfaces | `src/ApexPost.Application/Persistence/` |
+| SQL implementations | `src/ApexPost.Infrastructure/Persistence/Sql/SqlRepositories.cs`, `SqlUnitOfWork.cs` |
+| Registration, all scoped | `SqlPersistenceRegistration.AddApexPostSqlPersistence` |
+| JSON bridge | `src/ApexPost.Application/Persistence/SnapshotStore.cs` |
+| Commit and retry | `IUnitOfWork.ExecuteInTransactionAsync` |
+| Audit stamping | `AuditColumnsInterceptor`, `ICurrentStaffAccessor` |
+| Input limits | `InputLimits`, `[MaximumLength]`: text lengths, and the largest value each decimal column holds |
+| Failed use case | `SqlUnitOfWork` clears the change tracker, so nothing from a failed attempt reaches a later read |
+| Set-based price revision | `SqlProductRepository.RevisePricesAsync` (`ExecuteUpdateAsync`), `AdministrationApplicationService.RevisePricesAsync`. No screen calls it yet |
+| Input → command → entity | Web view models → `CounterBasketRequest` records → domain entities, mapped explicitly in the controllers and services. The sale form's posted fields include no status or audit values, and its posted `TransactionId` is the idempotency key. Automated over-posting tests are still to come |
+
+**Behaviour changes from M2:**
+- Text longer than its column, and numbers too large for theirs, are now rejected as validation errors.
+- `AdjustStockAsync` records a fixed reason, "Manual stock adjustment", on the history row, because the screen does not ask for one.
+- A refund, and a void of a paid sale, each write a `Refund` entry on SQL Server only. **These entries are inferred, not required by the brief, and are pending trainer confirmation** ([ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md)).
+
+#### M2 traceability
+
+Verification ran on 2026-10-31 on a disposable database in `E:\SqlData\ApexPost\Tests`, since dropped, using throwaway probes that ran the real services. These are not repeatable automated tests.
+
+| Assignment requirement | Implementation | Documentation | Verification evidence |
+|---|---|---|---|
+| F: dependency direction | Interfaces in Application, implementations in Infrastructure | ADR 0020, diagram above | Domain and Application reference no EF Core packages |
+| F: specific repositories | `IBranchRepository`, `IProductRepository`, `IStockRepository`, `ICounterTransactionRepository`, `IStaffRepository` | ADR 0020 | Sale, void, refund, stock adjustment and administration ran on them on SQL Server |
+| F: stage only, no `IQueryable` | `SqlRepositories.cs` | ADR 0020 | Review of `SqlRepositories.cs`: public methods return entities or lists. `RevisePricesAsync` is the documented exception |
+| F: `IUnitOfWork`, one commit per use case | `SqlUnitOfWork`, migrated services | ADR 0020 | A failed sale left no transaction, payment, money-order or stock change |
+| F: scoped lifetimes | `AddApexPostSqlPersistence` | ADR 0020 | The probe resolved one scope per use case |
+| F: persistence entity and mapper | `SqlCounterTransactionRepository`, `MoneyOrder.RestoreIdentityVerification` | ADR 0019, ADR 0020 | Basket and money-order reads returned the restored verification |
+| F: Week 2 tests unchanged | `SnapshotStore` and the `IApexPostRepository` constructors | ADR 0020 | All 558 existing tests passed after the refactor, with no test file changed. They run on JSON through the bridge |
+| E: one `SaveChangesAsync` per sale | `MixedBasketApplicationService.ProcessAsync` | ADR 0020 | Sale saved transaction, lines, shipment, money order, verification, payment and stock together |
+| E: `ExecuteUpdateAsync` | `SqlProductRepository.RevisePricesAsync` | ADR 0020 | 33.33 × 1.1 stored as 36.66; another category unchanged |
+| E: concurrency | `SqlUnitOfWork`, rowversion | ADR 0021 | 20 sales of 10 units: 10 sold, stock 0. Retry reloaded state; repeated conflicts gave `ConcurrencyConflictException` |
+| E: explicit transaction with execution strategy | `SqlUnitOfWork.ExecuteInTransactionAsync` | ADR 0021 | Ran with `EnableRetryOnFailure` configured. A transient failure was not simulated |
+| Plan: events once | `committedEvents` in services | ADR 0021 | 10 completed events for 10 committed sales; no event for a failed sale |
+| Implemented, pending trainer confirmation: void and refund entries | `TransactionApplicationService.RecordPaymentEntry` | ADR 0020, ADR 0017 | Void of a paid sale and a refund each added one `Refund` entry with the sale's method. Amounts matched on a sale without shipping (78.66). They were not compared on a sale with shipping, where ADR 0017 records a known defect |
+| Plan: audit stamping | `AuditColumnsInterceptor` | ADR 0020 | `CreatedBy` and `ModifiedAtUtc` were stamped |
+| Plan: input limits | `InputLimits` | ADR 0020 | A 501-character reason was rejected before saving |
+| Numeric limits | `InputLimits.Ensure`, `MixedBasketApplicationService`, `AdministrationApplicationService` | ADR 0020 | Oversized weight rejected with no rows written |
+| Failed use case clears tracked state | `SqlUnitOfWork.ExecuteInTransactionAsync` | ADR 0020 | No tracked entries after a failed attempt; tracked entries kept after a success |
+
+**Not implemented in M2:** the Web cutover, a real `ICurrentStaffAccessor`, the report and dashboard query services, and the tests the brief requires for fakes, a spy Unit of Work and over-posting.
+
 ## 5. HTTP pipeline
 
 ```mermaid
@@ -656,7 +714,7 @@ flowchart TD
 | Principle | Where it shows |
 |---|---|
 | Single responsibility | One rule class per business rule; pricing, sale processing and reversal are separate domain services; storage, audit and credentials are separate stores |
-| Open/closed | New report filters are new specifications; new notification channels subscribe to the publisher; a database repository can replace JSON behind `IApexPostRepository` |
+| Open/closed | New report filters are new specifications; new notification channels subscribe to the publisher; SQL Server repositories can replace `SnapshotStore` behind the same interfaces without changing the services |
 | Liskov substitution | Simulated courier and verification services are interchangeable with real ones behind their interfaces; tests substitute fakes for the repository and stores |
 | Interface segregation | Credential reads (`IStaffCredentialRepository`) are separate from provisioning (`IStaffCredentialProvisioning`); `IAuditStore` has one method |
 | Dependency inversion | Application depends on its own interfaces; Infrastructure implements them; Web composes them |
@@ -689,6 +747,7 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 - **Single-process persistence:** the persistence lock and partner rate limiting are single-process, and there is one shared partner key.
 - **Audit gaps:** the audit omits pre-MVC rejections (authorization, antiforgery, rate limit, IP checks); the framework logs them instead.
 - **No measurements:** none are recorded for the cache or dashboard.
+- **Refund amounts can differ from payments:** on SQL Server, a `Refund` entry for a sale with a shipping price of more than 2 decimals can differ from its `Payment` entry by about one minor currency unit. The fix waits for trainer confirmation of the `Refund` entries ([ADR 0017](docs/adr/0017-money-precision-and-rounding.md)).
 
 ## 15. Decision records
 
@@ -713,3 +772,5 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 | [0017](docs/adr/0017-money-precision-and-rounding.md) | Money precision at the database boundary |
 | [0018](docs/adr/0018-schema-design-and-delete-behaviours.md) | Schema design and delete behaviours |
 | [0019](docs/adr/0019-domain-and-persistence-separation.md) | Where domain and persistence models are separated |
+| [0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md) | Repository and Unit of Work boundaries |
+| [0021](docs/adr/0021-concurrency-strategy.md) | Concurrency strategy for stock and transactions |

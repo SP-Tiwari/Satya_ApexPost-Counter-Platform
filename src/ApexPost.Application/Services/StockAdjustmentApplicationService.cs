@@ -9,40 +9,78 @@ public sealed record StockAdjustmentCatalog(
 
 public sealed class StockAdjustmentApplicationService
 {
-	private readonly IApexPostRepository _repository;
+	// The adjustment screen does not ask for a reason, but the history row
+	// requires one.
+	private const string ManualAdjustmentReason = "Manual stock adjustment";
+
+	private readonly IStaffRepository _staff;
+	private readonly IBranchRepository _branches;
+	private readonly IProductRepository _products;
+	private readonly IStockRepository _stock;
+	private readonly IUnitOfWork _unitOfWork;
 	private readonly DomainEventPublisher? _events;
 	private readonly int? _lowStockThreshold;
 	private readonly TimeProvider _timeProvider;
 
 	public StockAdjustmentApplicationService(
-		IApexPostRepository repository,
+		IStaffRepository staff,
+		IBranchRepository branches,
+		IProductRepository products,
+		IStockRepository stock,
+		IUnitOfWork unitOfWork,
 		DomainEventPublisher? events = null,
 		int? lowStockThreshold = null,
 		TimeProvider? timeProvider = null)
 	{
-		ArgumentNullException.ThrowIfNull(repository);
+		ArgumentNullException.ThrowIfNull(staff);
+		ArgumentNullException.ThrowIfNull(branches);
+		ArgumentNullException.ThrowIfNull(products);
+		ArgumentNullException.ThrowIfNull(stock);
+		ArgumentNullException.ThrowIfNull(unitOfWork);
 		if (lowStockThreshold < 0)
 			throw new ArgumentOutOfRangeException(
 				nameof(lowStockThreshold), "Low-stock threshold cannot be negative.");
-		_repository = repository;
+		_staff = staff;
+		_branches = branches;
+		_products = products;
+		_stock = stock;
+		_unitOfWork = unitOfWork;
 		_events = events;
 		_lowStockThreshold = lowStockThreshold;
 		_timeProvider = timeProvider ?? TimeProvider.System;
+	}
+
+	// JSON persistence, until the SQL Server cutover in M3.
+	public StockAdjustmentApplicationService(
+		IApexPostRepository repository,
+		DomainEventPublisher? events = null,
+		int? lowStockThreshold = null,
+		TimeProvider? timeProvider = null)
+		: this(new SnapshotStore(repository), events, lowStockThreshold, timeProvider)
+	{
+	}
+
+	private StockAdjustmentApplicationService(
+		SnapshotStore store,
+		DomainEventPublisher? events,
+		int? lowStockThreshold,
+		TimeProvider? timeProvider)
+		: this(store, store, store, store, store, events, lowStockThreshold, timeProvider)
+	{
 	}
 
 	public async Task<StockAdjustmentCatalog> GetCatalogAsync(
 		string staffId,
 		CancellationToken cancellationToken = default)
 	{
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		var staff = await FindActiveBranchManagerAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		var staff = FindActiveBranchManager(snapshot, staffId);
-		var branch = FindBranch(snapshot, staff.HomeBranchCode);
-		var branchStocks = snapshot.BranchStocks
-			.Where(stock => stock.BranchCode == staff.HomeBranchCode)
-			.ToArray();
-		return new StockAdjustmentCatalog(
-			branch, Array.AsReadOnly(branchStocks));
+		var branch = await FindBranchAsync(staff.HomeBranchCode, cancellationToken)
+			.ConfigureAwait(false);
+		var branchStocks = await _stock
+			.GetForBranchAsync(staff.HomeBranchCode, cancellationToken)
+			.ConfigureAwait(false);
+		return new StockAdjustmentCatalog(branch, branchStocks);
 	}
 
 	public async Task AdjustStockAsync(
@@ -51,12 +89,15 @@ public sealed class StockAdjustmentApplicationService
 		int quantityChange,
 		CancellationToken cancellationToken = default)
 	{
-		// Collected inside the update; published only once it has been saved.
+		// Replaced on every attempt; published only once a commit has succeeded.
 		IReadOnlyList<StockLowEvent> committedEvents = [];
-		await _repository.UpdateAsync(snapshot =>
+		await _unitOfWork.ExecuteInTransactionAsync(async token =>
 		{
-			var staff = FindActiveBranchManager(snapshot, staffId);
-			_ = FindBranch(snapshot, staff.HomeBranchCode);
+			committedEvents = [];
+			var staff = await FindActiveBranchManagerAsync(staffId, token)
+				.ConfigureAwait(false);
+			_ = await FindBranchAsync(staff.HomeBranchCode, token)
+				.ConfigureAwait(false);
 
 			if (quantityChange == 0 || quantityChange == int.MinValue)
 				throw new ArgumentOutOfRangeException(
@@ -64,17 +105,14 @@ public sealed class StockAdjustmentApplicationService
 					"Stock adjustment must be a non-zero supported quantity.");
 
 			var sku = new Sku(productSku);
-			_ = FindExactly(
-				snapshot.Products,
-				product => product.Sku == sku,
-				$"Product '{sku}'");
-			var stock = FindExactly(
-				snapshot.BranchStocks,
-				candidate =>
-					candidate.BranchCode == staff.HomeBranchCode &&
-					candidate.ProductSku == sku,
-				$"Stock for product '{sku}' at branch '{staff.HomeBranchCode}'");
+			_ = await _products.FindBySkuAsync(sku, token).ConfigureAwait(false)
+				?? throw new KeyNotFoundException($"Product '{sku}' was not found.");
+			var stock = await _stock.FindAsync(staff.HomeBranchCode, sku, token)
+				.ConfigureAwait(false)
+				?? throw new KeyNotFoundException(
+					$"Stock for product '{sku}' at branch '{staff.HomeBranchCode}' was not found.");
 
+			var occurredAtUtc = _timeProvider.GetUtcNow();
 			if (quantityChange > 0)
 			{
 				stock.AddStock(quantityChange);
@@ -89,60 +127,46 @@ public sealed class StockAdjustmentApplicationService
 					stock.BranchCode,
 					quantitiesBefore,
 					_lowStockThreshold,
-					_timeProvider.GetUtcNow());
+					occurredAtUtc);
 			}
 
-			return snapshot;
+			_stock.AddAdjustment(new StockAdjustment(
+				Guid.NewGuid(),
+				stock.BranchCode,
+				stock.ProductSku,
+				quantityChange,
+				ManualAdjustmentReason,
+				staff.Id,
+				occurredAtUtc));
+			await _unitOfWork.SaveChangesAsync(token).ConfigureAwait(false);
 		}, cancellationToken).ConfigureAwait(false);
 
 		_events?.Publish(committedEvents);
 	}
 
-	private static Staff FindActiveBranchManager(
-		ApexPostSnapshot snapshot,
-		string staffId)
+	private async Task<Staff> FindActiveBranchManagerAsync(
+		string staffId,
+		CancellationToken cancellationToken)
 	{
 		if (string.IsNullOrWhiteSpace(staffId))
 			throw new UnauthorizedAccessException(
 				"An active Branch Manager is required to adjust stock.");
 
-		var matches = snapshot.Staff
-			.Where(staff => string.Equals(
-				staff.Id, staffId, StringComparison.Ordinal))
-			.Take(2)
-			.ToArray();
-		if (matches.Length != 1 ||
-			!matches[0].IsActive ||
-			matches[0].Role != StaffRole.BranchManager)
+		var staff = await _staff.FindByIdAsync(staffId, cancellationToken)
+			.ConfigureAwait(false);
+		if (staff is not { IsActive: true, Role: StaffRole.BranchManager })
 		{
 			throw new UnauthorizedAccessException(
 				"An active Branch Manager is required to adjust stock.");
 		}
 
-		return matches[0];
+		return staff;
 	}
 
-	private static Branch FindBranch(
-		ApexPostSnapshot snapshot,
-		BranchCode branchCode) =>
-		FindExactly(
-			snapshot.Branches,
-			branch => branch.Code == branchCode,
-			$"Branch '{branchCode}'");
-
-	private static T FindExactly<T>(
-		IEnumerable<T> entries,
-		Func<T, bool> predicate,
-		string description)
-	{
-		var matches = entries.Where(predicate).Take(2).ToArray();
-		return matches.Length switch
-		{
-			0 => throw new KeyNotFoundException(
-				$"{description} was not found."),
-			1 => matches[0],
-			_ => throw new InvalidOperationException(
-				$"Multiple records match {description}.")
-		};
-	}
+	private async Task<Branch> FindBranchAsync(
+		BranchCode branchCode,
+		CancellationToken cancellationToken) =>
+		await _branches.FindByCodeAsync(branchCode, cancellationToken)
+			.ConfigureAwait(false)
+		?? throw new KeyNotFoundException($"Branch '{branchCode}' was not found.");
 }

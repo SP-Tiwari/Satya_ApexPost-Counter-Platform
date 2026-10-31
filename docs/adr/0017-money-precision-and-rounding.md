@@ -42,5 +42,13 @@ Nothing in the running application uses this yet: the app stays on JSON until M3
 
 - There is one documented rule in one place.
 - A sale's in-memory total can differ from its reloaded total by a fraction of a currency unit. Tests in the testing phase must pin this.
+- **Known defect, not yet fixed: a refund can differ from its payment.** The `Payment` entry rounds the unrounded in-memory total. A `Refund` entry rounds the total calculated after reloading, when a line's price has already been rounded.
+
+  | Example sale | Total | Stored entry |
+  |---|---|---|
+  | Payment, with shipping at 11.255 | 5,160.7691 | 5,160.77 |
+  | Refund, with shipping reloaded as 11.26 | 5,160.775 | 5,160.78 |
+
+  The 5,160.77 was observed in the M2 SQL probe. The 5,160.78 is calculated from the code and has not been run. The effect is limited to sales with a price of more than 2 decimals, which in practice means shipping lines, and to about one minor currency unit. It affects `Payments` on SQL Server only, so it has no effect until the M3 cutover. The fix is held until the trainer confirms the `Refund` entries ([ADR 0020](0020-repository-and-unit-of-work-boundaries.md)), because it depends on that rule. A likely fix is to reuse the amount of the stored `Payment` entry.
 - T-SQL reports in M4 must calculate tax the same way: stored line amounts × stored rates, rounded only for display.
 - Dimensions use `decimal(8,2)` with no converter, because no calculation uses them.

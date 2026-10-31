@@ -4,17 +4,25 @@ namespace ApexPost.Application.Services;
 
 public sealed class StaffAuthenticationService
 {
-	private readonly IApexPostRepository _repository;
+	private readonly IStaffRepository _staff;
 	private readonly IStaffCredentialRepository _credentials;
 
 	public StaffAuthenticationService(
-		IApexPostRepository repository,
+		IStaffRepository staff,
 		IStaffCredentialRepository credentials)
 	{
-		ArgumentNullException.ThrowIfNull(repository);
+		ArgumentNullException.ThrowIfNull(staff);
 		ArgumentNullException.ThrowIfNull(credentials);
-		_repository = repository;
+		_staff = staff;
 		_credentials = credentials;
+	}
+
+	// JSON persistence, until the SQL Server cutover in M3.
+	public StaffAuthenticationService(
+		IApexPostRepository repository,
+		IStaffCredentialRepository credentials)
+		: this(new SnapshotStore(repository), credentials)
+	{
 	}
 
 	public async Task<Staff?> AuthenticateAsync(
@@ -40,19 +48,8 @@ public sealed class StaffAuthenticationService
 		if (!StaffPasswordHashVerifier.Verify(password, credential))
 			return null;
 
-		var snapshot = await _repository.LoadAsync(cancellationToken)
-			.ConfigureAwait(false);
-		var matches = snapshot.Staff
-			.Where(staff => string.Equals(
-				staff.Id, credential.StaffId, StringComparison.Ordinal))
-			.Take(2)
-			.ToArray();
-
-		if (matches.Length > 1)
-			throw new InvalidDataException(
-				"Multiple staff records match the credential identity.");
-
-		var staff = matches.SingleOrDefault();
+		var staff = await _staff.FindByIdAsync(
+			credential.StaffId, cancellationToken).ConfigureAwait(false);
 		return staff is { IsActive: true } ? staff : null;
 	}
 
@@ -63,19 +60,8 @@ public sealed class StaffAuthenticationService
 		if (string.IsNullOrWhiteSpace(staffId))
 			return null;
 
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		var staff = await _staff.FindByIdAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		var matches = snapshot.Staff
-			.Where(staff => string.Equals(
-				staff.Id, staffId, StringComparison.Ordinal))
-			.Take(2)
-			.ToArray();
-
-		if (matches.Length > 1)
-			throw new InvalidDataException(
-				"Multiple staff records match the authenticated identity.");
-
-		var staff = matches.SingleOrDefault();
 		return staff is { IsActive: true } ? staff : null;
 	}
 }

@@ -5,16 +5,35 @@ namespace ApexPost.Application.Services;
 // issued only as basket lines (MixedBasketApplicationService).
 public sealed class MoneyOrderApplicationService
 {
-	private readonly IApexPostRepository _repository;
+	private readonly IStaffRepository _staff;
+	private readonly ICounterTransactionRepository _transactions;
 	private readonly Money? _highValueThreshold;
 
 	public MoneyOrderApplicationService(
-		IApexPostRepository repository,
+		IStaffRepository staff,
+		ICounterTransactionRepository transactions,
 		Money? highValueThreshold)
 	{
-		ArgumentNullException.ThrowIfNull(repository);
-		_repository = repository;
+		ArgumentNullException.ThrowIfNull(staff);
+		ArgumentNullException.ThrowIfNull(transactions);
+		_staff = staff;
+		_transactions = transactions;
 		_highValueThreshold = highValueThreshold;
+	}
+
+	// JSON persistence, until the SQL Server cutover in M3.
+	public MoneyOrderApplicationService(
+		IApexPostRepository repository,
+		Money? highValueThreshold)
+		: this(new SnapshotStore(repository), highValueThreshold)
+	{
+	}
+
+	private MoneyOrderApplicationService(
+		SnapshotStore store,
+		Money? highValueThreshold)
+		: this(store, store, highValueThreshold)
+	{
 	}
 
 	public bool IsConfigured => _highValueThreshold is not null;
@@ -23,36 +42,29 @@ public sealed class MoneyOrderApplicationService
 		string staffId,
 		CancellationToken cancellationToken = default)
 	{
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		var staff = await FindActiveBranchManagerAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		var staff = FindActiveBranchManager(snapshot, staffId);
-		return Array.AsReadOnly(snapshot.MoneyOrders
-			.Where(order =>
-				order.ProcessingBranchCode == staff.HomeBranchCode)
-			.ToArray());
+		return await _transactions
+			.GetMoneyOrdersForBranchAsync(staff.HomeBranchCode, cancellationToken)
+			.ConfigureAwait(false);
 	}
 
-	private static Staff FindActiveBranchManager(
-		ApexPostSnapshot snapshot,
-		string staffId)
+	private async Task<Staff> FindActiveBranchManagerAsync(
+		string staffId,
+		CancellationToken cancellationToken)
 	{
 		if (string.IsNullOrWhiteSpace(staffId))
 			throw new UnauthorizedAccessException(
 				"An active Branch Manager is required to access money orders.");
 
-		var matches = snapshot.Staff
-			.Where(person => string.Equals(
-				person.Id, staffId, StringComparison.Ordinal))
-			.Take(2)
-			.ToArray();
-		if (matches.Length != 1 ||
-			!matches[0].IsActive ||
-			matches[0].Role != StaffRole.BranchManager)
+		var staff = await _staff.FindByIdAsync(staffId, cancellationToken)
+			.ConfigureAwait(false);
+		if (staff is not { IsActive: true, Role: StaffRole.BranchManager })
 		{
 			throw new UnauthorizedAccessException(
 				"An active Branch Manager is required to access money orders.");
 		}
 
-		return matches[0];
+		return staff;
 	}
 }

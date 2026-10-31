@@ -102,10 +102,23 @@ Work in order. Each milestone is one or more small PRs into a `feature/week3-sql
 - Use an execution strategy around explicit transactions.
 - Add `ExecuteUpdateAsync` for price revision, and input model → command → entity mapping.
 
-**Done when:** `IApexPostRepository` is gone, Application tests pass with the fakes and a spy Unit of Work (commit once, never on failure), and over-posting tests pass.
+**Done when (as approved for M2):** the command and read services listed in [ADR 0020](adr/0020-repository-and-unit-of-work-boundaries.md) use the new interfaces, the Web application stays on JSON, and the existing tests pass unchanged.
+
+The original conditions moved, because M2 kept the Web application on JSON and did not change tests:
+- `IApexPostRepository` stays until M3, for the temporary `SnapshotStore` bridge and for the services not yet migrated.
+- Application tests with fakes, a spy Unit of Work (commit once, never on failure) and over-posting tests belong to the testing phase.
 
 ### M3: Cut over the platform (Part G, seed)
 
+- Remove `SnapshotStore` and the `IApexPostRepository` service constructors, and supply a real `ICurrentStaffAccessor`.
+- Move the remaining reads to SQL Server with the **minimum change**, keeping the Domain report classes and calculating in memory:
+  - Daily sales, low stock and the dashboard: use the existing repository reads, sequentially. `Task.WhenAll` stays for courier lookups.
+  - Shipping volume: add `GetShipmentsAsync`.
+  - Branch auditor report: add `GetMoneyOrdersAsync` for all branches, with verifications restored.
+  - Parcel status: add `FindByShipmentIdAsync`.
+  - `ReferenceDataCache`: load through a small interface that opens a short-lived scope in Infrastructure, because the cache is a singleton.
+- These reads are a stepping stone. Optimization stays in M5, so M3 does not add `AsNoTracking`, new split queries, N+1 analysis or projections.
+- Register the new interfaces and delete the old `IApexPostRepository` constructors in one step. While both exist, `StaffAuthenticationService` has two equally long constructors, which DI rejects as ambiguous.
 - Store audit entries and credentials in SQL.
 - Build the seeding service: 5 branches, 20 staff, 30 products, 10 zones/rates, **200+ transactions** (the current seed has 40).
 - Add the `DbUpdateConcurrencyException` and unique-violation mappings to Problem Details. The current handler always titles errors "An unexpected error occurred", which has to change.
@@ -129,6 +142,7 @@ Work in order. Each milestone is one or more small PRs into a `feature/week3-sql
 
 ### M5: Query services (Part E rules, Part G)
 
+- **Depends on M3's minimum reads, and must come before M6:** those reads load whole lists into memory, which suits the 200+ seeded transactions but not M6's data volumes.
 - Reports and the dashboard use `AsNoTracking` DTO projections or stored procedures, with `AsSplitQuery` where a query would multiply rows.
 - Use Development command logging to prove there are no N+1 queries.
 
@@ -194,6 +208,7 @@ Each item from `AssignmentWeek03.txt` is checked off against the repository at M
 
 - Take the SSMS screenshots if the trainer wants them: the blocking demo with two sessions, and the execution plans. The plans can also be saved as `.sqlplan` files by script.
 - Ask the trainer about offline scope (decision 12) and the 409 deviation (decision 4).
+- Ask the trainer whether a refund, and a void of a paid sale, should each write a `Refund` entry in `Payments`, and which amount it should hold. These entries are inferred, not required ([ADR 0020](adr/0020-repository-and-unit-of-work-boundaries.md)), and the rounding defect in [ADR 0017](adr/0017-money-precision-and-rounding.md) waits for this answer.
 - Ask the trainer to confirm the Enterprise Evaluation edition, since the tools list names Developer, Express and LocalDB, and to approve the Pkcs pin (ADR 0016).
 - Approve pushes and pull requests.
 - Decide about `Assignment.txt` and `trainer_evaluation_remarks.txt`: both show as deleted in the working tree, and `AssignmentWeek03.txt` is untracked. Keep these out of the feature commits.
