@@ -1,6 +1,6 @@
 # ADR 0007: Separate staff credential store
 
-- Status: Accepted
+- Status: Superseded: credentials are now in the StaffCredentials table (ADR 0018)
 - Date: 2026-10-25 (updated 2026-10-29: demo provisioning, see ADR 0010)
 
 ## Context

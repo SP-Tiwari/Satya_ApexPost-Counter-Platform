@@ -14,14 +14,25 @@ public sealed class SkuConverter() : ValueConverter<Sku, string>(
 
 public sealed class WeightConverter() : ValueConverter<Weight, decimal>(
 	weight => Math.Round(weight.Kilograms, 3, MidpointRounding.AwayFromZero),
-	value => new Weight(value));
+	value => new Weight(value / DecimalScale.OneWithFullScale));
+
+// Decimal columns return their full scale, such as 20.00. Dividing by this
+// removes trailing zeros, so a stored value reads back and displays as entered.
+internal static class DecimalScale
+{
+	public const decimal OneWithFullScale = 1.000000000000000000000000000000000m;
+}
+
+public sealed class TrailingZeroConverter() : ValueConverter<decimal, decimal>(
+	value => value,
+	value => value / DecimalScale.OneWithFullScale);
 
 // The one place where a money amount meets decimal(18,2). Domain arithmetic is
 // unrounded, so a shipping price can carry more decimals; the rule is explicit
 // here rather than left to the driver. See ADR 0017.
 public sealed class MoneyAmountConverter() : ValueConverter<decimal, decimal>(
 	amount => Math.Round(amount, 2, MidpointRounding.AwayFromZero),
-	value => value);
+	value => value / DecimalScale.OneWithFullScale);
 
 // Stores UTC in datetime2 and restores a zero offset.
 public sealed class UtcDateTimeOffsetConverter() : ValueConverter<DateTimeOffset, DateTime>(

@@ -8,14 +8,18 @@ public sealed class DailyBranchSalesReportApplicationService
 	private const string DeniedMessage =
 		"An active Branch Manager is required to access daily sales reports.";
 
-	private readonly IApexPostRepository _repository;
+	private readonly IStaffRepository _staff;
+	private readonly ICounterTransactionRepository _transactions;
 	private readonly DailySalesReportService _reportService = new();
 
 	public DailyBranchSalesReportApplicationService(
-		IApexPostRepository repository)
+		IStaffRepository staff,
+		ICounterTransactionRepository transactions)
 	{
-		ArgumentNullException.ThrowIfNull(repository);
-		_repository = repository;
+		ArgumentNullException.ThrowIfNull(staff);
+		ArgumentNullException.ThrowIfNull(transactions);
+		_staff = staff;
+		_transactions = transactions;
 	}
 
 	public async Task<IReadOnlyList<DailySalesReportRow>> GetReportAsync(
@@ -26,25 +30,19 @@ public sealed class DailyBranchSalesReportApplicationService
 		if (string.IsNullOrWhiteSpace(staffId))
 			throw new UnauthorizedAccessException(DeniedMessage);
 
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		var staff = await _staff.FindByIdAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		var matches = snapshot.Staff
-			.Where(staff => string.Equals(
-				staff.Id, staffId, StringComparison.Ordinal))
-			.Take(2)
-			.ToArray();
-		if (matches.Length != 1 ||
-			!matches[0].IsActive ||
-			matches[0].Role != StaffRole.BranchManager)
-		{
+		if (staff is not { IsActive: true, Role: StaffRole.BranchManager })
 			throw new UnauthorizedAccessException(DeniedMessage);
-		}
 
-		var branchCode = matches[0].HomeBranchCode;
+		var branchCode = staff.HomeBranchCode;
+		var baskets = await _transactions
+			.GetForBranchAsync(branchCode, cancellationToken)
+			.ConfigureAwait(false);
 		var paidAtBranchOnDate = new PaidTransactionSpecification()
 			.And(new TransactionAtBranchSpecification(branchCode))
 			.And(new TransactionOnBusinessDateSpecification(businessDate));
-		var entries = snapshot.TransactionBaskets
+		var entries = baskets
 			.Matching(paidAtBranchOnDate)
 			.Select(basket => new DailySalesReportEntry(
 				branchCode,

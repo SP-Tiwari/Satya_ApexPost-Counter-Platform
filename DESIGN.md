@@ -1,6 +1,6 @@
 # ApexPost Counter Platform — Design
 
-This document describes the platform as implemented on the `feature/week3-sql-persistence` branch. Where something is planned but not built, it says so. The application still runs on JSON persistence; the SQL Server schema and mapping from Week 3 M1 are described in [section 4.4](#44-sql-server-schema), and the application moves onto them in M3 ([plan](docs/week-3-plan.md)). The repositories and Unit of Work from M2 are in [section 4.5](#45-repositories-and-unit-of-work). Decisions are recorded as ADRs in [docs/adr/](docs/adr/); a short request-flow walkthrough is in [docs/architecture.md](docs/architecture.md).
+This document describes the platform as implemented on the `feature/week3-sql-persistence` branch. Where something is planned but not built, it says so. Decisions are recorded as ADRs in [docs/adr/](docs/adr/); a short request-flow walkthrough is in [docs/architecture.md](docs/architecture.md). **The application runs on SQL Server** since Week 3 M3 ([section 4.6](#46-sql-server-cutover)). The schema is in [section 4.4](#44-sql-server-schema), and the repositories in [section 4.5](#45-repositories-and-unit-of-work).
 
 ## 1. Architecture
 
@@ -10,14 +10,14 @@ This document describes the platform as implemented on the `feature/week3-sql-pe
 |---|---|---|
 | `ApexPost.Domain` | Entities, value objects, business rules, domain services, events, specifications and report calculations. No I/O. | — |
 | `ApexPost.Application` | Use cases (application services), persistence/security/audit/courier/verification abstractions, the domain-event publisher, the reference-data cache and request validation. | Domain |
-| `ApexPost.Infrastructure` | JSON snapshot repository, JSON credential store, JSON Lines audit store, demo seed, and the simulated courier and identity-verification services. Also `ApexPostDbContext`, its EF Core mappings and migrations, which the running application does not use until M3. | Application, Domain |
+| `ApexPost.Infrastructure` | `ApexPostDbContext`, EF Core mappings and migrations, SQL Server repositories and stores, demo seed, and the simulated courier and identity-verification services. The older JSON stores remain in the code but the application no longer uses them. | Application, Domain |
 | `ApexPost.Web` | MVC controllers and views, middleware, filters, authentication, authorization policies, the partner API and the composition root (`Program.cs`). | Application, Infrastructure |
 
 ```mermaid
 flowchart LR
     Web["ApexPost.Web<br/>MVC, middleware, filters, composition root"]
     App["ApexPost.Application<br/>use cases and abstractions"]
-    Infra["ApexPost.Infrastructure<br/>JSON stores, simulated services"]
+    Infra["ApexPost.Infrastructure<br/>EF Core, SQL Server stores, simulated services"]
     Domain["ApexPost.Domain<br/>entities, rules, events"]
     Web --> App
     Web --> Infra
@@ -209,8 +209,10 @@ Events are collected inside `IUnitOfWork.ExecuteInTransactionAsync` and publishe
 
 ## 4. Persistence
 
+> **Historical.** The bullets below up to section 4.4 describe the JSON store used until Week 3 M3. The application no longer uses it. The classes remain only because existing Infrastructure tests still compile against them.
+
 - **Store:** `JsonApexPostRepository` keeps one versioned `apexpost.json` snapshot in `Storage:Directory`. Infrastructure maps it through DTOs and rebuilds domain objects through their validating constructors; it never deserializes straight into entities.
-- **Concurrency:** the migrated services run through `SnapshotStore.ExecuteInTransactionAsync`, which holds a gate per snapshot repository across load, change and save. If the work throws, nothing is saved. The repository writes to a temporary file in the same folder and then moves it into place. Together these make concurrent sales safe within one process ([ADR 0001](docs/adr/0001-json-snapshot-persistence.md), [ADR 0004](docs/adr/0004-atomic-transaction-processing.md), [ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md)). `UpdateAsync` holds the repository's own lock in the same way; only the demo seed still calls it.
+- **Concurrency:** `UpdateAsync(Func<snapshot, snapshot>)` held a `SemaphoreSlim` across load, change and save, and the repository wrote to a temporary file before moving it into place ([ADR 0001](docs/adr/0001-json-snapshot-persistence.md), [ADR 0004](docs/adr/0004-atomic-transaction-processing.md)). SQL Server concurrency is in [ADR 0021](docs/adr/0021-concurrency-strategy.md).
 - **Schema migration:** the current schema is 7.
 
   | Version | Change |
@@ -222,12 +224,11 @@ Events are collected inside `IUnitOfWork.ExecuteInTransactionAsync` and publishe
 
   Older files are migrated on load without inventing business data; for example, undated legacy sales stay undated. A file without a version that contains newer fields is rejected.
 - **Failure behaviour:** a missing file is an empty snapshot. A malformed, unsupported or domain-invalid file fails loudly and is never overwritten.
-- **Other stores:** credentials live in a separate file (`Authentication:CredentialFile`, [ADR 0007](docs/adr/0007-separate-staff-credential-store.md)), and audit records are appended to a JSON Lines file (`Audit:FilePath`).
-- **Next step:** the SQL Server schema below replaces these stores in M2 and M3. The lock is per process; it does not coordinate several processes sharing one folder.
+- **Other stores:** credentials lived in a separate file ([ADR 0007](docs/adr/0007-separate-staff-credential-store.md)), and audit records in a JSON Lines file. Both are now tables.
 
 ### 4.4 SQL Server schema
 
-Week 3 M1 adds the schema and mapping. **No screen or service uses them yet.** Decisions are in [ADR 0017](docs/adr/0017-money-precision-and-rounding.md) (money precision), [ADR 0018](docs/adr/0018-schema-design-and-delete-behaviours.md) (schema and deletes) and [ADR 0019](docs/adr/0019-domain-and-persistence-separation.md) (domain and persistence models).
+Week 3 M1 added the schema and mapping, and M3 moved the application onto them. Decisions are in [ADR 0017](docs/adr/0017-money-precision-and-rounding.md) (money precision), [ADR 0018](docs/adr/0018-schema-design-and-delete-behaviours.md) (schema and deletes) and [ADR 0019](docs/adr/0019-domain-and-persistence-separation.md) (domain and persistence models).
 
 #### ER diagram
 
@@ -510,14 +511,12 @@ Verification ran on 2026-10-31 on SQL Server 2025 (17.0) Enterprise Evaluation, 
 
 ### 4.5 Repositories and Unit of Work
 
-Week 3 M2 moves the application services onto repository and unit-of-work interfaces. **The Web application still runs on JSON**: `Program.cs` is unchanged, and services reach JSON through the temporary `SnapshotStore` bridge. The SQL Server implementations exist and are registered by `AddApexPostSqlPersistence`, which nothing calls until M3. Decisions are in [ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md) and [ADR 0021](docs/adr/0021-concurrency-strategy.md).
+Week 3 M2 moved the application services onto repository and unit-of-work interfaces, and M3 removed the temporary `SnapshotStore` bridge that kept them on JSON in between. Decisions are in [ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md) and [ADR 0021](docs/adr/0021-concurrency-strategy.md).
 
 ```mermaid
 flowchart LR
     S["Application services"] --> I["IBranchRepository, IProductRepository,<br/>IStockRepository, ICounterTransactionRepository,<br/>IStaffRepository, IUnitOfWork"]
-    I -->|"today"| B["SnapshotStore (temporary)"]
-    B --> J["IApexPostRepository (JSON)"]
-    I -->|"from M3"| E["Sql* repositories, SqlUnitOfWork"]
+    I --> E["Sql* repositories, SqlUnitOfWork"]
     E --> D["ApexPostDbContext"]
     R["Reports, dashboard, parcel status,<br/>ReferenceDataCache"] --> J
 ```
@@ -527,7 +526,6 @@ flowchart LR
 | Interfaces | `src/ApexPost.Application/Persistence/` |
 | SQL implementations | `src/ApexPost.Infrastructure/Persistence/Sql/SqlRepositories.cs`, `SqlUnitOfWork.cs` |
 | Registration, all scoped | `SqlPersistenceRegistration.AddApexPostSqlPersistence` |
-| JSON bridge | `src/ApexPost.Application/Persistence/SnapshotStore.cs` |
 | Commit and retry | `IUnitOfWork.ExecuteInTransactionAsync` |
 | Audit stamping | `AuditColumnsInterceptor`, `ICurrentStaffAccessor` |
 | Input limits | `InputLimits`, `[MaximumLength]`: text lengths, and the largest value each decimal column holds |
@@ -542,7 +540,7 @@ flowchart LR
 
 #### M2 traceability
 
-Verification ran on 2026-10-31 on a disposable database in `E:\SqlData\ApexPost\Tests`, since dropped, using throwaway probes that ran the real services. These are not repeatable automated tests.
+Verification first ran on 2026-10-31 on a disposable database, using throwaway probes that ran the real services. The M3 testing phase replaced those with the repeatable tests in `tests/ApexPost.Infrastructure.Tests/Sql/SqlPersistenceTests.cs`.
 
 | Assignment requirement | Implementation | Documentation | Verification evidence |
 |---|---|---|---|
@@ -552,7 +550,7 @@ Verification ran on 2026-10-31 on a disposable database in `E:\SqlData\ApexPost\
 | F: `IUnitOfWork`, one commit per use case | `SqlUnitOfWork`, migrated services | ADR 0020 | A failed sale left no transaction, payment, money-order or stock change |
 | F: scoped lifetimes | `AddApexPostSqlPersistence` | ADR 0020 | The probe resolved one scope per use case |
 | F: persistence entity and mapper | `SqlCounterTransactionRepository`, `MoneyOrder.RestoreIdentityVerification` | ADR 0019, ADR 0020 | Basket and money-order reads returned the restored verification |
-| F: Week 2 tests unchanged | `SnapshotStore` and the `IApexPostRepository` constructors | ADR 0020 | All 558 existing tests passed after the refactor, with no test file changed. They run on JSON through the bridge |
+| F: Week 2 tests unchanged | `SnapshotStore` and the `IApexPostRepository` constructors, at M2 | ADR 0020 | At M2, all 558 existing tests passed with no test file changed, on JSON through the bridge. M3 removed the bridge, so see section 4.6 for the current test status |
 | E: one `SaveChangesAsync` per sale | `MixedBasketApplicationService.ProcessAsync` | ADR 0020 | Sale saved transaction, lines, shipment, money order, verification, payment and stock together |
 | E: `ExecuteUpdateAsync` | `SqlProductRepository.RevisePricesAsync` | ADR 0020 | 33.33 × 1.1 stored as 36.66; another category unchanged |
 | E: concurrency | `SqlUnitOfWork`, rowversion | ADR 0021 | 20 sales of 10 units: 10 sold, stock 0. Retry reloaded state; repeated conflicts gave `ConcurrencyConflictException` |
@@ -564,7 +562,41 @@ Verification ran on 2026-10-31 on a disposable database in `E:\SqlData\ApexPost\
 | Numeric limits | `InputLimits.Ensure`, `MixedBasketApplicationService`, `AdministrationApplicationService` | ADR 0020 | Oversized weight rejected with no rows written |
 | Failed use case clears tracked state | `SqlUnitOfWork.ExecuteInTransactionAsync` | ADR 0020 | No tracked entries after a failed attempt; tracked entries kept after a success |
 
-**Not implemented in M2:** the Web cutover, a real `ICurrentStaffAccessor`, the report and dashboard query services, and the tests the brief requires for fakes, a spy Unit of Work and over-posting.
+**Not implemented in M2:** the report and dashboard query services. Tests for fakes, a spy Unit of Work and over-posting followed in the M3 testing phase.
+
+### 4.6 SQL Server cutover
+
+Week 3 M3 moved the Web application from JSON to SQL Server. `Program.cs` requires `ConnectionStrings:ApexPostDb` and registers `AddApexPostSqlPersistence`. `SnapshotStore` and the `IApexPostRepository` service constructors are gone, which also resolves the DI ambiguity on `StaffAuthenticationService`.
+
+| Concern | Implementation |
+|---|---|
+| Reports, dashboard, parcel status | The Domain report classes are unchanged, and now read through repositories, calculating in memory. M5 replaces these with optimized query services |
+| Added repository reads | `GetMoneyOrdersAsync`, `GetShipmentsAsync`, `FindByShipmentIdAsync` |
+| `ReferenceDataCache` | Loads through `IReferenceDataSource`. `SqlReferenceDataSource` opens a short-lived scope, because the cache is a singleton |
+| Audit | `SqlAuditStore`, in its own scope and commit ([ADR 0022](docs/adr/0022-audit-store-and-unit-of-work.md)) |
+| Credentials | `SqlStaffCredentialRepository`, in `StaffCredentials` |
+| Demo seed | `SqlDemoDataSeeder` writes `DemoDataInitializer`'s data in one commit: 5 branches, 20 staff, 30 products, 10 zones and rates, 210 paid sales with payments |
+| Current staff | `HttpContextStaffAccessor` supplies `CreatedBy` |
+| Problem Details | `ApplicationExceptionHandler` maps `ConcurrencyConflictException` and `DuplicateRecordException` to 409, `KeyNotFoundException` to 404 and `ArgumentException` to 400. Anything else stays a 500 |
+| Unique violations | `SqlUnitOfWork` translates SQL errors 2601 and 2627 to `DuplicateRecordException` |
+
+#### M3 traceability
+
+Verified on 2026-10-31 by running the real application over HTTPS against a disposable seeded database in `E:\SqlData\ApexPost\Tests`, since dropped. That run was one-off. The repeatable equivalents are in [section 13](#13-testing). `ApexPostDb` itself has not been migrated.
+
+| Assignment requirement | Implementation | Documentation | Verification evidence |
+|---|---|---|---|
+| G: screens read and write SQL Server | `Program.cs`, `AddApexPostSqlPersistence` | This section | 34 live checks passed across clerk, manager, auditor and administrator, with no errors logged |
+| G: reports through services | The report application services | This section | Daily sales, low stock, shipping volume and branch auditor pages returned 200 |
+| G: `AuditEntries` through `IAuditStore` | `SqlAuditStore`, `AuditActionFilter` | ADR 0022 | 9 audit rows, including the 409 rejections |
+| G: exceptions to Problem Details | `ApplicationExceptionHandler` | This section | `ProblemDetailsExceptionHandlingTests.KnownException_MapsToItsProblemDetails` covers all four mappings |
+| G: connection string from user-secrets | `Program.cs` | README | Startup refuses to run without it. The live run supplied it through the environment |
+| E: seed volumes | `SqlDemoDataSeeder` | This section | 5 branches, 10 counters, 20 staff, 20 credentials, 30 products, 150 stock rows, 10 zones, 10 rates |
+| E: 200+ historical transactions | `SqlDemoDataSeeder` | This section | 210 seeded sales, plus the 1 made in the run, with no negative stock |
+| Plan: `CreatedBy` from the signed-in staff member | `HttpContextStaffAccessor` | This section | The sale recorded `demo-staff-01`, and the refund entry `demo-staff-02` |
+| Plan: partner API | `ParcelStatusApplicationService` | This section | Status 200 for a real shipment, 404 for an unknown one |
+
+**Test status after the M3 testing phase:** the whole solution builds with 0 warnings, and all 626 tests pass. See [section 13](#13-testing).
 
 ## 5. HTTP pipeline
 
@@ -653,7 +685,7 @@ flowchart TD
 | CORS misuse | Exact configured origin, GET only, no credentials | CORS only tells browsers what to allow. It does not stop scripts or servers calling the API, so it is not a security boundary; the API key is. |
 | Sensitive data in logs or audit | Audit records only IDs, roles, route keys and status; passwords, document numbers, keys and form values are never recorded; identity documents are masked in the domain | Void/refund notification logs include the staff-entered reason |
 | Secrets in the repository | User-secrets (`UserSecretsId` set), `.gitignore` for data folders, demo password never committed | — |
-| Lost updates under concurrency | Locked read-modify-write and atomic file replace | Single process only |
+| Lost updates under concurrency | Rowversion on stock and transactions, with a bounded retry ([ADR 0021](docs/adr/0021-concurrency-strategy.md)) | A heavy load can exhaust the retries while stock remains |
 | Error detail disclosure | Problem Details with a trace ID only | — |
 
 ## 8. Auditing and privacy
@@ -673,9 +705,9 @@ flowchart TD
   - duration and allow-listed route values (`id`, `transactionId`, `branchCode`); a new sale adds its posted transaction ID through `AuditActionFilter.AddAuditValue`, which accepts only the same allow-listed keys
   - staff ID, role and branch
   - correlation ID
-- **Where it is stored:** `IAuditStore` is implemented by `JsonAuditStore`, an append-only JSON Lines file serialized by a `SemaphoreSlim`. A write is not cancelled if the client disconnects. [data/AUDIT-SAMPLE.json](data/AUDIT-SAMPLE.json) contains real lines from a local run.
+- **Where it is stored:** `IAuditStore` is implemented by `SqlAuditStore`, which writes to `AuditEntries` in its own scope and commit ([ADR 0022](docs/adr/0022-audit-store-and-unit-of-work.md)). A write is not cancelled if the client disconnects, and a failed write is logged without changing the response. [data/AUDIT-SAMPLE.json](data/AUDIT-SAMPLE.json) contains real lines from the earlier JSON audit file.
 - **Personal data:** no passwords, API keys, full document numbers, card data or form values are written. Route keys that look sensitive (password, key, token, secret, credential, document, card) are dropped.
-- **Integrity:** the file is not tamper-evident; protect it with file permissions and backups.
+- **Integrity:** the table is not tamper-evident; M4's least-privilege note covers who may write to it.
 - **Gaps:** requests rejected before MVC (authorization, antiforgery, rate limit, IP) are logged by the framework but not audited.
 
 ## 9. Asynchrony, concurrency and caching
@@ -684,15 +716,15 @@ flowchart TD
 |---|---|---|
 | `async`/`await` with `CancellationToken` | Controllers → application services → repositories and simulated services | No blocking I/O; abandoned requests stop work. There is no `.Result`, `.Wait()` or `Thread.Sleep`. |
 | `Task.WhenAll` | `BranchDashboardApplicationService` (reference data plus courier lookups); demo credential hashing | Independent work runs at the same time, so the page waits for the slowest call rather than the sum |
-| `SemaphoreSlim` | JSON repository and audit store (one writer); simulated courier (`Courier:MaxConcurrentLookups`) | Safe file writes; bounded load on the external courier |
+| `SemaphoreSlim` | Simulated courier (`Courier:MaxConcurrentLookups`) | Bounded load on the external courier |
 | `ValueTask` plus cache | `ReferenceDataCache` (products and shipping rates, `Caching:ReferenceDataSeconds` = 30), read by the dashboard and the catalogue page | A cache hit returns synchronously without reading and deserializing the JSON file. Sale pricing always uses the authoritative snapshot inside the locked update, never the cache. |
 | Timeouts, separate from cancellation | Simulated courier and identity verification use `CancellationTokenSource(timeout, TimeProvider)` | A timeout becomes `TimedOut` or a 503 "verification unavailable"; caller cancellation propagates as cancellation. |
 
 **Measurement:** no benchmark has been recorded yet. The cache's benefit is explained above rather than measured; adding a timing comparison is listed under known gaps.
 
 **DI lifetimes:**
-- **Singletons:** repository, credential and audit stores, cache, event publisher, notification sender, `TimeProvider`, simulated services. They hold locks or shared state.
-- **Scoped:** application services, filters and `StaffCookieAuthenticationEvents`, which are per request.
+- **Singletons:** cache, event publisher, notification sender, `TimeProvider`, simulated services, `SqlAuditStore` and `SqlReferenceDataSource`. The last two open their own scopes.
+- **Scoped:** the `DbContext`, repositories, Unit of Work, application services, filters and `StaffCookieAuthenticationEvents`, which are per request.
 - **Middleware** is created once, so its constructors take only singletons (`IConfiguration`, `ILogger`, the partner limiter). Nothing scoped is captured.
 
 ## 10. C# 14 and language features
@@ -727,16 +759,18 @@ flowchart TD
 
 ## 13. Testing
 
-There are four xUnit projects: Domain (rules and value objects), Application (use cases), Infrastructure (JSON persistence, migration, concurrency, demo seed) and Web integration (`WebApplicationFactory`: security headers, API key and IP, rate limits, CORS, maintenance, authentication, filters and controllers).
+There are four xUnit projects: Domain (rules and value objects), Application (use cases with in-memory fakes and a spy Unit of Work), Infrastructure (SQL Server repositories, transactions and concurrency, plus the older JSON stores) and Web integration (`WebApplicationFactory` on a real SQL Server database: security headers, API key and IP, rate limits, CORS, maintenance, authentication, filters and controllers).
+
+**Test database.** SQL tests run against a uniquely named `ApexPost_Test_*` database, built by the real migrations, with its files in `E:\SqlData\ApexPost\Tests`, and dropped when the run ends (`tests/Shared/DisposableSqlDatabase.cs`). It refuses any other name, so it cannot touch `ApexPostDb`, and it never falls back to the instance default on C:. The Web test host replaces the connection string with this database, and a test confirms it. Web tests seed through a test-only `SqlSnapshotRepository`, so their assertions stayed as they were.
 
 Only the assignment's allowed libraries are used: xUnit, `Microsoft.AspNetCore.Mvc.Testing` and the Microsoft test SDK. Test doubles are hand-written (`FakeApexPostRepository`, a fixed `TimeProvider`, a fake identity-verification service), and every integration test host uses `ApexPostWebApplicationFactory`, which drops the developer's user-secrets so local settings cannot change results.
 
 | Project | Result | Main coverage |
 |---|---|---|
-| Domain | 213/213 | Stock, weight-limit, money-order verification and void/refund rules, pricing, transaction access (`CanView`) |
-| Application | 110/110 | Multi-line counter sales, payment-method configuration, money orders as basket lines (fee, threshold, verification success, failure and timeout), dated reports, catalogue, clerk read access, password hashing and the dummy-hash timing |
-| Infrastructure | 38/38 | JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed, database health check failure and cancellation paths |
-| Web | 197/197 | Database health endpoint isolation, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
+| Domain | 224/224 | Stock, weight-limit, money-order verification and void/refund rules, pricing, transaction access (`CanView`) |
+| Application | 120/120 | One commit per use case and none on failure (spy Unit of Work), events once across a retry, multi-line counter sales, payment-method configuration, money orders as basket lines (fee, threshold, verification success, failure and timeout), dated reports, catalogue, clerk read access, password hashing and the dummy-hash timing |
+| Infrastructure | 78/78 | SQL repositories and mapping, rollback of a failed sale, rowversion conflicts and retries, concurrent sales, constraints, migrations down and up, seed, credentials and audit store, JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed, database health check failure and cancellation paths |
+| Web | 204/204 | Audit failures tested apart from business failures, Problem Details mappings, over-posting, SQL persistence registration, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
 
 The dummy-hash timing test compares the fastest of three runs and accepts a ratio of 0.6–1.6 against a real check; the old 210,000-iteration dummy measured about 0.35.
 
@@ -747,7 +781,7 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 - **Single-process persistence:** the persistence lock and partner rate limiting are single-process, and there is one shared partner key.
 - **Audit gaps:** the audit omits pre-MVC rejections (authorization, antiforgery, rate limit, IP checks); the framework logs them instead.
 - **No measurements:** none are recorded for the cache or dashboard.
-- **Refund amounts can differ from payments:** on SQL Server, a `Refund` entry for a sale with a shipping price of more than 2 decimals can differ from its `Payment` entry by about one minor currency unit. The fix waits for trainer confirmation of the `Refund` entries ([ADR 0017](docs/adr/0017-money-precision-and-rounding.md)).
+- **Refund amounts can differ from payments:** on SQL Server, a `Refund` entry for a sale with a shipping price of more than 2 decimals can differ from its `Payment` entry by about one minor currency unit. `KnownDefect_RefundOfASaleWithShippingCanDifferFromItsPayment` pins it. The fix waits for trainer confirmation of the `Refund` entries ([ADR 0017](docs/adr/0017-money-precision-and-rounding.md)).
 
 ## 15. Decision records
 

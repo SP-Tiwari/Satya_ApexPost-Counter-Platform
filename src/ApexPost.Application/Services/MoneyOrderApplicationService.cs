@@ -21,21 +21,6 @@ public sealed class MoneyOrderApplicationService
 		_highValueThreshold = highValueThreshold;
 	}
 
-	// JSON persistence, until the SQL Server cutover in M3.
-	public MoneyOrderApplicationService(
-		IApexPostRepository repository,
-		Money? highValueThreshold)
-		: this(new SnapshotStore(repository), highValueThreshold)
-	{
-	}
-
-	private MoneyOrderApplicationService(
-		SnapshotStore store,
-		Money? highValueThreshold)
-		: this(store, store, highValueThreshold)
-	{
-	}
-
 	public bool IsConfigured => _highValueThreshold is not null;
 
 	public async Task<IReadOnlyList<MoneyOrder>> GetMoneyOrdersAsync(

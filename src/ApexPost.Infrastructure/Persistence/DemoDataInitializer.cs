@@ -36,7 +36,11 @@ public sealed class DemoDataInitializer(
 		return initialized;
 	}
 
-	private static ApexPostSnapshot CreateDemoSnapshot(DateTimeOffset seededAtUtc)
+	// With a payment method, sales record a counter and clerk like real ones.
+	internal static ApexPostSnapshot CreateDemoSnapshot(
+		DateTimeOffset seededAtUtc,
+		int saleCount = 40,
+		string? paymentMethod = null)
 	{
 		var branches = Enumerable.Range(1, 5)
 			.Select(index => new Branch(
@@ -99,11 +103,15 @@ public sealed class DemoDataInitializer(
 			[TaxCategory.ZeroRated] = 0m
 		};
 		var saleProcessing = new SaleProcessingService();
-		var transactions = Enumerable.Range(1, 40)
+		var transactions = Enumerable.Range(1, saleCount)
 			.Select(index =>
 			{
 				var product = products[(index - 1) % products.Length];
-				var branchCode = branches[(index - 1) % branches.Length].Code;
+				var branch = branches[(index - 1) % branches.Length];
+				var branchCode = branch.Code;
+				var clerk = staff.First(person =>
+					person.HomeBranchCode == branchCode &&
+					person.Role == StaffRole.CounterClerk);
 				// Demo history: one sale every six hours going back from seeding
 				// time, so the daily report has data on recent dates.
 				var basket = new TransactionBasket(
@@ -111,7 +119,11 @@ public sealed class DemoDataInitializer(
 					"INR",
 					taxRates,
 					branchCode,
-					seededAtUtc.AddHours(-6 * (index - 1)));
+					seededAtUtc.AddHours(-6 * (index - 1)),
+					paymentMethod is null
+						? null
+						: new CounterSaleDetails(
+							branch.CounterTerminals[0].Id, clerk.Id, paymentMethod));
 				basket.AddLineItem(new TransactionLineItem(product, 1));
 				// Process seed sales like real sales so they deduct stock and a
 				// later void or refund returns only stock that was taken.

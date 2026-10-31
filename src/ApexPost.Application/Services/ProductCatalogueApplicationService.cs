@@ -39,21 +39,6 @@ public sealed class ProductCatalogueApplicationService
 		_referenceData = referenceData;
 	}
 
-	// JSON persistence, until the SQL Server cutover in M3.
-	public ProductCatalogueApplicationService(
-		IApexPostRepository repository,
-		ReferenceDataCache referenceData)
-		: this(new SnapshotStore(repository), referenceData)
-	{
-	}
-
-	private ProductCatalogueApplicationService(
-		SnapshotStore store,
-		ReferenceDataCache referenceData)
-		: this(store, store, store, referenceData)
-	{
-	}
-
 	public async Task<ProductCatalogue> GetCatalogueAsync(
 		string staffId,
 		CancellationToken cancellationToken = default)

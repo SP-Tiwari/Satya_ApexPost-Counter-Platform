@@ -27,11 +27,11 @@
 - All SQL types are scoped and share one `DbContext` per request (`AddApexPostSqlPersistence`).
 - `IProductRepository.RevisePricesAsync` is the one exception to "stage only". `ExecuteUpdateAsync` applies at once, so it runs inside `ExecuteInTransactionAsync`.
 
-**`SnapshotStore` is a temporary bridge.** It implements the same six interfaces over `IApexPostRepository`. Services take the new interfaces in their main constructor, and keep a second constructor taking `IApexPostRepository` that creates a `SnapshotStore`. This keeps the Web application on JSON, and existing tests run unchanged against the refactored services. A gate per snapshot repository is held from a use case's first read to its commit, which keeps read-change-save atomic as `UpdateAsync` did. The bridge and these constructors are removed in M3.
+**`SnapshotStore` was a temporary bridge during M2.** It implemented the same six interfaces over `IApexPostRepository`. Services take the new interfaces in their main constructor, and keep a second constructor taking `IApexPostRepository` that creates a `SnapshotStore`. This keeps the Web application on JSON, and existing tests run unchanged against the refactored services. A gate per snapshot repository is held from a use case's first read to its commit, which keeps read-change-save atomic as `UpdateAsync` did. **M3 removed the bridge and these constructors.**
 
 **Migrated in M2:** `TransactionApplicationService`, `MixedBasketApplicationService`, `StockAdjustmentApplicationService`, `AdministrationApplicationService`, `StaffAuthenticationService`, `MoneyOrderApplicationService`, `ProductCatalogueApplicationService`.
 
-**Not migrated:** the report services, `BranchDashboardApplicationService`, `ParcelStatusApplicationService` and `ReferenceDataCache`. They are reads, and they still use `IApexPostRepository` until M3.
+**Migrated in M3, with the minimum change:** the report services, `BranchDashboardApplicationService`, `ParcelStatusApplicationService` and `ReferenceDataCache`.
 
 **Where direct `DbContext` use is acceptable:** only in Infrastructure. M5's query services may project directly from the `DbContext`, behind Application interfaces.
 
@@ -47,7 +47,7 @@ The two `Refund` entries are **inferred, not approved**. No source requires them
 
 **Known defect in these entries:** a `Refund` entry can differ from its `Payment` entry by a small amount. See [ADR 0017](0017-money-precision-and-rounding.md). The fix is held until the trainer confirms the rule.
 
-Voiding an open basket writes nothing. A basket without sale details, or with a zero total, writes no entry. `SnapshotStore` keeps no payments or stock adjustment history, because the JSON snapshot has no place for them.
+Voiding an open basket writes nothing. A basket without sale details, or with a zero total, writes no entry.
 
 **Identity verification:** `SqlCounterTransactionRepository` loads `IdentityVerificationRecord` rows in one query per read, and restores them with `MoneyOrder.RestoreIdentityVerification`, which never replaces a recorded value.
 
@@ -67,7 +67,6 @@ Voiding an open basket writes nothing. A basket without sale details, or with a 
 
 ## Consequences
 
-- Services are ready for SQL Server, and M3 changes the composition rather than the use cases.
-- Until M3, some reads load the JSON file more than once per page. A catalogue page also reads sequentially instead of in parallel, because a `DbContext` cannot run two operations at once.
-- `SnapshotStore` reports duplicate records as `InvalidDataException`. Some lookups previously treated a duplicate staff ID as unauthorized. Both refuse the request, and SQL keys prevent duplicates.
-- Reports, the dashboard, parcel status and `ReferenceDataCache` still read JSON. M3 gives them minimum SQL-compatible reads, and M5 replaces those with optimized query services. See the plan.
+- A catalogue page reads sequentially instead of in parallel, because a `DbContext` cannot run two operations at once.
+- Reports, the dashboard and parcel status load whole lists through repositories and calculate in memory. M5 replaces these with optimized query services. See the plan.
+- `IApexPostRepository`, `ApexPostSnapshot` and the JSON stores remain, unused by the application, because existing tests compile against them. `AdministrationApplicationService.GetSnapshotAsync` still returns `ApexPostSnapshot` as a simple container.

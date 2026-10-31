@@ -30,7 +30,10 @@ public sealed class BranchDashboardApplicationService
 	// How many of today's shipments the dashboard looks up; a display limit.
 	private const int RecentShipmentLimit = 5;
 
-	private readonly IApexPostRepository _repository;
+	private readonly IStaffRepository _staff;
+	private readonly IBranchRepository _branches;
+	private readonly IStockRepository _stock;
+	private readonly ICounterTransactionRepository _transactions;
 	private readonly ReferenceDataCache _referenceData;
 	private readonly TimeProvider _timeProvider;
 	private readonly int? _lowStockThreshold;
@@ -39,20 +42,29 @@ public sealed class BranchDashboardApplicationService
 	private readonly LowStockReportService _lowStockReport = new();
 
 	public BranchDashboardApplicationService(
-		IApexPostRepository repository,
+		IStaffRepository staff,
+		IBranchRepository branches,
+		IStockRepository stock,
+		ICounterTransactionRepository transactions,
 		ReferenceDataCache referenceData,
 		TimeProvider timeProvider,
 		int? lowStockThreshold = null,
 		ICourierTrackingService? courier = null)
 	{
-		ArgumentNullException.ThrowIfNull(repository);
+		ArgumentNullException.ThrowIfNull(staff);
+		ArgumentNullException.ThrowIfNull(branches);
+		ArgumentNullException.ThrowIfNull(stock);
+		ArgumentNullException.ThrowIfNull(transactions);
 		ArgumentNullException.ThrowIfNull(referenceData);
 		ArgumentNullException.ThrowIfNull(timeProvider);
 		if (lowStockThreshold < 0)
 			throw new ArgumentOutOfRangeException(
 				nameof(lowStockThreshold), "Low-stock threshold cannot be negative.");
 
-		_repository = repository;
+		_staff = staff;
+		_branches = branches;
+		_stock = stock;
+		_transactions = transactions;
 		_referenceData = referenceData;
 		_timeProvider = timeProvider;
 		_lowStockThreshold = lowStockThreshold;
@@ -63,27 +75,37 @@ public sealed class BranchDashboardApplicationService
 		string staffId,
 		CancellationToken cancellationToken = default)
 	{
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		var staff = await FindActiveStaffAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		var staff = FindActiveStaff(snapshot, staffId);
-		var branch = snapshot.Branches.SingleOrDefault(
-			candidate => candidate.Code == staff.HomeBranchCode)
+		var branch = await _branches
+			.FindByCodeAsync(staff.HomeBranchCode, cancellationToken)
+			.ConfigureAwait(false)
 			?? throw new KeyNotFoundException(
 				$"Branch '{staff.HomeBranchCode}' was not found.");
 
 		var generatedAtUtc = _timeProvider.GetUtcNow();
 		var today = DateOnly.FromDateTime(generatedAtUtc.UtcDateTime);
 		var isManager = staff.Role == StaffRole.BranchManager;
-		TransactionBasket[] todaysSales = isManager
-			? snapshot.TransactionBaskets
+		TransactionBasket[] todaysSales = [];
+		IReadOnlyList<BranchStock> branchStocks = [];
+		if (isManager)
+		{
+			// One after another: these share the request's DbContext.
+			var baskets = await _transactions
+				.GetForBranchAsync(branch.Code, cancellationToken)
+				.ConfigureAwait(false);
+			todaysSales = baskets
 				.Matching(new PaidTransactionSpecification()
 					.And(new TransactionAtBranchSpecification(branch.Code))
 					.And(new TransactionOnBusinessDateSpecification(today)))
-				.ToArray()
-			: [];
+				.ToArray();
+			branchStocks = await _stock
+				.GetForBranchAsync(branch.Code, cancellationToken)
+				.ConfigureAwait(false);
+		}
 
-		// The catalogue (from the cache) and the courier lookups are
-		// independent I/O, so they run in parallel.
+		// The catalogue (from the cache, in its own scope) and the courier
+		// lookups are independent I/O, so they run in parallel.
 		var referenceTask = _referenceData.GetAsync(cancellationToken).AsTask();
 		var shipmentsTask = isManager && _courier is not null
 			? LookUpRecentShipmentsAsync(todaysSales, _courier, cancellationToken)
@@ -103,10 +125,7 @@ public sealed class BranchDashboardApplicationService
 				.Count(),
 			isManager ? SummarizeSales(branch.Code, today, todaysSales) : null,
 			isManager && _lowStockThreshold is { } threshold
-				? _lowStockReport.CreateReport(
-					snapshot.BranchStocks.Matching(
-						new StockAtBranchSpecification(branch.Code)),
-					threshold)
+				? _lowStockReport.CreateReport(branchStocks, threshold)
 				: null,
 			await shipmentsTask.ConfigureAwait(false),
 			generatedAtUtc);
@@ -144,21 +163,19 @@ public sealed class BranchDashboardApplicationService
 			.ConfigureAwait(false);
 	}
 
-	private static Staff FindActiveStaff(ApexPostSnapshot snapshot, string staffId)
+	private async Task<Staff> FindActiveStaffAsync(
+		string staffId,
+		CancellationToken cancellationToken)
 	{
 		if (string.IsNullOrWhiteSpace(staffId))
 			throw new UnauthorizedAccessException(
 				"Active staff are required to view the dashboard.");
 
-		var matches = snapshot.Staff
-			.Where(staff => string.Equals(
-				staff.Id, staffId, StringComparison.Ordinal))
-			.Take(2)
-			.ToArray();
-		if (matches.Length != 1 || !matches[0].IsActive)
-			throw new UnauthorizedAccessException(
+		var staff = await _staff.FindByIdAsync(staffId, cancellationToken)
+			.ConfigureAwait(false);
+		return staff is { IsActive: true }
+			? staff
+			: throw new UnauthorizedAccessException(
 				"Active staff are required to view the dashboard.");
-
-		return matches[0];
 	}
 }

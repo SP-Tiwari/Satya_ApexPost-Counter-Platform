@@ -46,25 +46,6 @@ public sealed class TransactionApplicationService
 		_lowStockThreshold = lowStockThreshold;
 	}
 
-	// JSON persistence, until the SQL Server cutover in M3.
-	public TransactionApplicationService(
-		IApexPostRepository repository,
-		TimeProvider? timeProvider = null,
-		DomainEventPublisher? events = null,
-		int? lowStockThreshold = null)
-		: this(new SnapshotStore(repository), timeProvider, events, lowStockThreshold)
-	{
-	}
-
-	private TransactionApplicationService(
-		SnapshotStore store,
-		TimeProvider? timeProvider,
-		DomainEventPublisher? events,
-		int? lowStockThreshold)
-		: this(store, store, store, store, store, timeProvider, events, lowStockThreshold)
-	{
-	}
-
 	public async Task<IReadOnlyList<TransactionBasketSnapshot>>
 		GetTransactionBasketsAsync(
 			string staffId,

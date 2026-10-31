@@ -96,12 +96,15 @@ public sealed class ShipmentConfiguration
 		builder.ComplexProperty(shipment => shipment.Dimensions, dimensions =>
 		{
 			dimensions.Property(value => value.LengthCm)
+				.HasConversion(new TrailingZeroConverter())
 				.HasColumnName("LengthCm")
 				.HasPrecision(8, 2);
 			dimensions.Property(value => value.WidthCm)
+				.HasConversion(new TrailingZeroConverter())
 				.HasColumnName("WidthCm")
 				.HasPrecision(8, 2);
 			dimensions.Property(value => value.HeightCm)
+				.HasConversion(new TrailingZeroConverter())
 				.HasColumnName("HeightCm")
 				.HasPrecision(8, 2);
 		});

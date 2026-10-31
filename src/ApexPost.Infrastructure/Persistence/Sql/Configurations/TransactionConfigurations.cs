@@ -86,7 +86,9 @@ public sealed class CounterTransactionConfiguration
 			rate.WithOwner().HasForeignKey("TransactionId");
 			rate.Property(value => value.Category).IsEnumCode("TaxCategory");
 			rate.HasKey("TransactionId", nameof(TransactionTaxRate.Category));
-			rate.Property(value => value.Rate).HasPrecision(9, 6);
+			rate.Property(value => value.Rate)
+				.HasConversion(new TrailingZeroConverter())
+				.HasPrecision(9, 6);
 			rate.HasAuditColumns();
 		});
 

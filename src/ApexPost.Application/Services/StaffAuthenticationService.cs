@@ -17,14 +17,6 @@ public sealed class StaffAuthenticationService
 		_credentials = credentials;
 	}
 
-	// JSON persistence, until the SQL Server cutover in M3.
-	public StaffAuthenticationService(
-		IApexPostRepository repository,
-		IStaffCredentialRepository credentials)
-		: this(new SnapshotStore(repository), credentials)
-	{
-	}
-
 	public async Task<Staff?> AuthenticateAsync(
 		string staffId,
 		string password,

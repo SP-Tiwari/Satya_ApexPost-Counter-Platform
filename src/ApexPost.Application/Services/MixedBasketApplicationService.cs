@@ -61,62 +61,6 @@ public sealed class MixedBasketApplicationService
 	private readonly int? _lowStockThreshold;
 	private readonly IReadOnlyList<string> _paymentMethods;
 
-	// JSON persistence, until the SQL Server cutover in M3.
-	public MixedBasketApplicationService(
-		IApexPostRepository repository,
-		IReadOnlyDictionary<TaxCategory, decimal> taxRates,
-		IReadOnlyDictionary<ShippingServiceLevel, Weight> maximumParcelWeights,
-		TaxCategory? shippingTaxCategory = null,
-		TimeProvider? timeProvider = null,
-		MoneyOrderBasketSettings? moneyOrderSettings = null,
-		IIdentityVerificationService? identityVerification = null,
-		DomainEventPublisher? events = null,
-		int? lowStockThreshold = null,
-		IReadOnlyCollection<string>? paymentMethods = null)
-		: this(
-			new SnapshotStore(repository),
-			taxRates,
-			maximumParcelWeights,
-			shippingTaxCategory,
-			timeProvider,
-			moneyOrderSettings,
-			identityVerification,
-			events,
-			lowStockThreshold,
-			paymentMethods)
-	{
-	}
-
-	private MixedBasketApplicationService(
-		SnapshotStore store,
-		IReadOnlyDictionary<TaxCategory, decimal> taxRates,
-		IReadOnlyDictionary<ShippingServiceLevel, Weight> maximumParcelWeights,
-		TaxCategory? shippingTaxCategory,
-		TimeProvider? timeProvider,
-		MoneyOrderBasketSettings? moneyOrderSettings,
-		IIdentityVerificationService? identityVerification,
-		DomainEventPublisher? events,
-		int? lowStockThreshold,
-		IReadOnlyCollection<string>? paymentMethods)
-		: this(
-			store,
-			store,
-			store,
-			store,
-			store,
-			store,
-			taxRates,
-			maximumParcelWeights,
-			shippingTaxCategory,
-			timeProvider,
-			moneyOrderSettings,
-			identityVerification,
-			events,
-			lowStockThreshold,
-			paymentMethods)
-	{
-	}
-
 	public MixedBasketApplicationService(
 		IStaffRepository staff,
 		IBranchRepository branches,

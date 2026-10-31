@@ -33,21 +33,6 @@ public sealed class AdministrationApplicationService
 		_referenceData = referenceData;
 	}
 
-	// JSON persistence, until the SQL Server cutover in M3.
-	public AdministrationApplicationService(
-		IApexPostRepository repository,
-		ReferenceDataCache? referenceData = null)
-		: this(new SnapshotStore(repository), referenceData)
-	{
-	}
-
-	private AdministrationApplicationService(
-		SnapshotStore store,
-		ReferenceDataCache? referenceData)
-		: this(store, store, store, store, referenceData)
-	{
-	}
-
 	// Holds only the branches, staff and products that administration manages.
 	public async Task<ApexPostSnapshot> GetSnapshotAsync(
 		string administratorId, CancellationToken cancellationToken = default)

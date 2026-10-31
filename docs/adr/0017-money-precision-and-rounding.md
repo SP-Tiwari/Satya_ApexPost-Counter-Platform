@@ -27,7 +27,7 @@ Nothing in `src` called `Math.Round` before this decision. Left alone, a value w
 
 There is one, and it is limited to values with more than 2 decimals. A shipping line priced at 11.255 is stored as 11.26, so after reloading it the basket's totals are calculated from 11.26. A value of 2 decimals or fewer is unaffected.
 
-Nothing in the running application uses this yet: the app stays on JSON until M3. The change takes effect when sales are saved through SQL Server, and it needs automated tests in the approved testing phase.
+This has been live since the M3 cutover, and `MoneyAboveTwoDecimals_IsRoundedAtTheColumn` covers it. On reading, money, weight, dimensions and tax rates drop trailing zeros, so `20.00` from a decimal column still displays as `20`, as it did on JSON.
 
 `Payments.Amount` must hold the total the customer actually pays. M2 sets that value from the sale, and the converter applies the same rounding to it.
 
@@ -46,9 +46,9 @@ Nothing in the running application uses this yet: the app stays on JSON until M3
 
   | Example sale | Total | Stored entry |
   |---|---|---|
-  | Payment, with shipping at 11.255 | 5,160.7691 | 5,160.77 |
-  | Refund, with shipping reloaded as 11.26 | 5,160.775 | 5,160.78 |
+  | Payment, with shipping at 12.255 | 5,123.9609 | 5,123.96 |
+  | Refund, with shipping reloaded as 12.26 | 5,123.9668 | 5,123.97 |
 
-  The 5,160.77 was observed in the M2 SQL probe. The 5,160.78 is calculated from the code and has not been run. The effect is limited to sales with a price of more than 2 decimals, which in practice means shipping lines, and to about one minor currency unit. It affects `Payments` on SQL Server only, so it has no effect until the M3 cutover. The fix is held until the trainer confirms the `Refund` entries ([ADR 0020](0020-repository-and-unit-of-work-boundaries.md)), because it depends on that rule. A likely fix is to reuse the amount of the stored `Payment` entry.
+  **Measured** on 2026-10-31 in the M3 live run against a disposable database: a voided sale stored a `Payment` of 5,123.96 and a `Refund` of 5,123.97. The effect is limited to sales with a price of more than 2 decimals, which in practice means shipping lines, and to about one minor currency unit. It affects `Payments` on SQL Server, so it is live since the M3 cutover. The fix is held until the trainer confirms the `Refund` entries ([ADR 0020](0020-repository-and-unit-of-work-boundaries.md)), because it depends on that rule. A likely fix is to reuse the amount of the stored `Payment` entry.
 - T-SQL reports in M4 must calculate tax the same way: stored line amounts × stored rates, rounded only for display.
 - Dimensions use `decimal(8,2)` with no converter, because no calculation uses them.

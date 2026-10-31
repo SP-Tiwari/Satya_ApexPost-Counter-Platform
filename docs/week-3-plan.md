@@ -122,15 +122,17 @@ The original conditions moved, because M2 kept the Web application on JSON and d
 - Store audit entries and credentials in SQL.
 - Build the seeding service: 5 branches, 20 staff, 30 products, 10 zones/rates, **200+ transactions** (the current seed has 40).
 - Add the `DbUpdateConcurrencyException` and unique-violation mappings to Problem Details. The current handler always titles errors "An unexpected error occurred", which has to change.
-- Move all Web tests to a disposable database and update `run-demo.ps1`.
-- Build the test database fixture:
+- Update `run-demo.ps1`.
+- **Done in the separate testing phase:** move all Web tests to a disposable database, update the Application tests, and build the test database fixture:
   - It creates each `ApexPost_Test_*` database with explicit MDF and LDF paths in `E:\SqlData\ApexPost\Tests`, a subfolder that inherits the service account's access, so no instance setting changes.
   - It applies migrations, and drops the database after the run.
   - It stops with an error if the folder is unavailable, and never falls back to the C: default.
   - `CREATE DATABASE` cannot take parameters for names, so the fixture passes them as parameters to a T-SQL batch that uses `QUOTENAME`. C# does not concatenate the SQL.
 - Use Postman to check the partner API and Problem Details responses by hand. Browser forms stay manual, because they need antiforgery tokens.
 
-**Done when:** every screen works on SQL Server, the Web tests pass against a disposable database on E:, no test database files appear on C:, and no JSON repository remains in `Program.cs`. Merge to `master`.
+**Done when (development, as approved for M3):** every screen works on SQL Server in a live run, and no JSON repository remains in `Program.cs`.
+
+**Testing phase, done:** the solution builds, and the Application and Web tests pass on a disposable database on E:, with no test database files left behind.
 
 ### M4: T-SQL (Parts B, D): 10 + 10 marks
 

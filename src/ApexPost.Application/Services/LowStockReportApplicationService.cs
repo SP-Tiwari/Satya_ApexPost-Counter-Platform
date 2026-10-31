@@ -1,25 +1,28 @@
 using ApexPost.Domain.Reporting;
-using ApexPost.Domain.Specifications;
 
 namespace ApexPost.Application.Services;
 
 public sealed class LowStockReportApplicationService
 {
-	private readonly IApexPostRepository _repository;
+	private readonly IStaffRepository _staff;
+	private readonly IStockRepository _stock;
 	private readonly int? _threshold;
 	private readonly LowStockReportService _reportService = new();
 
 	public LowStockReportApplicationService(
-		IApexPostRepository repository,
+		IStaffRepository staff,
+		IStockRepository stock,
 		int? threshold)
 	{
-		ArgumentNullException.ThrowIfNull(repository);
+		ArgumentNullException.ThrowIfNull(staff);
+		ArgumentNullException.ThrowIfNull(stock);
 		if (threshold < 0)
 			throw new ArgumentOutOfRangeException(
 				nameof(threshold),
 				"Low-stock threshold cannot be negative.");
 
-		_repository = repository;
+		_staff = staff;
+		_stock = stock;
 		_threshold = threshold;
 	}
 
@@ -31,16 +34,9 @@ public sealed class LowStockReportApplicationService
 			throw new UnauthorizedAccessException(
 				"An active Branch Manager is required to access low-stock reports.");
 
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		var staff = await _staff.FindByIdAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		var matches = snapshot.Staff
-			.Where(staff => string.Equals(
-				staff.Id, staffId, StringComparison.Ordinal))
-			.Take(2)
-			.ToArray();
-		if (matches.Length != 1 ||
-			!matches[0].IsActive ||
-			matches[0].Role != StaffRole.BranchManager)
+		if (staff is not { IsActive: true, Role: StaffRole.BranchManager })
 		{
 			throw new UnauthorizedAccessException(
 				"An active Branch Manager is required to access low-stock reports.");
@@ -50,8 +46,9 @@ public sealed class LowStockReportApplicationService
 			throw new InvalidOperationException(
 				"Reports:LowStockThreshold is not configured.");
 
-		var branchStocks = snapshot.BranchStocks
-			.Matching(new StockAtBranchSpecification(matches[0].HomeBranchCode));
+		var branchStocks = await _stock
+			.GetForBranchAsync(staff.HomeBranchCode, cancellationToken)
+			.ConfigureAwait(false);
 		return _reportService.CreateReport(branchStocks, _threshold.Value);
 	}
 }

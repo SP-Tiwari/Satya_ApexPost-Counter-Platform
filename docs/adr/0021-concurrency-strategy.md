@@ -24,7 +24,7 @@ Two clerks selling the last unit must not drive stock negative. `BranchStock` an
 
 **Identity verification keeps its result across retries.** It runs once before the transaction, because it comes from an external provider, not from the database state a conflict makes stale.
 
-**A repeated transaction ID** is rejected by `ExistsAsync`. Two simultaneous submissions of one ID are stopped by the primary key; mapping that error to 409 is planned in M3.
+**A repeated transaction ID** is rejected by `ExistsAsync`. Two simultaneous submissions of one ID are stopped by the primary key, which `SqlUnitOfWork` turns into `DuplicateRecordException` and the controllers answer with 409.
 
 ## Alternatives considered
 
@@ -35,7 +35,7 @@ Two clerks selling the last unit must not drive stock negative. `BranchStock` an
 
 ## Consequences
 
-A disposable-database probe on 2026-10-31 gave these results. They are not repeatable automated tests yet.
+A disposable-database probe on 2026-10-31 gave these results. `SqlPersistenceTests` now repeats each scenario.
 
 | Scenario | Result |
 |---|---|

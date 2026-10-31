@@ -166,6 +166,40 @@ public sealed class SqlCounterTransactionRepository(ApexPostDbContext database)
 		return moneyOrders;
 	}
 
+	public async Task<IReadOnlyList<MoneyOrder>> GetMoneyOrdersAsync(
+		CancellationToken cancellationToken = default)
+	{
+		var moneyOrders = await database.MoneyOrders
+			.ToArrayAsync(cancellationToken)
+			.ConfigureAwait(false);
+		await RestoreVerificationsAsync(moneyOrders, cancellationToken)
+			.ConfigureAwait(false);
+		return moneyOrders;
+	}
+
+	public async Task<IReadOnlyList<ShippingItem>> GetShipmentsAsync(
+		CancellationToken cancellationToken = default) =>
+		await database.Shipments
+			.ToArrayAsync(cancellationToken)
+			.ConfigureAwait(false);
+
+	public async Task<TransactionBasket?> FindByShipmentIdAsync(
+		string shipmentId,
+		CancellationToken cancellationToken = default)
+	{
+		var basket = await WholeBaskets()
+			.SingleOrDefaultAsync(
+				candidate => candidate.LineItems.Any(
+					line => line.ShippingItem!.Id == shipmentId),
+				cancellationToken)
+			.ConfigureAwait(false);
+		if (basket is not null)
+			await RestoreVerificationsAsync(MoneyOrdersOf([basket]), cancellationToken)
+				.ConfigureAwait(false);
+
+		return basket;
+	}
+
 	public void Add(TransactionBasket basket)
 	{
 		ArgumentNullException.ThrowIfNull(basket);

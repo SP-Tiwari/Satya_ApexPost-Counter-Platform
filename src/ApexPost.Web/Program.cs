@@ -1,13 +1,12 @@
 using System.Globalization;
 using ApexPost.Application.Persistence;
-using ApexPost.Application.Auditing;
 using ApexPost.Application.Caching;
 using ApexPost.Application.Courier;
 using ApexPost.Application.Events;
-using ApexPost.Application.Security;
 using ApexPost.Application.Verification;
 using ApexPost.Infrastructure.Courier;
 using ApexPost.Infrastructure.Persistence;
+using ApexPost.Infrastructure.Persistence.Sql;
 using ApexPost.Infrastructure.Verification;
 using ApexPost.Web.Authentication;
 using ApexPost.Web.Authorization;
@@ -34,7 +33,9 @@ builder.Services.AddProblemDetails(options =>
 {
 	options.CustomizeProblemDetails = context =>
 	{
-		context.ProblemDetails.Title = "An unexpected error occurred.";
+		// Keeps the specific titles set by ApplicationExceptionHandler.
+		if (context.ProblemDetails.Status is null or >= 500)
+			context.ProblemDetails.Title = "An unexpected error occurred.";
 
 		SecurityHeadersMiddleware.ApplyHeaders(
 			context.HttpContext.Response);
@@ -52,6 +53,8 @@ builder.Services.AddProblemDetails(options =>
 		}
 	};
 });
+
+builder.Services.AddExceptionHandler<ApplicationExceptionHandler>();
 
 builder.Services
 	.AddAuthentication(options =>
@@ -104,62 +107,27 @@ builder.Services.AddCors(options =>
 		}
 	}));
 
-var storageDirectory = builder.Configuration["Storage:Directory"];
-
-if (string.IsNullOrWhiteSpace(storageDirectory))
-{
-	throw new InvalidOperationException(
-		"Storage:Directory must be configured for JSON persistence.");
-}
-
-if (!Path.IsPathRooted(storageDirectory))
-{
-	storageDirectory = Path.Combine(
-		builder.Environment.ContentRootPath,
-		storageDirectory);
-}
-
-// The app still runs on JSON; this only proves SQL Server can be reached.
-// Development-only, because each request opens a database connection.
 var databaseConnectionString =
 	builder.Configuration.GetConnectionString("ApexPostDb");
-var databaseHealthEnabled = builder.Environment.IsDevelopment() &&
-	!string.IsNullOrWhiteSpace(databaseConnectionString);
+if (string.IsNullOrWhiteSpace(databaseConnectionString))
+{
+	throw new InvalidOperationException(
+		"ConnectionStrings:ApexPostDb must be configured.");
+}
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentStaffAccessor, HttpContextStaffAccessor>();
+builder.Services.AddApexPostSqlPersistence(databaseConnectionString);
+
+// Development-only, because each request opens a database connection.
+var databaseHealthEnabled = builder.Environment.IsDevelopment();
 if (databaseHealthEnabled)
 {
 	builder.Services.AddHealthChecks().AddCheck(
 		"sql-server",
-		new SqlServerConnectivityHealthCheck(databaseConnectionString!),
+		new SqlServerConnectivityHealthCheck(databaseConnectionString),
 		timeout: TimeSpan.FromSeconds(10));
 }
-
-builder.Services.AddSingleton<IApexPostRepository>(
-	_ => new JsonApexPostRepository(storageDirectory));
-builder.Services.AddSingleton<DemoDataInitializer>();
-
-var credentialFile =
-	builder.Configuration["Authentication:CredentialFile"];
-
-if (string.IsNullOrWhiteSpace(credentialFile))
-{
-	throw new InvalidOperationException(
-		"Authentication:CredentialFile must be configured.");
-}
-
-if (!Path.IsPathRooted(credentialFile))
-{
-	credentialFile = Path.Combine(
-		builder.Environment.ContentRootPath,
-		credentialFile);
-}
-
-builder.Services.AddSingleton(
-	_ => new JsonStaffCredentialRepository(credentialFile));
-builder.Services.AddSingleton<IStaffCredentialRepository>(services =>
-	services.GetRequiredService<JsonStaffCredentialRepository>());
-builder.Services.AddSingleton<IStaffCredentialProvisioning>(services =>
-	services.GetRequiredService<JsonStaffCredentialRepository>());
-builder.Services.AddSingleton<DemoCredentialProvisioner>();
 
 // Demo logins: the password comes from user-secrets (never source control)
 // and is only honoured in Development, so a stray setting cannot create
@@ -185,7 +153,7 @@ if (!double.IsFinite(referenceDataSeconds) || referenceDataSeconds < 0d)
 var referenceDataLifetime = TimeSpan.FromSeconds(referenceDataSeconds);
 builder.Services.AddSingleton<ReferenceDataCache>(services =>
 	new ReferenceDataCache(
-		services.GetRequiredService<IApexPostRepository>(),
+		services.GetRequiredService<IReferenceDataSource>(),
 		services.GetRequiredService<TimeProvider>(),
 		referenceDataLifetime));
 
@@ -261,24 +229,36 @@ builder.Services.AddSingleton<SimulatedNotificationSender>();
 
 builder.Services.AddScoped<TransactionApplicationService>(services =>
 	new TransactionApplicationService(
-		services.GetRequiredService<IApexPostRepository>(),
+		services.GetRequiredService<IStaffRepository>(),
+		services.GetRequiredService<IBranchRepository>(),
+		services.GetRequiredService<IStockRepository>(),
+		services.GetRequiredService<ICounterTransactionRepository>(),
+		services.GetRequiredService<IUnitOfWork>(),
 		services.GetRequiredService<TimeProvider>(),
 		services.GetRequiredService<DomainEventPublisher>(),
 		lowStockThreshold));
 builder.Services.AddScoped<StockAdjustmentApplicationService>(services =>
 	new StockAdjustmentApplicationService(
-		services.GetRequiredService<IApexPostRepository>(),
+		services.GetRequiredService<IStaffRepository>(),
+		services.GetRequiredService<IBranchRepository>(),
+		services.GetRequiredService<IProductRepository>(),
+		services.GetRequiredService<IStockRepository>(),
+		services.GetRequiredService<IUnitOfWork>(),
 		services.GetRequiredService<DomainEventPublisher>(),
 		lowStockThreshold,
 		services.GetRequiredService<TimeProvider>()));
 
 builder.Services.AddScoped<LowStockReportApplicationService>(services =>
 	new LowStockReportApplicationService(
-		services.GetRequiredService<IApexPostRepository>(),
+		services.GetRequiredService<IStaffRepository>(),
+		services.GetRequiredService<IStockRepository>(),
 		lowStockThreshold));
 builder.Services.AddScoped<BranchDashboardApplicationService>(services =>
 	new BranchDashboardApplicationService(
-		services.GetRequiredService<IApexPostRepository>(),
+		services.GetRequiredService<IStaffRepository>(),
+		services.GetRequiredService<IBranchRepository>(),
+		services.GetRequiredService<IStockRepository>(),
+		services.GetRequiredService<ICounterTransactionRepository>(),
 		services.GetRequiredService<ReferenceDataCache>(),
 		services.GetRequiredService<TimeProvider>(),
 		lowStockThreshold,
@@ -286,7 +266,7 @@ builder.Services.AddScoped<BranchDashboardApplicationService>(services =>
 builder.Services.AddScoped<ProductCatalogueApplicationService>();
 builder.Services.AddScoped<ParcelStatusApplicationService>(services =>
 	new ParcelStatusApplicationService(
-		services.GetRequiredService<IApexPostRepository>(),
+		services.GetRequiredService<ICounterTransactionRepository>(),
 		services.GetService<ICourierTrackingService>()));
 builder.Services.AddScoped<ShippingVolumeReportApplicationService>();
 builder.Services.AddScoped<BranchAuditorReportApplicationService>();
@@ -391,7 +371,8 @@ if (acceptedDocumentTypes.Length > 0)
 
 builder.Services.AddScoped<MoneyOrderApplicationService>(services =>
 	new MoneyOrderApplicationService(
-		services.GetRequiredService<IApexPostRepository>(),
+		services.GetRequiredService<IStaffRepository>(),
+		services.GetRequiredService<ICounterTransactionRepository>(),
 		moneyOrderHighValueThreshold));
 
 var configuredTaxRates = new Dictionary<TaxCategory, decimal>();
@@ -473,7 +454,12 @@ if (configuredShippingTaxCategoryValue is not null)
 
 builder.Services.AddScoped<MixedBasketApplicationService>(services =>
 	new MixedBasketApplicationService(
-		services.GetRequiredService<IApexPostRepository>(),
+		services.GetRequiredService<IStaffRepository>(),
+		services.GetRequiredService<IBranchRepository>(),
+		services.GetRequiredService<IProductRepository>(),
+		services.GetRequiredService<IStockRepository>(),
+		services.GetRequiredService<ICounterTransactionRepository>(),
+		services.GetRequiredService<IUnitOfWork>(),
 		configuredTaxRates,
 		configuredMaximumParcelWeights,
 		configuredShippingTaxCategory,
@@ -483,22 +469,6 @@ builder.Services.AddScoped<MixedBasketApplicationService>(services =>
 		services.GetRequiredService<DomainEventPublisher>(),
 		lowStockThreshold,
 		configuredPaymentMethods));
-
-var auditFile = builder.Configuration["Audit:FilePath"];
-
-if (string.IsNullOrWhiteSpace(auditFile))
-{
-	auditFile = Path.Combine(storageDirectory, "audit-events.jsonl");
-}
-else if (!Path.IsPathRooted(auditFile))
-{
-	auditFile = Path.Combine(
-		builder.Environment.ContentRootPath,
-		auditFile);
-}
-
-builder.Services.AddSingleton<IAuditStore>(
-	_ => new JsonAuditStore(auditFile));
 
 var signInPermitLimit = builder.Configuration.GetValue<int>(
 	"Authentication:SignInRateLimit:PermitLimit", 5);
@@ -583,8 +553,9 @@ app.Services.GetRequiredService<SimulatedNotificationSender>()
 
 if (app.Configuration.GetValue<bool>("DemoData:Initialize"))
 {
-	await app.Services
-		.GetRequiredService<DemoDataInitializer>()
+	await using var seedScope = app.Services.CreateAsyncScope();
+	await seedScope.ServiceProvider
+		.GetRequiredService<SqlDemoDataSeeder>()
 		.InitializeAsync();
 
 	if (demoStaffPassword is null)
@@ -594,7 +565,7 @@ if (app.Configuration.GetValue<bool>("DemoData:Initialize"))
 	}
 	else
 	{
-		var added = await app.Services
+		var added = await seedScope.ServiceProvider
 			.GetRequiredService<DemoCredentialProvisioner>()
 			.ProvisionAsync(demoStaffPassword);
 		app.Logger.LogInformation(

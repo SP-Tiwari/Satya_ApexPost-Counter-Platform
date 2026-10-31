@@ -1,4 +1,7 @@
+using ApexPost.Application.Auditing;
+using ApexPost.Application.Caching;
 using ApexPost.Application.Persistence;
+using ApexPost.Application.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -6,9 +9,9 @@ namespace ApexPost.Infrastructure.Persistence.Sql;
 
 public static class SqlPersistenceRegistration
 {
-	// Everything is scoped, so a request shares one DbContext. The caller
-	// registers TimeProvider and ICurrentStaffAccessor. Nothing calls this
-	// until the SQL Server cutover in M3.
+	// Everything that touches the DbContext is scoped, so a request shares one.
+	// The audit store and reference-data source are singletons that open their
+	// own scopes. The caller registers TimeProvider and ICurrentStaffAccessor.
 	public static IServiceCollection AddApexPostSqlPersistence(
 		this IServiceCollection services,
 		string connectionString)
@@ -29,6 +32,16 @@ public static class SqlPersistenceRegistration
 		services.AddScoped<ICounterTransactionRepository, SqlCounterTransactionRepository>();
 		services.AddScoped<IStaffRepository, SqlStaffRepository>();
 		services.AddScoped<IUnitOfWork, SqlUnitOfWork>();
+
+		services.AddScoped<SqlStaffCredentialRepository>();
+		services.AddScoped<IStaffCredentialRepository>(provider =>
+			provider.GetRequiredService<SqlStaffCredentialRepository>());
+		services.AddScoped<IStaffCredentialProvisioning>(provider =>
+			provider.GetRequiredService<SqlStaffCredentialRepository>());
+		services.AddSingleton<IAuditStore, SqlAuditStore>();
+		services.AddSingleton<IReferenceDataSource, SqlReferenceDataSource>();
+		services.AddScoped<SqlDemoDataSeeder>();
+		services.AddScoped<DemoCredentialProvisioner>();
 		return services;
 	}
 }

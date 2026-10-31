@@ -3,17 +3,20 @@
 Runs ApexPost with fictional demo data and working demo logins.
 
 .DESCRIPTION
-Uses the "demo" launch profile (Development, DemoData:Initialize=true, data
-kept under src/ApexPost.Web/data/demo). The demo staff password is read from
-user-secrets (DemoData:StaffPassword); if none is set, a random one is
-generated and stored there. No password is ever written to the repository.
+Applies the EF Core migrations to the database named in user-secrets
+(ConnectionStrings:ApexPostDb, see scripts/setup-database.ps1), then uses the
+"demo" launch profile (Development, DemoData:Initialize=true). The demo staff
+password is read from user-secrets (DemoData:StaffPassword); if none is set, a
+random one is generated and stored there. No password is ever written to the
+repository.
 
 .PARAMETER Password
 Use this demo password instead of the stored or generated one.
 
 .PARAMETER Reset
-Delete the demo data folder first, so the seed and demo logins are recreated
-(needed for a changed password to take effect).
+Revert all migrations first, which DELETES ALL DATA in that database, so the
+seed and demo logins are recreated (needed for a changed password to take
+effect).
 
 .EXAMPLE
 ./scripts/run-demo.ps1
@@ -27,8 +30,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $project = (Resolve-Path (Join-Path $PSScriptRoot '..\src\ApexPost.Web')).Path
-$demoData = Join-Path $project 'data\demo'
+$infrastructure = (Resolve-Path (Join-Path $PSScriptRoot '..\src\ApexPost.Infrastructure')).Path
 $secretKey = 'DemoData:StaffPassword'
+$connectionKey = 'ConnectionStrings:ApexPostDb'
 
 function New-DemoPassword {
 	$alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
@@ -45,22 +49,35 @@ function New-DemoPassword {
 	-join $chars
 }
 
-function Get-StoredPassword {
-	$prefix = "$secretKey = "
+function Get-StoredSecret([string]$key) {
+	$prefix = "$key = "
 	$line = dotnet user-secrets list --project $project |
 		Where-Object { $_.StartsWith($prefix) } |
 		Select-Object -First 1
 	if ($line) { $line.Substring($prefix.Length) } else { $null }
 }
 
-if ($Reset -and (Test-Path $demoData)) {
-	Write-Host "Removing demo data folder $demoData"
-	Remove-Item -Recurse -Force $demoData
+function Update-Database([string]$target) {
+	$arguments = @('ef', 'database', 'update')
+	if ($target) { $arguments += $target }
+	dotnet @arguments --connection $connection --project $infrastructure --startup-project $project --context ApexPostDbContext
+	if ($LASTEXITCODE -ne 0) { throw 'Applying the database migrations failed.' }
 }
 
-$stored = Get-StoredPassword
+$connection = Get-StoredSecret $connectionKey
+if (-not $connection) {
+	throw "User-secret $connectionKey is not set. Run ./scripts/setup-database.ps1 first."
+}
+
+if ($Reset) {
+	Write-Host 'Reverting all migrations: every row in the database will be deleted.'
+	Update-Database '0'
+}
+Update-Database
+
+$stored = Get-StoredSecret $secretKey
 if ($Password) {
-	if ($stored -and $stored -ne $Password -and -not $Reset -and (Test-Path $demoData)) {
+	if ($stored -and $stored -ne $Password -and -not $Reset) {
 		Write-Warning 'Existing demo logins keep their old password. Add -Reset to recreate them with the new one.'
 	}
 	dotnet user-secrets set $secretKey $Password --project $project | Out-Null

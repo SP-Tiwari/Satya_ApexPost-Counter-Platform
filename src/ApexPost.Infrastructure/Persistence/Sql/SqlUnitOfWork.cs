@@ -1,4 +1,5 @@
 using ApexPost.Application.Persistence;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace ApexPost.Infrastructure.Persistence.Sql;
@@ -8,6 +9,8 @@ public sealed class SqlUnitOfWork(ApexPostDbContext database) : IUnitOfWork
 {
 	private const int MaximumAttempts = 5;
 	private const int MaximumBackoffMilliseconds = 50;
+	private const int UniqueIndexViolation = 2601;
+	private const int UniqueConstraintViolation = 2627;
 
 	public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
 		database.SaveChangesAsync(cancellationToken);
@@ -52,6 +55,12 @@ public sealed class SqlUnitOfWork(ApexPostDbContext database) : IUnitOfWork
 					Random.Shared.Next(1, MaximumBackoffMilliseconds * attempt),
 					cancellationToken).ConfigureAwait(false);
 			}
+			catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+			{
+				database.ChangeTracker.Clear();
+				throw new DuplicateRecordException(
+					"This record already exists.", exception);
+			}
 			catch
 			{
 				// The transaction has rolled back, so nothing tracked from the
@@ -61,4 +70,10 @@ public sealed class SqlUnitOfWork(ApexPostDbContext database) : IUnitOfWork
 			}
 		}
 	}
+
+	private static bool IsUniqueViolation(DbUpdateException exception) =>
+		exception.InnerException is SqlException
+		{
+			Number: UniqueIndexViolation or UniqueConstraintViolation
+		};
 }

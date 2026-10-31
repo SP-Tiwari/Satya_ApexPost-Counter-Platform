@@ -10,28 +10,28 @@ public sealed record ReferenceData(
 // rates are immutable, so one cached copy can be shared safely.
 //
 // GetAsync returns ValueTask: a cache hit completes synchronously without
-// allocating a Task or reading and deserializing the JSON store; only a miss
-// goes to the repository. The cache is for display only: sale pricing always
-// uses the authoritative snapshot inside the repository's atomic update.
+// allocating a Task or querying the database; only a miss goes to the source.
+// The cache is for display only: sale pricing always reads current prices
+// inside the sale's unit of work.
 public sealed class ReferenceDataCache
 {
-	private readonly IApexPostRepository _repository;
+	private readonly IReferenceDataSource _source;
 	private readonly TimeProvider _timeProvider;
 	private readonly TimeSpan _timeToLive;
 	private volatile ReferenceData? _cached;
 
 	public ReferenceDataCache(
-		IApexPostRepository repository,
+		IReferenceDataSource source,
 		TimeProvider timeProvider,
 		TimeSpan timeToLive)
 	{
-		ArgumentNullException.ThrowIfNull(repository);
+		ArgumentNullException.ThrowIfNull(source);
 		ArgumentNullException.ThrowIfNull(timeProvider);
 		if (timeToLive < TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(
 				nameof(timeToLive), "The cache lifetime cannot be negative.");
 
-		_repository = repository;
+		_source = source;
 		_timeProvider = timeProvider;
 		_timeToLive = timeToLive;
 	}
@@ -57,11 +57,11 @@ public sealed class ReferenceDataCache
 	{
 		// Concurrent misses may each load once; the last result wins, which
 		// is harmless because the data is equivalent.
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		var (products, shippingRates) = await _source.LoadAsync(cancellationToken)
 			.ConfigureAwait(false);
 		var loaded = new ReferenceData(
-			snapshot.Products,
-			snapshot.ShippingRates,
+			products,
+			shippingRates,
 			_timeProvider.GetUtcNow());
 		_cached = loaded;
 		return loaded;

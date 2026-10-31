@@ -50,25 +50,6 @@ public sealed class StockAdjustmentApplicationService
 		_timeProvider = timeProvider ?? TimeProvider.System;
 	}
 
-	// JSON persistence, until the SQL Server cutover in M3.
-	public StockAdjustmentApplicationService(
-		IApexPostRepository repository,
-		DomainEventPublisher? events = null,
-		int? lowStockThreshold = null,
-		TimeProvider? timeProvider = null)
-		: this(new SnapshotStore(repository), events, lowStockThreshold, timeProvider)
-	{
-	}
-
-	private StockAdjustmentApplicationService(
-		SnapshotStore store,
-		DomainEventPublisher? events,
-		int? lowStockThreshold,
-		TimeProvider? timeProvider)
-		: this(store, store, store, store, store, events, lowStockThreshold, timeProvider)
-	{
-	}
-
 	public async Task<StockAdjustmentCatalog> GetCatalogAsync(
 		string staffId,
 		CancellationToken cancellationToken = default)

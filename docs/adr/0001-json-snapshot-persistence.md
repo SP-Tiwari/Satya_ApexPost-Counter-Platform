@@ -1,6 +1,6 @@
 # ADR 0001: Versioned JSON snapshot persistence
 
-- Status: Accepted
+- Status: Superseded by ADR 0018 and ADR 0020 (SQL Server persistence)
 - Date: 2026-10-25 (updated 2026-10-29: schema history)
 
 ## Context
