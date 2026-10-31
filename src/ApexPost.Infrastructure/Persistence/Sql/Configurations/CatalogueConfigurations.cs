@@ -81,6 +81,7 @@ public sealed class BranchStockConfiguration
 		builder.HasKey(stock => new { stock.BranchCode, stock.ProductSku });
 
 		builder.Property(stock => stock.Quantity).HasDefaultValue(0);
+		builder.HasIndex(stock => stock.Quantity);
 		builder.Property<byte[]>("RowVersion").IsRowVersion().IsRequired();
 		builder.HasAuditColumns();
 

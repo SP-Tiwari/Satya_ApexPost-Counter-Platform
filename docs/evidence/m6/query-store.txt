@@ -1,0 +1,18 @@
+﻿QueryId PlanId Executions AvgLogicalReads AvgCpuMs AvgDurationMs QueryText
+------- ------ ---------- --------------- -------- ------------- ---------
+81 36 14 20.0 .3 .7 (@BranchCode varchar(10),@Threshold int)SELECT              s.BranchCode,              s.S
+81 37 7 8562.0 88.9 40.3 (@BranchCode varchar(10),@Threshold int)SELECT              s.BranchCode,              s.S
+81 64 7 133.0 36.2 41.8 (@BranchCode varchar(10),@Threshold int)SELECT              s.BranchCode,              s.S
+82 38 14 34367.2 194.7 52.3 (@branchCode varchar(10),@start datetime2(7),@end datetime2(7))SELECT [c].[TransactionId],
+82 65 14 1003.3 1.7 1.7 (@branchCode varchar(10),@start datetime2(7),@end datetime2(7))SELECT [c].[TransactionId],
+86 42 7 33397.6 168.1 168.3 (@BranchCode varchar(10),@From datetime2(3),@To datetime2(3))INSERT INTO @Totals (Currency
+86 67 7 809.0 2.2 2.3 (@BranchCode varchar(10),@From datetime2(3),@To datetime2(3))INSERT INTO @Totals (Currency
+88 44 7 13771.0 132.0 53.1 (@zoneCode varchar(50),@serviceLevel varchar(20))SELECT [s].[ShipmentId], [s].[ShipmentTyp
+88 68 7 61.0 2.9 3.9 (@zoneCode varchar(50),@serviceLevel varchar(20))SELECT [s].[ShipmentId], [s].[ShipmentTyp
+89 45 7 13771.0 156.3 41.2 SELECT [s].[ZoneCode], [s].[ServiceLevel], COUNT(*) FROM [Shipments] AS [s] GROUP BY [s].[
+89 69 7 8703.0 267.7 69.7 SELECT [s].[ZoneCode], [s].[ServiceLevel], COUNT(*) FROM [Shipments] AS [s] GROUP BY [s].[
+90 46 7 9597.0 98.3 98.6 (@branchCode varchar(10))SELECT [m].[Amount], [m].[Currency], [m].[Sender], [m].[Recipient
+90 70 7 2704.0 51.0 51.0 (@branchCode varchar(10))SELECT [m].[Amount], [m].[Currency], [m].[Sender], [m].[Recipient
+91 47 7 10098.0 240.9 64.0 SELECT [m].[ProcessingBranchCode], COUNT(*), COUNT(CASE     WHEN [i].[IsSuccessful] IS NOT
+91 71 7 8694.0 232.5 61.2 SELECT [m].[ProcessingBranchCode], COUNT(*), COUNT(CASE     WHEN [i].[IsSuccessful] IS NOT
+95 51 6 16894.3 530.6 153.4 UPDATE s SET s.Quantity = s.Quantity + 1, s.ModifiedAtUtc = SYSUTCDATETIME() FROM dbo.Bran

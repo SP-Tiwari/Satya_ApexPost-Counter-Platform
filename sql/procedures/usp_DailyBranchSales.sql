@@ -55,7 +55,10 @@ BEGIN
         AND t.Status = 'Paid'
         AND t.OccurredAtUtc >= @From
         AND t.OccurredAtUtc < @To
-    GROUP BY t.Currency;
+    GROUP BY t.Currency
+    -- The dates are local variables, which the optimizer cannot otherwise see.
+    -- See docs/adr/0024-index-choices.md.
+    OPTION (RECOMPILE);
 
     IF (SELECT COUNT(*) FROM @Totals) > 1
     BEGIN

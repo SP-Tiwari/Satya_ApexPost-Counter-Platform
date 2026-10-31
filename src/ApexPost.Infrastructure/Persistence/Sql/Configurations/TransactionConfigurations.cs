@@ -55,6 +55,8 @@ public sealed class CounterTransactionConfiguration
 		builder.Property<string?>(ReversalReasonField)
 			.HasColumnName("ReversalReason")
 			.HasMaxLength(500);
+		builder.HasIndex(transaction => new { transaction.BranchCode, transaction.OccurredAtUtc })
+			.IncludeProperties("PaymentStatus", "Currency");
 		builder.Property<byte[]>("RowVersion").IsRowVersion().IsRequired();
 		builder.HasAuditColumns();
 
@@ -156,6 +158,10 @@ public sealed class TransactionLineConfiguration
 		builder.Property<string?>("ShipmentId")
 			.IsUnicode(false)
 			.HasMaxLength(50);
+		// UnitPrice is also included, in the AddPerformanceIndexes migration, because
+		// IncludeProperties cannot name a complex property.
+		builder.HasIndex("TransactionId")
+			.IncludeProperties("Type", "Quantity", "TaxCategory", "ShipmentId");
 		builder.HasOne(line => line.ShippingItem)
 			.WithOne()
 			.HasForeignKey<TransactionLineItem>("ShipmentId")

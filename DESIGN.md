@@ -472,7 +472,7 @@ Identity documents are stored only as `****` plus the last four characters, in `
 |---|---|
 | Migration | `src/ApexPost.Infrastructure/Persistence/Sql/Migrations/20261031085407_InitialCreate.cs` |
 | Idempotent script | `sql/schema/ApexPostDb-idempotent.sql` |
-| Follow-up migration | `AddPerformanceIndexes`, planned for M6 |
+| Follow-up migrations | `AddStoredProcedures`, `AddPerformanceIndexes`, `AddDailyBranchSalesRecompile` |
 
 The application never calls `EnsureCreated()` or migrates at startup. `InitialCreate` was reviewed by hand. The review made `CreatedBy`, `RowVersion` and `TransactionLines.TransactionId` non-nullable, and added the composite counter foreign key by hand.
 
@@ -607,6 +607,8 @@ M4 adds the hand-written T-SQL. It changed no screen. [Section 4.8](#48-query-se
 | `sql/reports/` | The five reporting queries |
 | `sql/transactions/atomic-sale.sql` | The atomic sale |
 | `sql/procedures/` | The three stored procedures |
+| `sql/procedures/history/<migration>/` | The procedure text each migration deployed. The migrations read only these snapshots |
+| `sql/performance/` | Data generator, baseline and candidate indexes, and write workload for `scripts/run-performance.ps1` |
 | `sql/demos/` | Fixture, blocking demo and deadlock demo. They refuse any database outside `ApexPost_Test_*` |
 | `sql/security/least-privilege-role.sql` | The application's database role |
 
@@ -714,6 +716,31 @@ The services keep their authorization checks and return the same report rows, so
 | F: response DTOs for every screen | `IScreenQueryService`, `ScreenQueryApplicationService` | This section | Nine reads compared with the old path: same output |
 
 **Test status after M5:** the whole solution builds with 0 warnings, and all 662 tests pass with no test file changed.
+
+### 4.9 Indexes and execution plans
+
+M6 measured nine workloads on 2 million sales in a disposable `ApexPostDb_Perf` database, then added the chosen indexes in the `AddPerformanceIndexes` migration. [PERFORMANCE.md](PERFORMANCE.md#index-optimization-and-execution-plans) has the results, and [ADR 0024](docs/adr/0024-index-choices.md) the reasoning.
+
+#### M6 traceability
+
+Evidence is saved in [docs/evidence/m6](docs/evidence/m6/README.md). Run it with `./scripts/run-performance.ps1`.
+
+| Assignment requirement | Implementation | Documentation | Verification evidence |
+|---|---|---|---|
+| C: four or more real workloads | `scripts/run-performance.ps1`, application SQL and procedures | PERFORMANCE.md | 9 workloads in `measurements-*.csv` |
+| C: actual plans, reads and CPU | Same | PERFORMANCE.md | `plans/*.sqlplan`, `measurements-before.csv` |
+| C: candidate indexes with justified key and `INCLUDE` columns | `sql/performance/03-candidate-indexes.sql` | ADR 0024 | Five indexes; the narrower money-order include was measured and rejected |
+| C: measured on realistic volumes | `sql/performance/01-generate-data.sql` | PERFORMANCE.md | `dataset.txt`, `measurements-after.csv` |
+| C: write overhead and storage | `sql/performance/04-write-workload.sql` | PERFORMANCE.md | 10.8% more log, 284 MB |
+| C: SARGability fix with plans | Study in the harness | PERFORMANCE.md | 357 reads to 151, two saved plans |
+| C: estimate mismatch explained | `usp_DailyBranchSales`, study in the harness | PERFORMANCE.md, ADR 0024 | 24,612 estimated against 71 actual; 3,157 against 200,000 |
+| Training: Query Store | `ApexPostDb_Perf` only | PERFORMANCE.md | `query-store.txt` |
+| Training: implicit conversion | Study in the harness | PERFORMANCE.md | `CONVERT_IMPLICIT` warning, 1,537 reads to 5,055 |
+| E: follow-up migration | `20261031141512_AddPerformanceIndexes` | ADR 0024 | Applied by every SQL test; in the idempotent script; definitions match the measured database |
+| D, E: procedure change through a migration | `20261031184702_AddDailyBranchSalesRecompile`; each migration reads only its own snapshot in `sql/procedures/history/<migration>/` | ADR 0023, ADR 0024 | `recompile-migration.txt`: fresh installation, upgrade, rollback, re-upgrade and idempotent runs; `Procedures_AreDeployedByTheMigrationFromTheRepositoryFiles` |
+| ADRs: index choices | [ADR 0024](docs/adr/0024-index-choices.md) | | |
+
+**Test status after M6:** the whole solution builds with 0 warnings, and all 662 tests pass with no test file changed.
 
 ## 5. HTTP pipeline
 
@@ -930,3 +957,4 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 | [0021](docs/adr/0021-concurrency-strategy.md) | Concurrency strategy for stock and transactions |
 | [0022](docs/adr/0022-audit-store-and-unit-of-work.md) | How the audit store interacts with the unit of work |
 | [0023](docs/adr/0023-stored-procedures.md) | Which operations are stored procedures, and why |
+| [0024](docs/adr/0024-index-choices.md) | Index choices from execution-plan evidence |

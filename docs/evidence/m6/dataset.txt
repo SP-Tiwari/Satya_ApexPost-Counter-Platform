@@ -1,0 +1,22 @@
+﻿TableName TableRows
+--------- ---------
+AuditEntries 0
+Branches 500
+BranchStock 1000000
+Counters 500
+CounterTransactions 2000000
+IdentityVerifications 300000
+MoneyOrders 400000
+Payments 2000000
+ProductCategories 3
+Products 2000
+Roles 4
+Shipments 1000000
+ShippingRates 0
+ShippingZones 50
+Staff 500
+StaffCredentials 0
+StockAdjustments 0
+TransactionLines 4400000
+TransactionTaxRates 6000000
+Load minutes: 2.9

@@ -46,5 +46,5 @@ The brief requires normalized tables with keys, constraints and audit columns, a
 
 - Deleting history needs an explicit archival design, which is deliberate.
 - If `InitialCreate` is ever regenerated, the hand-written foreign key must be added again. A comment in the migration says so.
-- A random GUID as the clustered key on `CounterTransactions` can fragment under load. M6 measures this rather than guessing.
+- A random GUID as the clustered key on `CounterTransactions` fragments under load. M6 measured 0% after the ordered load and 99.1% after random inserts, and the key stays for the offline design ([PERFORMANCE.md](../../PERFORMANCE.md#clustered-guid-key)).
 - Line rows repeat `Currency` from their transaction, because `Money` is stored as a whole value. The domain guarantees they match. See the normalization note.

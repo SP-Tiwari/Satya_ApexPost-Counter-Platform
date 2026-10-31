@@ -18,7 +18,7 @@ namespace ApexPost.Infrastructure.Persistence.Sql.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             foreach (var procedure in Procedures)
-                migrationBuilder.Sql(StoredProcedureScripts.ReadAsExec(procedure));
+                migrationBuilder.Sql(StoredProcedureScripts.ReadSnapshotAsExec(nameof(AddStoredProcedures), procedure));
         }
 
         /// <inheritdoc />

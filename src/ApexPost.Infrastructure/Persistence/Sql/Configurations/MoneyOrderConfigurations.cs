@@ -36,6 +36,10 @@ public sealed class MoneyOrderConfiguration
 			.IsBranchCode("ProcessingBranchCode")
 			.IsRequired();
 		builder.Property(order => order.Status).IsEnumCode("Status");
+		// Amount, Currency and Fee are also included, in the AddPerformanceIndexes
+		// migration, because IncludeProperties cannot name a complex property.
+		builder.HasIndex(order => order.ProcessingBranchCode)
+			.IncludeProperties("Status", "Sender", "Recipient");
 		builder.HasAuditColumns();
 
 		builder.HasOne<Branch>()

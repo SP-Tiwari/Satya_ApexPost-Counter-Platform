@@ -13,7 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="..\..\sql\procedures\*.sql" LogicalName="ApexPost.Sql.Procedures.%(Filename).sql" />
+    <EmbeddedResource Include="..\..\sql\procedures\history\AddDailyBranchSalesRecompile\*.sql" LogicalName="ApexPost.Sql.Procedures.History.AddDailyBranchSalesRecompile.%(Filename).sql" />
+    <EmbeddedResource Include="..\..\sql\procedures\history\AddStoredProcedures\*.sql" LogicalName="ApexPost.Sql.Procedures.History.AddStoredProcedures.%(Filename).sql" />
   </ItemGroup>
 
   <PropertyGroup>

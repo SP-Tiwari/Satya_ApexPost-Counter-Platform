@@ -165,6 +165,8 @@ The original conditions moved, because M2 kept the Web application on JSON and d
 
 **Done when:** every number in `PERFORMANCE.md` comes from a saved run, any scans that remain are explained, and `AddPerformanceIndexes` is applied and in the script.
 
+**M6 result:** see [PERFORMANCE.md](../PERFORMANCE.md), [ADR 0024](adr/0024-index-choices.md) and [docs/evidence/m6](evidence/m6/README.md). `ApexPostDb_Perf` is disposable, so the harness drops it after each run. `AddDailyBranchSalesRecompile` deploys the `usp_DailyBranchSales` change as a separate migration.
+
 ### M7: Remaining tests (Part H)
 
 Rollback of a failed sale, a real two-connection concurrency conflict returning 409, repository translation, stored procedures, void requiring a Branch Manager, and Problem Details.

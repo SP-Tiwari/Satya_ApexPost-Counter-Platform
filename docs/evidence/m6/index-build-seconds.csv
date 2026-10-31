@@ -1,0 +1,5 @@
+﻿IX_BranchStock_Quantity,0.7
+IX_CounterTransactions_BranchCode_OccurredAtUtc,1.9
+IX_TransactionLines_TransactionId,3.4
+IX_Shipments_ZoneCode_ServiceLevel,1.5
+IX_MoneyOrders_ProcessingBranchCode,0.5

@@ -112,6 +112,8 @@ public sealed class ShipmentConfiguration
 			.IsCode(50, "ZoneCode");
 		builder.Property(shipment => shipment.ServiceLevel)
 			.IsEnumCode("ServiceLevel");
+		builder.HasIndex(shipment => new { shipment.DestinationZone, shipment.ServiceLevel })
+			.IncludeProperties("Type", "Weight");
 		builder.HasAuditColumns();
 
 		builder.HasOne<ShippingZone>()

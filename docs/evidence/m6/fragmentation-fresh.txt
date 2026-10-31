@@ -1,0 +1,5 @@
+﻿IndexName FragmentationPercent Pages
+--------- -------------------- -----
+PK_CounterTransactions .0 31856
+IX_CounterTransactions_BranchCode .0 7663
+IX_CounterTransactions_ClerkStaffId .0 10153

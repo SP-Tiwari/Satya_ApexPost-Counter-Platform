@@ -170,6 +170,8 @@ To check connectivity, start the app with `dotnet run --project src/ApexPost.Web
 
 Tests never use `ApexPostDb`. They create a disposable `ApexPost_Test_*` database and drop it when the run ends.
 
+To repeat the performance evidence on a disposable `ApexPostDb_Perf` database, run `./scripts/run-performance.ps1`. See [PERFORMANCE.md](PERFORMANCE.md).
+
 ### T-SQL scripts
 
 The reports, atomic sale, stored procedures and concurrency demos are in [sql/](sql/), and are explained in [DESIGN.md](DESIGN.md#47-t-sql-reports-procedures-and-concurrency). The stored procedures are deployed by the migrations above.

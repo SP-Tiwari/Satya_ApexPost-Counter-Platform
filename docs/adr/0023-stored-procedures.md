@@ -41,9 +41,18 @@ Observed on the disposable database: `@BranchCode = 'DM01'` used a **Clustered I
 
 ### Deployment
 
-`sql/procedures/*.sql` is the only copy of each procedure. The files are embedded in Infrastructure, and the `AddStoredProcedures` migration deploys them. It wraps each one in `EXEC(N'...')`, because the idempotent script runs migrations inside an `IF` block, where `CREATE OR ALTER` is a syntax error.
+`sql/procedures/*.sql` holds the current text of each procedure. `sql/procedures/history/<migration>/` holds the text that migration deployed, and it must not change. Only these snapshots are embedded in Infrastructure, so a later change to a procedure cannot change an existing migration. The `AddStoredProcedures` migration wraps each snapshot in `EXEC(N'...')`, because the idempotent script runs migrations inside an `IF` block, where `CREATE OR ALTER` is a syntax error.
 
-A later change to a procedure needs a new migration, so existing databases receive it.
+A later change to a procedure needs a new migration, so existing databases receive it. `AddDailyBranchSalesRecompile` is the first ([ADR 0024](0024-index-choices.md)). Such a migration:
+
+- adds a snapshot of the new text in its own history folder, with its own `EmbeddedResource` line;
+- applies that snapshot with `ALTER PROCEDURE`, which fails if the procedure is missing, through `StoredProcedureScripts.ReadSnapshotAsAlter`;
+- runs it with `sp_executesql`, because `ALTER PROCEDURE` must start a batch;
+- restores the earlier text in `Down` from the earlier migration's snapshot.
+
+`Procedures_AreDeployedByTheMigrationFromTheRepositoryFiles` fails if `sql/procedures` changes without such a migration, because it compares the database after all migrations with the current files.
+
+`AddDailyBranchSalesRecompile` is the only source of `OPTION (RECOMPILE)` in `usp_DailyBranchSales`. [recompile-migration.txt](../evidence/m6/recompile-migration.txt) records fresh installation, upgrade from the committed script, rollback and re-upgrade. A procedure deployed by the idempotent script differs from its file only in leading spaces, because EF Core indents the script block, including inside the `EXEC` string.
 
 ### Least privilege
 

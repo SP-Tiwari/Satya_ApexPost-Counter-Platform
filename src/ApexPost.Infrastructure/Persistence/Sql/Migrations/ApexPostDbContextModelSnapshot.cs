@@ -277,6 +277,8 @@ namespace ApexPost.Infrastructure.Persistence.Sql.Migrations
 
                     b.HasIndex("ProductSku");
 
+                    b.HasIndex("Quantity");
+
                     b.ToTable("BranchStock", null, t =>
                         {
                             t.HasCheckConstraint("CK_BranchStock_Quantity", "[Quantity] >= 0");
@@ -414,6 +416,8 @@ namespace ApexPost.Infrastructure.Persistence.Sql.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ProcessingBranchCode");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("ProcessingBranchCode"), new[] { "Status", "Sender", "Recipient" });
 
                     b.ToTable("MoneyOrders", null, t =>
                         {
@@ -651,7 +655,9 @@ namespace ApexPost.Infrastructure.Persistence.Sql.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DestinationZone");
+                    b.HasIndex("DestinationZone", "ServiceLevel");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("DestinationZone", "ServiceLevel"), new[] { "Type", "Weight" });
 
                     b.ToTable("Shipments", null, t =>
                         {
@@ -901,7 +907,9 @@ namespace ApexPost.Infrastructure.Persistence.Sql.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BranchCode");
+                    b.HasIndex("BranchCode", "OccurredAtUtc");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("BranchCode", "OccurredAtUtc"), new[] { "PaymentStatus", "Currency" });
 
                     b.ToTable("CounterTransactions", null, t =>
                         {
@@ -1007,6 +1015,8 @@ namespace ApexPost.Infrastructure.Persistence.Sql.Migrations
                         .HasFilter("[ShipmentId] IS NOT NULL");
 
                     b.HasIndex("TransactionId");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("TransactionId"), new[] { "Type", "Quantity", "TaxCategory", "ShipmentId" });
 
                     b.ToTable("TransactionLines", null, t =>
                         {
