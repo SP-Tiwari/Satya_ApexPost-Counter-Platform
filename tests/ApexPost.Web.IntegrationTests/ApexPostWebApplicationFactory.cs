@@ -7,10 +7,18 @@ namespace ApexPost.Web.IntegrationTests;
 // are loaded. A developer's local secrets (a demo password, a partner key)
 // must not change test results, so that source is removed; each test sets
 // the configuration it needs explicitly.
+//
+// ConfigureAppConfiguration runs when the host is built, after Program has
+// already read builder.Configuration, so removing the source alone does not
+// hide a secret from Program. UseSetting applies early enough, so it blanks
+// the development connection string: tests must never reach that database.
+// A test that needs a connection string sets its own with UseSetting.
 public class ApexPostWebApplicationFactory : WebApplicationFactory<Program>
 {
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
+		builder.UseSetting("ConnectionStrings:ApexPostDb", string.Empty);
+
 		builder.ConfigureAppConfiguration((_, configuration) =>
 		{
 			var userSecrets = configuration.Sources

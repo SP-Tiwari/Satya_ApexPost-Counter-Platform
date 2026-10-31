@@ -119,6 +119,20 @@ if (!Path.IsPathRooted(storageDirectory))
 		storageDirectory);
 }
 
+// The app still runs on JSON; this only proves SQL Server can be reached.
+// Development-only, because each request opens a database connection.
+var databaseConnectionString =
+	builder.Configuration.GetConnectionString("ApexPostDb");
+var databaseHealthEnabled = builder.Environment.IsDevelopment() &&
+	!string.IsNullOrWhiteSpace(databaseConnectionString);
+if (databaseHealthEnabled)
+{
+	builder.Services.AddHealthChecks().AddCheck(
+		"sql-server",
+		new SqlServerConnectivityHealthCheck(databaseConnectionString!),
+		timeout: TimeSpan.FromSeconds(10));
+}
+
 builder.Services.AddSingleton<IApexPostRepository>(
 	_ => new JsonApexPostRepository(storageDirectory));
 builder.Services.AddSingleton<DemoDataInitializer>();
@@ -619,6 +633,8 @@ app.UseAuthorization();
 app.MapStaticAssets();
 
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
+if (databaseHealthEnabled)
+	app.MapHealthChecks("/health/database");
 
 app.MapControllerRoute(
 	name: "default",
