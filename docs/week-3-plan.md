@@ -54,7 +54,7 @@ Other rules: no `EnsureCreated()`, and the app does not migrate itself at startu
 
 1. **Domain rules are preserved.** Existing Domain business rules and test assertions are never weakened or removed to accommodate EF Core.
 2. **Async only.** Every database operation is asynchronous where the API supports it, and every call passes a `CancellationToken` through. No `.Result`, `.Wait()` or `Thread.Sleep`.
-3. **Tests never use the development database.** `ApexPostDb` is off limits to every test. Integration tests use a uniquely named disposable database, and the test host removes the developer's user-secrets.
+3. **Tests never use the development database.** `ApexPostDb` is off limits to every test. Integration tests use a uniquely named disposable database. The test host blanks `ConnectionStrings:ApexPostDb` with `UseSetting`, because removing the user-secrets source happens too late for values `Program.cs` reads directly.
 4. **One milestone at a time.** Each milestone ends with a report and waits for approval. Work does not move ahead of the approved milestone.
 5. **Offline stays a design.** No offline workflow or Outbox is built this week without approval.
 6. **Commits stay clean.** Unrelated files are preserved. `Assignment.txt` and `trainer_evaluation_remarks.txt` stay out of commits.

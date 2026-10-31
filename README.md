@@ -102,6 +102,30 @@ Sample request:
 curl.exe -H "X-API-Key: <your partner key>" https://localhost:7034/integration/parcel-status/<shipmentId>
 ```
 
+## SQL Server setup (Week 3, in progress)
+
+The application still runs on JSON persistence. The migration to SQL Server follows [the Week 3 plan](docs/week-3-plan.md); this section covers only the local database.
+
+Requirements: a local SQL Server instance, `sqlcmd`, and the `dotnet-ef` tool.
+
+From the repository root, run:
+
+```powershell
+./scripts/setup-database.ps1
+```
+
+The script:
+
+1. Creates the data folder (`E:\SqlData\ApexPost` by default; change it with `-DataDirectory`) and gives the SQL Server service account access.
+2. Creates an empty `ApexPostDb` from [sql/setup/create-database.sql](sql/setup/create-database.sql). An existing database is left untouched.
+3. Stores the connection string in user-secrets as `ConnectionStrings:ApexPostDb`, unless one is already set. It uses Windows authentication and trusts the local self-signed certificate, so it is for development only.
+
+Tables are not created yet; they arrive with the EF Core migrations.
+
+To check connectivity, start the app with `dotnet run --project src/ApexPost.Web --launch-profile https` and open <https://localhost:7034/health/database>. It answers `Healthy`, or `Unhealthy` with status 503. The endpoint exists only in Development with a connection string configured, because each request opens a database connection. `/health` does not depend on the database.
+
+Tests never use `ApexPostDb`: the test host blanks `ConnectionStrings:ApexPostDb`, and any test that needs a connection string sets its own.
+
 ## Configuration
 
 `src/ApexPost.Web/appsettings.json` documents non-secret settings. The storage directory is `Storage:Directory`; credentials are stored separately at `Authentication:CredentialFile`. By default the application neither seeds data nor creates credentials. The Web project has a `UserSecretsId`, so `dotnet user-secrets` works for local secrets in Development.
