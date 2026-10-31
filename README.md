@@ -170,6 +170,16 @@ To check connectivity, start the app with `dotnet run --project src/ApexPost.Web
 
 Tests never use `ApexPostDb`. They create a disposable `ApexPost_Test_*` database and drop it when the run ends.
 
+### T-SQL scripts
+
+The reports, atomic sale, stored procedures and concurrency demos are in [sql/](sql/), and are explained in [DESIGN.md](DESIGN.md#47-t-sql-reports-procedures-and-concurrency). The stored procedures are deployed by the migrations above.
+
+To run them all on a disposable database and save the output to [docs/evidence/m4](docs/evidence/m4/README.md):
+
+```powershell
+./scripts/run-sql-demos.ps1
+```
+
 ## Configuration
 
 `src/ApexPost.Web/appsettings.json` documents non-secret settings. The database connection string is `ConnectionStrings:ApexPostDb`, kept in user-secrets. By default the application neither seeds data nor creates credentials. The Web project has a `UserSecretsId`, so `dotnet user-secrets` works for local secrets in Development.

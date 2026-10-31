@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\DisposableSqlDatabase.cs" Link="Sql\DisposableSqlDatabase.cs" />
+    <None Include="..\..\sql\**\*.sql" Link="sql\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

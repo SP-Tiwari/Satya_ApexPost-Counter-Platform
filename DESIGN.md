@@ -598,6 +598,64 @@ Verified on 2026-10-31 by running the real application over HTTPS against a disp
 
 **Test status after the M3 testing phase:** the whole solution builds with 0 warnings, and all 626 tests pass. See [section 13](#13-testing).
 
+### 4.7 T-SQL reports, procedures and concurrency
+
+M4 adds the hand-written T-SQL. It changes no screen: the application still uses the reads from M3, and M5 moves reports to query services or procedures.
+
+| Folder | Contents |
+|---|---|
+| `sql/reports/` | The five reporting queries |
+| `sql/transactions/atomic-sale.sql` | The atomic sale |
+| `sql/procedures/` | The three stored procedures |
+| `sql/demos/` | Fixture, blocking demo and deadlock demo. They refuse any database outside `ApexPost_Test_*` |
+| `sql/security/least-privilege-role.sql` | The application's database role |
+
+**Report definitions.** The daily sales, shipping volume, money-order and low-stock results follow the existing Domain reports. Tests compare `usp_DailyBranchSales`, `usp_LowStockReport` and the shipping and money-order queries with the application's own results, and check the other queries against expected values. A sale is a `Paid` transaction, and dates are UTC. Retail is `Goods` lines and services are `Service` lines, both with tax. Money-order principal counts as neither.
+
+**Project decisions.** Week 3 does not specify the details below, so these are project decisions, not assignment or trainer requirements.
+
+| Topic | Decision |
+|---|---|
+| Product revenue | Quantity × unit price before tax, across all paid sales (all-time), `Goods` lines only. Products are ranked separately by currency, because amounts in different currencies cannot be added. The daily sales totals include tax, so the two reports can show different amounts for the same sales |
+| Top 10 | Each region and currency returns exactly 10 products when at least 10 have revenue, and all of them when fewer do. SKU is the deterministic tie-breaker, so a product tied for 10th place can be left out |
+| `ROW_NUMBER()` and the CTE | Implementation choices that the trainer topics do not explicitly cover. `TOP (10)` alone cannot restart for each region, so `ROW_NUMBER()` numbers the products within each region and currency. The CTEs keep the aggregation and the ranking as separate, readable steps |
+| Rounding | Following [ADR 0017](docs/adr/0017-money-precision-and-rounding.md), reports aggregate first, then round displayed totals to 2 decimals. Independently rounded totals may differ by 0.01. That includes `TotalSales` compared with `RetailSales + ServiceSales`: 10.004 + 10.004 displays as 10.00 and 10.00, with a total of 20.01 |
+
+**How the design avoids deadlocks.** A deadlock needs two transactions taking the same locks in different orders.
+
+- **Consistent table order.** A sale touches `BranchStock`, `CounterTransactions`, `Payments`, `TransactionLines`, then `TransactionTaxRates`. `EfSale_WritesTablesInTheDocumentedOrder` asserts this order for EF Core's real batch, and `atomic-sale.sql` follows it.
+- **Consistent row order.** Stock rows are read in SKU order (`GetForProductsAsync`). `EfSave_UpdatesStockRowsInSkuOrderWhateverOrderTheyChanged` shows EF Core updates them in key order, even when they were changed in reverse.
+- **Short transactions.** A sale reads, decides and writes in one short transaction. Identity verification, which is external, runs before it ([ADR 0021](docs/adr/0021-concurrency-strategy.md)), and nothing waits for a user.
+- **One statement for `usp_AdjustStock`.** It locks a single stock row, then inserts one history row.
+- **If one still happens.** A deadlock victim is a transient failure, which the execution strategy retries.
+
+The set-based `UPDATE` in `atomic-sale.sql` does not guarantee a row order across several SKUs, so the row-order rule above is proven for the application, not that script.
+
+#### M4 traceability
+
+Evidence is saved in [docs/evidence/m4](docs/evidence/m4/README.md). Tests are in `tests/ApexPost.Infrastructure.Tests/Sql/SqlScriptTests.cs`.
+
+| Assignment requirement | Implementation | Documentation | Verification evidence |
+|---|---|---|---|
+| B: daily sales, retail and services | `sql/reports/01-daily-branch-sales.sql` | This section | `DailySalesReportScript_SplitsRetailAndServices`; `reports.txt` |
+| B: no sales today (LEFT JOIN) | `sql/reports/02-branches-with-no-sales-today.sql` | This section | `NoSalesTodayScript_ListsOnlyBranchesWithoutAPaidSaleToday` |
+| B: top 10 products per region | `sql/reports/03-top-10-products-by-revenue-per-region.sql` | This section | `TopProductsScript_KeepsTheTopTenOfEachRegion`, with 12 products |
+| B: shipping volume | `sql/reports/04-shipping-volume-by-zone-and-service-level.sql` | This section | `ShippingVolumeScript_MatchesTheApplicationReport` |
+| B: money orders and verifications | `sql/reports/05-money-orders-and-identity-verifications-per-branch.sql` | This section | `MoneyOrderScript_MatchesTheApplicationReport` |
+| B: atomic sale | `sql/transactions/atomic-sale.sql` | This section | `AtomicSaleScript_*`: commit, short stock, failure in the last insert; `atomic-sale.txt` |
+| B: blocking demo and isolation level | `sql/demos/blocking-session-*.sql` | [Evidence guide](docs/evidence/m4/README.md) | `LCK_M_S`, about 18 s, READ COMMITTED |
+| B: deadlock avoidance | This section | [ADR 0021](docs/adr/0021-concurrency-strategy.md) | Error 1205 with opposite order; both commit with the same order; two EF Core order tests |
+| D: three procedures | `sql/procedures/` | [ADR 0023](docs/adr/0023-stored-procedures.md) | 18 `*Procedure_*` test methods; `procedures.txt` |
+| D: compared with the application | `SqlStoredProcedures` | ADR 0023 | `DailySalesProcedure_MatchesTheApplicationReport`, `LowStockProcedure_MatchesTheApplicationReport` |
+| D: transactional adjustment | `usp_AdjustStock` | ADR 0023 | `AdjustStockProcedure_RollsStockBackWhenTheHistoryRowFails`, `AdjustStockProcedure_StopsConcurrentCallsGoingBelowZero` |
+| D: RECOMPILE choice | `usp_LowStockReport` | ADR 0023 | Seek for one branch, scan for `NULL` |
+| D: parameterized calls | `SqlStoredProcedures` | ADR 0023 | `Database.SqlQuery` with `SqlParameter`; `LowStockProcedure_TreatsMaliciousInputAsAValue` |
+| D: least privilege | `sql/security/least-privilege-role.sql` | ADR 0023 | `LeastPrivilegeRole_CanSellAndRunProceduresButCannotDeleteOrRewriteHistory` |
+| D: ADR | [ADR 0023](docs/adr/0023-stored-procedures.md) | | Each reason avoids "faster" |
+| E: follow-up migration | `20261031124843_AddStoredProcedures` | ADR 0023 | Applied by every SQL test; idempotent script applied twice (`schema.txt`); `Procedures_AreDeployedByTheMigrationFromTheRepositoryFiles` |
+
+**Test status after M4:** the whole solution builds with 0 warnings, and all 662 tests pass: Domain 224, Application 120, Infrastructure 114, Web 204.
+
 ## 5. HTTP pipeline
 
 ```mermaid
@@ -769,7 +827,7 @@ Only the assignment's allowed libraries are used: xUnit, `Microsoft.AspNetCore.M
 |---|---|---|
 | Domain | 224/224 | Stock, weight-limit, money-order verification and void/refund rules, pricing, transaction access (`CanView`) |
 | Application | 120/120 | One commit per use case and none on failure (spy Unit of Work), events once across a retry, multi-line counter sales, payment-method configuration, money orders as basket lines (fee, threshold, verification success, failure and timeout), dated reports, catalogue, clerk read access, password hashing and the dummy-hash timing |
-| Infrastructure | 78/78 | SQL repositories and mapping, rollback of a failed sale, rowversion conflicts and retries, concurrent sales, constraints, migrations down and up, seed, credentials and audit store, JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed, database health check failure and cancellation paths |
+| Infrastructure | 114/114 | The `/sql` files and stored procedures on a real database, compared with the application's reports, least-privilege role, EF Core write order, SQL repositories and mapping, rollback of a failed sale, rowversion conflicts and retries, concurrent sales, constraints, migrations down and up, seed, credentials and audit store, JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed, database health check failure and cancellation paths |
 | Web | 204/204 | Audit failures tested apart from business failures, Problem Details mappings, over-posting, SQL persistence registration, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
 
 The dummy-hash timing test compares the fastest of three runs and accepts a ratio of 0.6–1.6 against a real check; the old 210,000-iteration dummy measured about 0.35.
@@ -781,6 +839,7 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 - **Single-process persistence:** the persistence lock and partner rate limiting are single-process, and there is one shared partner key.
 - **Audit gaps:** the audit omits pre-MVC rejections (authorization, antiforgery, rate limit, IP checks); the framework logs them instead.
 - **No measurements:** none are recorded for the cache or dashboard.
+- **Stored procedures are not on a screen yet:** they are tested and callable through `IStoredProcedures`, but no screen uses them ([ADR 0023](docs/adr/0023-stored-procedures.md)). `usp_AdjustStock` repeats the domain's adjustment rules and raises no low-stock event.
 - **Refund amounts can differ from payments:** on SQL Server, a `Refund` entry for a sale with a shipping price of more than 2 decimals can differ from its `Payment` entry by about one minor currency unit. `KnownDefect_RefundOfASaleWithShippingCanDifferFromItsPayment` pins it. The fix waits for trainer confirmation of the `Refund` entries ([ADR 0017](docs/adr/0017-money-precision-and-rounding.md)).
 
 ## 15. Decision records
@@ -808,3 +867,5 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 | [0019](docs/adr/0019-domain-and-persistence-separation.md) | Where domain and persistence models are separated |
 | [0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md) | Repository and Unit of Work boundaries |
 | [0021](docs/adr/0021-concurrency-strategy.md) | Concurrency strategy for stock and transactions |
+| [0022](docs/adr/0022-audit-store-and-unit-of-work.md) | How the audit store interacts with the unit of work |
+| [0023](docs/adr/0023-stored-procedures.md) | Which operations are stored procedures, and why |

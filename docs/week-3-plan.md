@@ -142,6 +142,8 @@ The original conditions moved, because M2 kept the Web application on JSON and d
 
 **Done when:** procedures are tested, and the ADR justifies each one without relying on "faster".
 
+**M4 result:** the deliverables are in `sql/`, [ADR 0023](adr/0023-stored-procedures.md), [DESIGN.md section 4.7](../DESIGN.md#47-t-sql-reports-procedures-and-concurrency) and [docs/evidence/m4](evidence/m4/README.md). The procedures are callable through `IStoredProcedures`, but no screen uses them yet: M5 decides that.
+
 ### M5: Query services (Part E rules, Part G)
 
 - **Depends on M3's minimum reads, and must come before M6:** those reads load whole lists into memory, which suits the 200+ seeded transactions but not M6's data volumes.

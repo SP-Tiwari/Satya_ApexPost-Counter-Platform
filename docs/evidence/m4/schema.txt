@@ -1,0 +1,12 @@
+﻿## Idempotent script applied twice
+
+MigrationId
+-----------
+20261031085407_InitialCreate
+20261031124843_AddStoredProcedures
+ProcedureName
+-------------
+usp_AdjustStock
+usp_DailyBranchSales
+usp_LowStockReport
+

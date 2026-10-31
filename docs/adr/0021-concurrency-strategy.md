@@ -20,7 +20,7 @@ Two clerks selling the last unit must not drive stock negative. `BranchStock` an
 
 **Execution strategy.** The transaction runs inside `CreateExecutionStrategy().ExecuteAsync`, which `EnableRetryOnFailure` requires for explicit transactions. It retries transient failures, also from a cleared change tracker.
 
-**Deadlocks.** `GetForProductsAsync` orders stock rows by SKU, so concurrent sales read them in one order. EF Core's write order is not asserted here; M4's deadlock note covers it. A deadlock victim is a transient failure, which the execution strategy retries.
+**Deadlocks.** `GetForProductsAsync` orders stock rows by SKU, so concurrent sales read them in one order. M4 measured EF Core's write order: one save updates `BranchStock` in key order, then writes `CounterTransactions`, `Payments`, `TransactionLines` and `TransactionTaxRates`. Tests assert both orders, and [DESIGN.md section 4.7](../../DESIGN.md#47-t-sql-reports-procedures-and-concurrency) has the full note. A deadlock victim is a transient failure, which the execution strategy retries.
 
 **Identity verification keeps its result across retries.** It runs once before the transaction, because it comes from an external provider, not from the database state a conflict makes stale.
 

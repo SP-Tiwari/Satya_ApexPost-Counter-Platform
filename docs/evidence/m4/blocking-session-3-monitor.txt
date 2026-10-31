@@ -1,0 +1,16 @@
+﻿## Monitor, while the reader waits
+
+ProductVersion ReadCommittedSnapshotOn
+-------------- -----------------------
+17.0.1000.7 0
+BlockedSession BlockingSession WaitType WaitMilliseconds WaitResource IsolationLevel
+-------------- --------------- -------- ---------------- ------------ --------------
+73 69 LCK_M_S 3061 KEY: 6:72057594048479232 (b71a4a7787e6) READ COMMITTED
+SessionId ResourceType LockMode LockStatus
+--------- ------------ -------- ----------
+69 KEY X GRANT
+73 KEY S WAIT
+UncommittedQuantity
+-------------------
+39
+

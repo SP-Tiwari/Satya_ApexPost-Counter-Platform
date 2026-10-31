@@ -1,0 +1,32 @@
+﻿## Stock before
+
+Sku Quantity
+--- --------
+DEMO-SKU-001 35
+DEMO-SKU-002 40
+
+## Successful sale
+
+TransactionId Outcome
+------------- -------
+2FDA6FBE-5BE2-405D-A5E4-0037723D5D45 Committed
+
+## Stock after
+
+Sku Quantity
+--- --------
+DEMO-SKU-001 33
+DEMO-SKU-002 39
+
+## Second sale with DEMO-SKU-002 set to 0
+
+Msg 51003, Level 16, State 1, Line 42
+Insufficient stock available.
+
+## Stock after the failed sale: DEMO-SKU-001 unchanged
+
+Sku Quantity
+--- --------
+DEMO-SKU-001 33
+DEMO-SKU-002 0
+

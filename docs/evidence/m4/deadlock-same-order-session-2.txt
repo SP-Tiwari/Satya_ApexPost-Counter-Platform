@@ -1,0 +1,3 @@
+SessionId Outcome
+--------- -------
+70 Committed

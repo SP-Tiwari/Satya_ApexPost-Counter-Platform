@@ -32,6 +32,7 @@ public static class SqlPersistenceRegistration
 		services.AddScoped<ICounterTransactionRepository, SqlCounterTransactionRepository>();
 		services.AddScoped<IStaffRepository, SqlStaffRepository>();
 		services.AddScoped<IUnitOfWork, SqlUnitOfWork>();
+		services.AddScoped<IStoredProcedures, SqlStoredProcedures>();
 
 		services.AddScoped<SqlStaffCredentialRepository>();
 		services.AddScoped<IStaffCredentialRepository>(provider =>

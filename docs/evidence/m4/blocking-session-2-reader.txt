@@ -1,0 +1,6 @@
+CommittedQuantity
+-----------------
+40
+ReaderSessionId ReaderWaitedMilliseconds
+--------------- ------------------------
+73 17977
