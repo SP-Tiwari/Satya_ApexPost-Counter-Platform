@@ -531,6 +531,8 @@ flowchart LR
 | Input limits | `InputLimits`, `[MaximumLength]`: text lengths, and the largest value each decimal column holds |
 | Failed use case | `SqlUnitOfWork` clears the change tracker, so nothing from a failed attempt reaches a later read |
 | Set-based price revision | `SqlProductRepository.RevisePricesAsync` (`ExecuteUpdateAsync`), `AdministrationApplicationService.RevisePricesAsync`. No screen calls it yet |
+| Void requires a Branch Manager | `TransactionsControllerVoidTests.cs`: on a real sale in SQL Server, every other role and a manager demoted or deactivated mid-session are refused, and the rowversions of the transaction and stock rows do not change. A manager's void returns the stock and adds the `Refund` entry |
+| Repository translation on SQL Server | `RepositoryTranslationTests`: value-object filters and lists, the UTC day bounds, the last supported date, the reads no other test ran, and the `ORDER BY` sent. The repositories and query services have no paging |
 | Input → command → entity | Web view models → `CounterBasketRequest` records → domain entities, mapped explicitly in the controllers and services. The sale form's posted fields include no status or audit values, and its posted `TransactionId` is the idempotency key. Automated over-posting tests are still to come |
 
 **Behaviour changes from M2:**
@@ -547,15 +549,15 @@ Verification first ran on 2026-10-31 on a disposable database, using throwaway p
 | F: dependency direction | Interfaces in Application, implementations in Infrastructure | ADR 0020, diagram above | Domain and Application reference no EF Core packages |
 | F: specific repositories | `IBranchRepository`, `IProductRepository`, `IStockRepository`, `ICounterTransactionRepository`, `IStaffRepository` | ADR 0020 | Sale, void, refund, stock adjustment and administration ran on them on SQL Server |
 | F: stage only, no `IQueryable` | `SqlRepositories.cs` | ADR 0020 | Review of `SqlRepositories.cs`: public methods return entities or lists. `RevisePricesAsync` is the documented exception |
-| F: `IUnitOfWork`, one commit per use case | `SqlUnitOfWork`, migrated services | ADR 0020 | A failed sale left no transaction, payment, money-order or stock change |
+| F: `IUnitOfWork`, one commit per use case | `SqlUnitOfWork`, migrated services | ADR 0020 | `SaleRollbackTests`: a sale that fails after its rows are written, or on a SQL Server error during the save, leaves no transaction, line, tax rate, payment, shipment, money order, verification or stock change |
 | F: scoped lifetimes | `AddApexPostSqlPersistence` | ADR 0020 | The probe resolved one scope per use case |
 | F: persistence entity and mapper | `SqlCounterTransactionRepository`, `MoneyOrder.RestoreIdentityVerification` | ADR 0019, ADR 0020 | Basket and money-order reads returned the restored verification |
 | F: Week 2 tests unchanged | `SnapshotStore` and the `IApexPostRepository` constructors, at M2 | ADR 0020 | At M2, all 558 existing tests passed with no test file changed, on JSON through the bridge. M3 removed the bridge, so see section 4.6 for the current test status |
 | E: one `SaveChangesAsync` per sale | `MixedBasketApplicationService.ProcessAsync` | ADR 0020 | Sale saved transaction, lines, shipment, money order, verification, payment and stock together |
-| E: `ExecuteUpdateAsync` | `SqlProductRepository.RevisePricesAsync` | ADR 0020 | 33.33 × 1.1 stored as 36.66; another category unchanged |
-| E: concurrency | `SqlUnitOfWork`, rowversion | ADR 0021 | 20 sales of 10 units: 10 sold, stock 0. Retry reloaded state; repeated conflicts gave `ConcurrencyConflictException` |
+| E: `ExecuteUpdateAsync` | `SqlProductRepository.RevisePricesAsync` | ADR 0020 | 33.33 × 1.1 stored as 36.66; another category unchanged. `RevisePrices_UsesEveryDecimalOfTheMultiplier`: 33.33 × 1.125 stored as 37.50 |
+| E: concurrency | `SqlUnitOfWork`, rowversion | ADR 0021 | 20 sales of 10 units: 10 sold, stock 0. Retry reloaded state; repeated conflicts gave `ConcurrencyConflictException`; `TransactionsControllerConcurrencyTests.cs` runs real two-connection conflicts through HTTP |
 | E: explicit transaction with execution strategy | `SqlUnitOfWork.ExecuteInTransactionAsync` | ADR 0021 | Ran with `EnableRetryOnFailure` configured. A transient failure was not simulated |
-| Plan: events once | `committedEvents` in services | ADR 0021 | 10 completed events for 10 committed sales; no event for a failed sale |
+| Plan: events once | `committedEvents` in services | ADR 0021 | 10 completed events for 10 committed sales. `SaleRollbackTests`: no event for a sale that fails after writing, and the events fire when the same request then succeeds |
 | Implemented, pending trainer confirmation: void and refund entries | `TransactionApplicationService.RecordPaymentEntry` | ADR 0020, ADR 0017 | Void of a paid sale and a refund each added one `Refund` entry with the sale's method. Amounts matched on a sale without shipping (78.66). They were not compared on a sale with shipping, where ADR 0017 records a known defect |
 | Plan: audit stamping | `AuditColumnsInterceptor` | ADR 0020 | `CreatedBy` and `ModifiedAtUtc` were stamped |
 | Plan: input limits | `InputLimits` | ADR 0020 | A 501-character reason was rejected before saving |
@@ -577,7 +579,7 @@ Week 3 M3 moved the Web application from JSON to SQL Server. `Program.cs` requir
 | Credentials | `SqlStaffCredentialRepository`, in `StaffCredentials` |
 | Demo seed | `SqlDemoDataSeeder` writes `DemoDataInitializer`'s data in one commit: 5 branches, 20 staff, 30 products, 10 zones and rates, 210 paid sales with payments |
 | Current staff | `HttpContextStaffAccessor` supplies `CreatedBy` |
-| Problem Details | `ApplicationExceptionHandler` maps `ConcurrencyConflictException` and `DuplicateRecordException` to 409, `KeyNotFoundException` to 404 and `ArgumentException` to 400. Anything else stays a 500 |
+| Problem Details | `ApplicationExceptionHandler` maps `ConcurrencyConflictException` and `DuplicateRecordException` to 409, `KeyNotFoundException` to 404 and `ArgumentException` to 400. Anything else is a logged 500 with safe Problem Details. Browser forms catch these themselves and answer with the view and the same status, including the administration forms. State conflicts are 409, a deliberate deviation from the brief's "domain errors → 400" ([ADR 0025](docs/adr/0025-domain-errors-and-http-status.md)) |
 | Unique violations | `SqlUnitOfWork` translates SQL errors 2601 and 2627 to `DuplicateRecordException` |
 
 #### M3 traceability
@@ -589,7 +591,7 @@ Verified on 2026-10-31 by running the real application over HTTPS against a disp
 | G: screens read and write SQL Server | `Program.cs`, `AddApexPostSqlPersistence` | This section | 34 live checks passed across clerk, manager, auditor and administrator, with no errors logged |
 | G: reports through services | The report application services | This section | Daily sales, low stock, shipping volume and branch auditor pages returned 200 |
 | G: `AuditEntries` through `IAuditStore` | `SqlAuditStore`, `AuditActionFilter` | ADR 0022 | 9 audit rows, including the 409 rejections |
-| G: exceptions to Problem Details | `ApplicationExceptionHandler` | This section | `ProblemDetailsExceptionHandlingTests.KnownException_MapsToItsProblemDetails` covers all four mappings |
+| G: exceptions to Problem Details | `ApplicationExceptionHandler` | This section | `ProblemDetailsExceptionHandlingTests.KnownException_MapsToItsProblemDetails` covers all four mappings. `UncaughtConflict_ReturnsSafeProblemDetailsWith409` proves the 409 with a real conflict through a test-only endpoint. Real routes answer a conflict with a 409 view (ADR 0021). `TransactionsControllerErrorMappingTests.cs` covers real routes: a unique violation during the save, 400 and 404 through the handler, and a logged, safe 500 |
 | G: connection string from user-secrets | `Program.cs` | README | Startup refuses to run without it. The live run supplied it through the environment |
 | E: seed volumes | `SqlDemoDataSeeder` | This section | 5 branches, 10 counters, 20 staff, 20 credentials, 30 products, 150 stock rows, 10 zones, 10 rates |
 | E: 200+ historical transactions | `SqlDemoDataSeeder` | This section | 210 seeded sales, plus the 1 made in the run, with no negative stock |
@@ -654,7 +656,7 @@ Evidence is saved in [docs/evidence/m4](docs/evidence/m4/README.md). Tests are i
 | D: parameterized calls | `SqlStoredProcedures` | ADR 0023 | `Database.SqlQuery` with `SqlParameter`; `LowStockProcedure_TreatsMaliciousInputAsAValue` |
 | D: least privilege | `sql/security/least-privilege-role.sql` | ADR 0023 | `LeastPrivilegeRole_CanSellAndRunProceduresButCannotDeleteOrRewriteHistory` |
 | D: ADR | [ADR 0023](docs/adr/0023-stored-procedures.md) | | Each reason avoids "faster" |
-| E: follow-up migration | `20261031124843_AddStoredProcedures` | ADR 0023 | Applied by every SQL test; idempotent script applied twice (`schema.txt`); `Procedures_AreDeployedByTheMigrationFromTheRepositoryFiles` |
+| E: follow-up migration | `20261031124843_AddStoredProcedures` | ADR 0023 | Applied by every SQL test; idempotent script applied twice (`schema.txt`); `Procedures_MatchTheRepositoryFilesAfterAllMigrations` |
 
 **Test status after M4:** the whole solution builds with 0 warnings, and all 662 tests pass: Domain 224, Application 120, Infrastructure 114, Web 204.
 
@@ -736,8 +738,8 @@ Evidence is saved in [docs/evidence/m6](docs/evidence/m6/README.md). Run it with
 | C: estimate mismatch explained | `usp_DailyBranchSales`, study in the harness | PERFORMANCE.md, ADR 0024 | 24,612 estimated against 71 actual; 3,157 against 200,000 |
 | Training: Query Store | `ApexPostDb_Perf` only | PERFORMANCE.md | `query-store.txt` |
 | Training: implicit conversion | Study in the harness | PERFORMANCE.md | `CONVERT_IMPLICIT` warning, 1,537 reads to 5,055 |
-| E: follow-up migration | `20261031141512_AddPerformanceIndexes` | ADR 0024 | Applied by every SQL test; in the idempotent script; definitions match the measured database |
-| D, E: procedure change through a migration | `20261031184702_AddDailyBranchSalesRecompile`; each migration reads only its own snapshot in `sql/procedures/history/<migration>/` | ADR 0023, ADR 0024 | `recompile-migration.txt`: fresh installation, upgrade, rollback, re-upgrade and idempotent runs; `Procedures_AreDeployedByTheMigrationFromTheRepositoryFiles` |
+| E: follow-up migration | `20261031141512_AddPerformanceIndexes` | ADR 0024 | Applied by every SQL test; in the idempotent script; definitions match the measured database; `IndexDefinitionTests` checks the migration, the model, the idempotent script and the built database, including rollback, uniqueness and filters |
+| D, E: procedure change through a migration | `20261031184702_AddDailyBranchSalesRecompile`; each migration reads only its own snapshot in `sql/procedures/history/<migration>/` | ADR 0023, ADR 0024 | `ProcedureMigrationTests`; `recompile-migration.txt`: fresh installation, upgrade, rollback, re-upgrade and idempotent runs; `Procedures_MatchTheRepositoryFilesAfterAllMigrations` |
 | ADRs: index choices | [ADR 0024](docs/adr/0024-index-choices.md) | | |
 
 **Test status after M6:** the whole solution builds with 0 warnings, and all 662 tests pass with no test file changed.
@@ -890,10 +892,10 @@ flowchart TD
 | Principle | Where it shows |
 |---|---|
 | Single responsibility | One rule class per business rule; pricing, sale processing and reversal are separate domain services; storage, audit and credentials are separate stores |
-| Open/closed | New report filters are new specifications; new notification channels subscribe to the publisher; SQL Server repositories can replace `SnapshotStore` behind the same interfaces without changing the services |
+| Open/closed | New report filters are new specifications; new notification channels subscribe to the publisher; SQL Server replaced JSON behind the Application interfaces, and the Domain tests did not change |
 | Liskov substitution | Simulated courier and verification services are interchangeable with real ones behind their interfaces; tests substitute fakes for the repository and stores |
-| Interface segregation | Credential reads (`IStaffCredentialRepository`) are separate from provisioning (`IStaffCredentialProvisioning`); `IAuditStore` has one method |
-| Dependency inversion | Application depends on its own interfaces; Infrastructure implements them; Web composes them |
+| Interface segregation | Credential reads (`IStaffCredentialRepository`) are separate from provisioning (`IStaffCredentialProvisioning`); `IAuditStore` has one method; each aggregate has its own repository (`IBranchRepository`, `IStockRepository` and others) in place of `IApexPostRepository`; reports read through `IReportQueryService` |
+| Dependency inversion | Application depends on its own interfaces; Infrastructure implements them with EF Core; Web composes them. `IUnitOfWork` keeps EF Core out of Application |
 
 ## 12. Configuration and demo
 
@@ -905,7 +907,7 @@ flowchart TD
 
 There are four xUnit projects: Domain (rules and value objects), Application (use cases with in-memory fakes and a spy Unit of Work), Infrastructure (SQL Server repositories, transactions and concurrency, plus the older JSON stores) and Web integration (`WebApplicationFactory` on a real SQL Server database: security headers, API key and IP, rate limits, CORS, maintenance, authentication, filters and controllers).
 
-**Test database.** SQL tests run against a uniquely named `ApexPost_Test_*` database, built by the real migrations, with its files in `E:\SqlData\ApexPost\Tests`, and dropped when the run ends (`tests/Shared/DisposableSqlDatabase.cs`). It refuses any other name, so it cannot touch `ApexPostDb`, and it never falls back to the instance default on C:. The Web test host replaces the connection string with this database, and a test confirms it. Web tests seed through a test-only `SqlSnapshotRepository`, so their assertions stayed as they were.
+**Test database.** SQL tests run against a uniquely named `ApexPost_Test_*` database, built by the real migrations, with its files in `E:\SqlData\ApexPost\Tests`, and dropped when the run ends (`tests/Shared/DisposableSqlDatabase.cs`). It refuses any other name, so it cannot touch `ApexPostDb`, and it never falls back to the instance default on C:. The Web test host replaces the connection string with this database, and a test confirms it. Web tests seed through a test-only `SqlSnapshotRepository`, so their assertions stayed as they were. This decision is recorded here and has no ADR, because Part H requires a disposable test database and the assignment's ADR topics do not include it.
 
 Only the assignment's allowed libraries are used: xUnit, `Microsoft.AspNetCore.Mvc.Testing` and the Microsoft test SDK. Test doubles are hand-written (`FakeApexPostRepository`, a fixed `TimeProvider`, a fake identity-verification service), and every integration test host uses `ApexPostWebApplicationFactory`, which drops the developer's user-secrets so local settings cannot change results.
 
@@ -913,8 +915,10 @@ Only the assignment's allowed libraries are used: xUnit, `Microsoft.AspNetCore.M
 |---|---|---|
 | Domain | 224/224 | Stock, weight-limit, money-order verification and void/refund rules, pricing, transaction access (`CanView`) |
 | Application | 120/120 | One commit per use case and none on failure (spy Unit of Work), events once across a retry, multi-line counter sales, payment-method configuration, money orders as basket lines (fee, threshold, verification success, failure and timeout), dated reports, catalogue, clerk read access, password hashing and the dummy-hash timing |
-| Infrastructure | 114/114 | The `/sql` files and stored procedures on a real database, compared with the application's reports, least-privilege role, EF Core write order, SQL repositories and mapping, rollback of a failed sale, rowversion conflicts and retries, concurrent sales, constraints, migrations down and up, seed, credentials and audit store, JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed, database health check failure and cancellation paths |
-| Web | 204/204 | Audit failures tested apart from business failures, Problem Details mappings, over-posting, SQL persistence registration, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
+| Infrastructure | 159/159 | Index definitions against the migration, model, script and database, migration snapshots, repository translation, the `/sql` files and stored procedures on a real database, compared with the application's reports, least-privilege role, EF Core write order, SQL repositories and mapping, rollback of a failed sale, rowversion conflicts and retries, concurrent sales, constraints, migrations down and up, seed, credentials and audit store, JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed, database health check failure and cancellation paths |
+| Web | 228/228 | A real two-connection 409, rollback of a failed sale through a route, the Branch Manager void rule on SQL Server, error mappings on real routes, audit failures tested apart from business failures, Problem Details mappings, over-posting, SQL persistence registration, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
+
+**Total: 731 of 731** at the M8 checkpoint on 2026-11-01, with 0 warnings on a clean build.
 
 The dummy-hash timing test compares the fastest of three runs and accepts a ratio of 0.6–1.6 against a real check; the old 210,000-iteration dummy measured about 0.35.
 
@@ -922,12 +926,15 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 
 - **Shipping label content:** the label preview prints only what a sale records (shipment ID, zone, service level, weight, dimensions, origin branch, date). The domain holds no sender or recipient address and no barcode format is specified, so neither is printed.
 - **Browser-only behaviour:** the label's print button is wired in `site.js` (the CSP blocks inline handlers). Tests check that wiring (the button's hook, the script served from the site's origin, the `window.print()` binding), but no browser engine is allowed, so the click itself is not exercised. A forbidden browser request redirects to `/Account/AccessDenied`, which answers 403.
-- **Single-process persistence:** the persistence lock and partner rate limiting are single-process, and there is one shared partner key.
+- **Single-process limits:** partner and sign-in rate limiting are per process, and there is one shared partner key.
 - **Audit gaps:** the audit omits pre-MVC rejections (authorization, antiforgery, rate limit, IP checks); the framework logs them instead.
 - **No measurements:** none are recorded for the cache or dashboard.
 - **Two stored procedures are not on a screen:** `usp_LowStockReport` backs the low-stock report and dashboard, but `usp_DailyBranchSales` and `usp_AdjustStock` are only callable through `IStoredProcedures` ([ADR 0023](docs/adr/0023-stored-procedures.md)). `usp_AdjustStock` repeats the domain's adjustment rules and raises no low-stock event.
 - **Domain read methods are kept for tests:** see [section 4.8](#48-query-services-and-read-projections). Web tests cover the DTO paths, and the unit tests still cover the kept methods.
 - **Two read paths in the report services:** without `IReportQueryService`, a report service still calculates from repository reads. Only the unit tests use that path, so production query code is covered by the Web tests.
+- **Unrounded totals on two screens:** Daily Sales and the dashboard can show more than two decimals, such as `26.455 INR`. Stored values are correct, and [ADR 0017](docs/adr/0017-money-precision-and-rounding.md) leaves the screen format open.
+- **Browser error pages:** an unknown transaction on a browser route is an empty 404, and a 500 on a browser route is Problem Details JSON, not an HTML page.
+- **Offline terminals:** not built. No Part or deliverable requires them.
 - **Refund amounts can differ from payments:** on SQL Server, a `Refund` entry for a sale with a shipping price of more than 2 decimals can differ from its `Payment` entry by about one minor currency unit. `KnownDefect_RefundOfASaleWithShippingCanDifferFromItsPayment` pins it. The fix waits for trainer confirmation of the `Refund` entries ([ADR 0017](docs/adr/0017-money-precision-and-rounding.md)).
 
 ## 15. Decision records
@@ -958,3 +965,4 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 | [0022](docs/adr/0022-audit-store-and-unit-of-work.md) | How the audit store interacts with the unit of work |
 | [0023](docs/adr/0023-stored-procedures.md) | Which operations are stored procedures, and why |
 | [0024](docs/adr/0024-index-choices.md) | Index choices from execution-plan evidence |
+| [0025](docs/adr/0025-domain-errors-and-http-status.md) | State conflicts stay 409, a deliberate deviation |

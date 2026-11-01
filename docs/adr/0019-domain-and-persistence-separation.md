@@ -39,3 +39,7 @@ The brief asks for rich domain entities mapped with the Fluent API, and for a se
 - `MoneyOrder.IdentityVerification` is ignored by EF Core, so M2 must load it through the record and mapper. This is M2's main mapping risk. Reports can read `IdentityVerifications` directly.
 - After reloading, a mask may have fewer asterisks than the in-memory value. Only the display changes, and the last four characters stay the same.
 - Domain types carry private constructors for EF Core, a small and documented cost.
+
+## `Money` is a complex type, not a value converter
+
+The brief lists `Money` among the value converters, but it has two parts, an amount and a currency, and a value converter maps one column. `Money` is therefore mapped with `ComplexProperty` to two columns, and `MoneyAmountConverter` converts only the amount ([ADR 0017](0017-money-precision-and-rounding.md)). `Sku`, `BranchCode` and `Weight` use value converters as the brief asks.

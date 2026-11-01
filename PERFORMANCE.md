@@ -124,7 +124,7 @@ These averages include the plan-capture run, so they differ slightly from the ta
 
 ### Clustered GUID key
 
-ADR 0018 left this for measurement. `CounterTransactions` is clustered on a client-generated GUID, which ADR 0018 keeps so that offline terminals can create IDs.
+ADR 0018 left this for measurement. `CounterTransactions` is clustered on a client-generated GUID, which ADR 0018 keeps so that a repeated submission fails as a key conflict.
 
 | State | `PK_CounterTransactions` fragmentation | Pages |
 |---|---|---|
@@ -132,7 +132,7 @@ ADR 0018 left this for measurement. `CounterTransactions` is clustered on a clie
 | After 60,000 rolled-back random inserts | 62.2% | 46,394 |
 | After 200,000 more committed inserts | 99.1% | 63,836 |
 
-Random inserts split pages, and a rollback does not undo the split. The first write run produced 248,609,396 log bytes, against about 14,400,000 for later runs on the same pages. The impact is contained because the workloads above no longer scan this table. The cost remains for writes, and the index would need regular maintenance in production. The key stays, because the offline design depends on it.
+Random inserts split pages, and a rollback does not undo the split. The first write run produced 248,609,396 log bytes, against about 14,400,000 for later runs on the same pages. The impact is contained because the workloads above no longer scan this table. The cost remains for writes, and the index would need regular maintenance in production. The key stays, because it rejects a repeated submission of the same transaction ID.
 
 ### Conclusions
 

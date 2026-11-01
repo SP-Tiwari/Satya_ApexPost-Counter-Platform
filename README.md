@@ -227,6 +227,8 @@ All seeded people and business values are marked or named `DEMO`. The seed conta
 - [Design](DESIGN.md): architecture and domain diagrams, pipeline order, middleware versus filters, threats and mitigations, auditing, concurrency, C# 14 features, SOLID mapping
 - [Request flow](docs/architecture.md): a counter sale end to end
 - [Architecture Decision Records](docs/adr/)
+- [Performance evidence](PERFORMANCE.md): execution plans, before and after measurements, index trade-offs and generated SQL
+- [Saved evidence](docs/evidence/): T-SQL runs (`m4`), query counts and SQL (`m5`), and plans and measurements (`m6`)
 - [Audit sample](data/AUDIT-SAMPLE.json) — the 12 lines of `audit-events.jsonl` written during a local diagnostic run against seeded demo data (sign-in, stock adjustment, a manager's and a clerk's sale with their transaction IDs, void and refund, including rejected attempts), exported unchanged as a JSON array; not application state.
 
 ## Build and test
@@ -237,5 +239,7 @@ From the repository root:
 dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
+
+At the Week 3 checkpoint on 2026-11-01, all 731 tests passed with 0 warnings: Domain 224, Application 120, Infrastructure 159, Web 228.
 
 The SQL tests need the local default SQL Server instance (`.`), Windows authentication with permission to create databases, and the `E:\SqlData\ApexPost` folder, because disposable test databases keep their files in `E:\SqlData\ApexPost\Tests`.
