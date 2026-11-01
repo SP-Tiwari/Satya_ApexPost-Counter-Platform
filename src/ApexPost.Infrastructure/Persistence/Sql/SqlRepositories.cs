@@ -249,6 +249,16 @@ public sealed class SqlCounterTransactionRepository(ApexPostDbContext database)
 
 	public void AddPayment(Payment payment) => database.Payments.Add(payment);
 
+	public Task<Payment?> FindPaymentAsync(
+		Guid transactionId,
+		CancellationToken cancellationToken = default) =>
+		database.Payments
+			.AsNoTracking()
+			.SingleOrDefaultAsync(
+				payment => payment.TransactionId == transactionId &&
+					payment.Type == PaymentEntryType.Payment,
+				cancellationToken);
+
 	// A split query, because lines would otherwise repeat for each joined row.
 	private IQueryable<TransactionBasket> WholeBaskets() =>
 		database.CounterTransactions

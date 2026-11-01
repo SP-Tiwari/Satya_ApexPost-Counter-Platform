@@ -6,30 +6,12 @@ using ApexPost.Infrastructure.Persistence;
 
 namespace ApexPost.Infrastructure.Tests.Persistence;
 
-public sealed class DemoDataInitializerTests : IAsyncLifetime
+public sealed class DemoDataInitializerTests
 {
-	private string _storageDirectory = null!;
-
-	public Task InitializeAsync()
-	{
-		_storageDirectory = Path.Combine(
-			Path.GetTempPath(),
-			$"ApexPost-DemoData-{Guid.NewGuid():N}");
-		Directory.CreateDirectory(_storageDirectory);
-		return Task.CompletedTask;
-	}
-
-	public Task DisposeAsync()
-	{
-		if (Directory.Exists(_storageDirectory))
-			Directory.Delete(_storageDirectory, recursive: true);
-		return Task.CompletedTask;
-	}
-
 	[Fact]
 	public async Task InitializeAsync_SeedsExpectedFictionalDataOnlyOnce()
 	{
-		using var repository = CreateRepository();
+		var repository = new InMemoryRepository();
 		var initializer = new DemoDataInitializer(repository);
 
 		Assert.True(await initializer.InitializeAsync());
@@ -60,14 +42,12 @@ public sealed class DemoDataInitializerTests : IAsyncLifetime
 				basket.PaymentStatus));
 		Assert.All(snapshot.ShippingRates, rate =>
 			Assert.StartsWith("DEMO-ZONE-", rate.DestinationZone, StringComparison.Ordinal));
-		Assert.False(File.Exists(
-			Path.Combine(_storageDirectory, "staff-credentials.json")));
 	}
 
 	[Fact]
 	public async Task InitializeAsync_SeededSalesDeductTheirBranchStock()
 	{
-		using var repository = CreateRepository();
+		var repository = new InMemoryRepository();
 
 		Assert.True(await new DemoDataInitializer(repository).InitializeAsync());
 
@@ -89,7 +69,7 @@ public sealed class DemoDataInitializerTests : IAsyncLifetime
 	[Fact]
 	public async Task InitializeAsync_DoesNotModifyANonEmptySnapshot()
 	{
-		using var repository = CreateRepository();
+		var repository = new InMemoryRepository();
 		var branch = new Branch(
 			new BranchCode("EX01"),
 			"Existing branch",
@@ -109,6 +89,28 @@ public sealed class DemoDataInitializerTests : IAsyncLifetime
 		Assert.Empty(snapshot.Products);
 	}
 
-	private JsonApexPostRepository CreateRepository() =>
-		new(_storageDirectory);
+	private sealed class InMemoryRepository : IApexPostRepository
+	{
+		private ApexPostSnapshot _snapshot = new([], [], [], [], [], [], [], [], []);
+
+		public Task<ApexPostSnapshot> LoadAsync(
+			CancellationToken cancellationToken = default) =>
+			Task.FromResult(_snapshot);
+
+		public Task SaveAsync(
+			ApexPostSnapshot snapshot,
+			CancellationToken cancellationToken = default)
+		{
+			_snapshot = snapshot;
+			return Task.CompletedTask;
+		}
+
+		public Task UpdateAsync(
+			Func<ApexPostSnapshot, ApexPostSnapshot> update,
+			CancellationToken cancellationToken = default)
+		{
+			_snapshot = update(_snapshot);
+			return Task.CompletedTask;
+		}
+	}
 }

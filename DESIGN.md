@@ -1,6 +1,6 @@
 # ApexPost Counter Platform — Design
 
-This document describes the platform as implemented on the `feature/week3-sql-persistence` branch. Where something is planned but not built, it says so. Decisions are recorded as ADRs in [docs/adr/](docs/adr/); a short request-flow walkthrough is in [docs/architecture.md](docs/architecture.md). **The application runs on SQL Server** since Week 3 M3 ([section 4.6](#46-sql-server-cutover)). The schema is in [section 4.4](#44-sql-server-schema), and the repositories in [section 4.5](#45-repositories-and-unit-of-work).
+This document describes the platform as implemented on the `master` branch. Where something is planned but not built, it says so. Decisions are recorded as ADRs in [docs/adr/](docs/adr/); a short request-flow walkthrough is in [docs/architecture.md](docs/architecture.md). **The application runs on SQL Server** since Week 3 M3 ([section 4.6](#46-sql-server-cutover)). The schema is in [section 4.4](#44-sql-server-schema), and the repositories in [section 4.5](#45-repositories-and-unit-of-work).
 
 ## 1. Architecture
 
@@ -10,7 +10,7 @@ This document describes the platform as implemented on the `feature/week3-sql-pe
 |---|---|---|
 | `ApexPost.Domain` | Entities, value objects, business rules, domain services, events, specifications and report calculations. No I/O. | — |
 | `ApexPost.Application` | Use cases (application services), persistence/security/audit/courier/verification abstractions, the domain-event publisher, the reference-data cache and request validation. | Domain |
-| `ApexPost.Infrastructure` | `ApexPostDbContext`, EF Core mappings and migrations, SQL Server repositories and stores, demo seed, and the simulated courier and identity-verification services. The older JSON stores remain in the code but the application no longer uses them. | Application, Domain |
+| `ApexPost.Infrastructure` | `ApexPostDbContext`, EF Core mappings and migrations, SQL Server repositories and stores, demo seed, and the simulated courier and identity-verification services. | Application, Domain |
 | `ApexPost.Web` | MVC controllers and views, middleware, filters, authentication, authorization policies, the partner API and the composition root (`Program.cs`). | Application, Infrastructure |
 
 ```mermaid
@@ -209,9 +209,9 @@ Events are collected inside `IUnitOfWork.ExecuteInTransactionAsync` and publishe
 
 ## 4. Persistence
 
-> **Historical.** The bullets below up to section 4.4 describe the JSON store used until Week 3 M3. The application no longer uses it. The classes remain only because existing Infrastructure tests still compile against them.
+> **Historical.** The bullets below up to section 4.4 describe the JSON store used until Week 3 M3. The application no longer uses it, and its classes were removed in Week 3 ([section 4.6](#46-sql-server-cutover)).
 
-- **Store:** `JsonApexPostRepository` keeps one versioned `apexpost.json` snapshot in `Storage:Directory`. Infrastructure maps it through DTOs and rebuilds domain objects through their validating constructors; it never deserializes straight into entities.
+- **Store:** `JsonApexPostRepository` kept one versioned `apexpost.json` snapshot in `Storage:Directory`. Infrastructure mapped it through DTOs and rebuilt domain objects through their validating constructors; it never deserialized straight into entities.
 - **Concurrency:** `UpdateAsync(Func<snapshot, snapshot>)` held a `SemaphoreSlim` across load, change and save, and the repository wrote to a temporary file before moving it into place ([ADR 0001](docs/adr/0001-json-snapshot-persistence.md), [ADR 0004](docs/adr/0004-atomic-transaction-processing.md)). SQL Server concurrency is in [ADR 0021](docs/adr/0021-concurrency-strategy.md).
 - **Schema migration:** the current schema is 7.
 
@@ -533,12 +533,30 @@ flowchart LR
 | Set-based price revision | `SqlProductRepository.RevisePricesAsync` (`ExecuteUpdateAsync`), `AdministrationApplicationService.RevisePricesAsync`. No screen calls it yet |
 | Void requires a Branch Manager | `TransactionsControllerVoidTests.cs`: on a real sale in SQL Server, every other role and a manager demoted or deactivated mid-session are refused, and the rowversions of the transaction and stock rows do not change. A manager's void returns the stock and adds the `Refund` entry |
 | Repository translation on SQL Server | `RepositoryTranslationTests`: value-object filters and lists, the UTC day bounds, the last supported date, the reads no other test ran, and the `ORDER BY` sent. The repositories and query services have no paging |
-| Input → command → entity | Web view models → `CounterBasketRequest` records → domain entities, mapped explicitly in the controllers and services. The sale form's posted fields include no status or audit values, and its posted `TransactionId` is the idempotency key. Automated over-posting tests are still to come |
+| Input → command → entity | Every form that changes business data binds a validated view model, maps it to a command record and then to domain entities; see [the mapping table](#input-model--application-command--entity). The sale form's posted fields include no status or audit values, and its posted `TransactionId` is the idempotency key. Over-posting evidence is in [section 4.8](#48-query-services-and-read-projections) |
 
 **Behaviour changes from M2:**
 - Text longer than its column, and numbers too large for theirs, are now rejected as validation errors.
 - `AdjustStockAsync` records a fixed reason, "Manual stock adjustment", on the history row, because the screen does not ask for one.
 - A refund, and a void of a paid sale, each write a `Refund` entry on SQL Server only. **These entries are inferred, not required by the brief, and are pending trainer confirmation** ([ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md)).
+
+#### Input model → application command → entity
+
+`AssignmentWeek03.txt` line 129 asks for explicit mapping from input model to application command to entity. Each form binds a validated view model, its controller builds an immutable command record, and the service overload delegates to the existing use case, so validation and business rules stay in one place. The acting staff ID is a separate argument taken from the sign-in claim, never from the form. The older service signatures remain, so existing tests are unchanged.
+
+| Operation | Input model and action | Command record | Service overload | Entity or table | Mapping test (`ApplicationCommandTests.cs`) |
+|---|---|---|---|---|---|
+| Sale | `CreateTransactionViewModel`, `TransactionsController.Create` | `CounterBasketRequest` | `MixedBasketApplicationService.CreateAndProcessAsync` | `TransactionBasket`, `Payments` | `Sale_CommitsOnce_AndRecordsItsPayment` |
+| Create staff | `CreateStaffViewModel`, `AdministrationController.CreateStaff` | `CreateStaffCommand` | `AdministrationApplicationService.AddStaffAsync` | `Staff` | `CreateStaffCommand_MapsEveryFieldToTheStaffEntity` |
+| Update staff | `UpdateStaffViewModel`, `AdministrationController.UpdateStaff` | `UpdateStaffCommand` | `AdministrationApplicationService.UpdateStaffAsync` | `Staff` | `UpdateStaffCommand_MapsEveryFieldToTheStaffEntity` |
+| Create branch | `CreateBranchViewModel`, `AdministrationController.CreateBranch` | `CreateBranchCommand` | `AdministrationApplicationService.AddBranchAsync` | `Branch`, `CounterTerminal` | `CreateBranchCommand_MapsEveryFieldToTheBranchEntity` |
+| Set branch status | `SetBranchStatusViewModel`, `AdministrationController.SetBranchStatus` | `SetBranchStatusCommand` | `AdministrationApplicationService.SetBranchStatusAsync` | `Branch` | `SetBranchStatusCommand_ReachesTheBranchEntity` |
+| Create product | `CreateProductViewModel`, `AdministrationController.CreateProduct` | `CreateProductCommand` | `AdministrationApplicationService.AddProductAsync` | `Product` | `CreateProductCommand_MapsEveryFieldToTheProductEntity` |
+| Adjust stock | `StockAdjustmentViewModel`, `StockController.Adjust` | `AdjustStockCommand` | `StockAdjustmentApplicationService.AdjustStockAsync` | `BranchStock`, `StockAdjustment` | `AdjustStockCommand_ReachesTheStockAndItsHistoryRow` |
+| Void | `TransactionActionViewModel`, `TransactionsController.Void` | `VoidTransactionCommand` | `TransactionApplicationService.VoidAsync` | `TransactionBasket`, `Payments` | `VoidTransactionCommand_ReachesTheBasketWithItsReason` |
+| Refund | `TransactionActionViewModel`, `TransactionsController.Refund` | `RefundTransactionCommand` | `TransactionApplicationService.RefundAsync` | `TransactionBasket`, `Payments` | `RefundTransactionCommand_ReachesTheBasketWithItsReason` |
+
+The rule tests in the same file, such as `CreateStaffCommand_KeepsTheDuplicateRule` and `VoidTransactionCommand_KeepsTheBranchManagerRule`, prove that the overloads add no path around the existing rules, and `EveryOverload_RefusesANullCommand` covers all eight. The sale's test is in `UnitOfWorkBoundaryTests.cs`. Focused runs on 2026-11-01 passed: Application 66 of 66, Web 111 of 111, which post real forms through these commands, and Infrastructure 42 of 42.
 
 #### M2 traceability
 
@@ -558,7 +576,7 @@ Verification first ran on 2026-10-31 on a disposable database, using throwaway p
 | E: concurrency | `SqlUnitOfWork`, rowversion | ADR 0021 | 20 sales of 10 units: 10 sold, stock 0. Retry reloaded state; repeated conflicts gave `ConcurrencyConflictException`; `TransactionsControllerConcurrencyTests.cs` runs real two-connection conflicts through HTTP |
 | E: explicit transaction with execution strategy | `SqlUnitOfWork.ExecuteInTransactionAsync` | ADR 0021 | Ran with `EnableRetryOnFailure` configured. A transient failure was not simulated |
 | Plan: events once | `committedEvents` in services | ADR 0021 | 10 completed events for 10 committed sales. `SaleRollbackTests`: no event for a sale that fails after writing, and the events fire when the same request then succeeds |
-| Implemented, pending trainer confirmation: void and refund entries | `TransactionApplicationService.RecordPaymentEntry` | ADR 0020, ADR 0017 | Void of a paid sale and a refund each added one `Refund` entry with the sale's method. Amounts matched on a sale without shipping (78.66). They were not compared on a sale with shipping, where ADR 0017 records a known defect |
+| Implemented, pending trainer confirmation: void and refund entries | `TransactionApplicationService.RecordRefundEntryAsync`, `ICounterTransactionRepository.FindPaymentAsync` | ADR 0020, ADR 0017 | Void of a paid sale and a refund each add one `Refund` entry. The project owner approved that it equals the amount originally paid, so it copies the stored `Payment`. `Reversal_OfASaleWithShipping_RefundsExactlyTheStoredPayment`, `Reversal_CopiesTheStoredPayment`, `Reversal_WithNoStoredPayment_WritesNoRefundEntry` and `VoidOfOpenBasket_WritesNoRefundEntry`. Focused runs on 2026-11-01: Application 40 of 40, Infrastructure 78 of 78, Web 98 of 98 |
 | Plan: audit stamping | `AuditColumnsInterceptor` | ADR 0020 | `CreatedBy` and `ModifiedAtUtc` were stamped |
 | Plan: input limits | `InputLimits` | ADR 0020 | A 501-character reason was rejected before saving |
 | Numeric limits | `InputLimits.Ensure`, `MixedBasketApplicationService`, `AdministrationApplicationService` | ADR 0020 | Oversized weight rejected with no rows written |
@@ -577,10 +595,30 @@ Week 3 M3 moved the Web application from JSON to SQL Server. `Program.cs` requir
 | `ReferenceDataCache` | Loads through `IReferenceDataSource`. `SqlReferenceDataSource` opens a short-lived scope, because the cache is a singleton |
 | Audit | `SqlAuditStore`, in its own scope and commit ([ADR 0022](docs/adr/0022-audit-store-and-unit-of-work.md)) |
 | Credentials | `SqlStaffCredentialRepository`, in `StaffCredentials` |
-| Demo seed | `SqlDemoDataSeeder` writes `DemoDataInitializer`'s data in one commit: 5 branches, 20 staff, 30 products, 10 zones and rates, 210 paid sales with payments |
+| Demo seed | `SqlDemoDataSeeder` writes `DemoDataInitializer`'s data in one commit: 5 branches, 20 staff, 30 products, 10 zones, 16 rates, and 270 paid sales with payments, of which 40 carry shipments and 20 carry money orders |
 | Current staff | `HttpContextStaffAccessor` supplies `CreatedBy` |
 | Problem Details | `ApplicationExceptionHandler` maps `ConcurrencyConflictException` and `DuplicateRecordException` to 409, `KeyNotFoundException` to 404 and `ArgumentException` to 400. Anything else is a logged 500 with safe Problem Details. Browser forms catch these themselves and answer with the view and the same status, including the administration forms. State conflicts are 409, a deliberate deviation from the brief's "domain errors → 400" ([ADR 0025](docs/adr/0025-domain-errors-and-http-status.md)) |
 | Unique violations | `SqlUnitOfWork` translates SQL errors 2601 and 2627 to `DuplicateRecordException` |
+
+**Legacy JSON removal.** SQL Server is the only persistence implementation. `JsonApexPostRepository`, `JsonAuditStore` and `JsonStaffCredentialRepository` were removed once a search of `src`, `scripts` and `sql` found no use outside their own files, and with them their 27 and 3 test cases, which tested only those classes. The eight `src/ApexPost.Web/App_Data/SeedData` files were removed too, because nothing loaded them; the Week 2 remarks had already noted that they were unused and did not match the C# seed. Demo data is written by `SqlDemoDataSeeder`, which `Program.cs` runs when `DemoData:Initialize` is true, from `DemoDataInitializer.CreateDemoSnapshot`. `IApexPostRepository` stays because 18 test files, including `FakeApexPostRepository` and `SqlSnapshotRepository`, depend on it; no production service resolves it. Verified on 2026-11-01 with a clean `dotnet build ApexPost.slnx --no-incremental` (0 warnings, 0 errors), `dotnet test tests/ApexPost.Infrastructure.Tests --no-build` (233 of 233) and focused Application (30 of 30) and Web (39 of 39) runs. This is not a full-suite result.
+
+**Demo shipments and money orders.** `DemoDataInitializer.CreateDemoServiceSales` builds both, and `SqlDemoDataSeeder` writes them in the same commit as the rest of the seed, so every report has data on a fresh demo.
+
+| Seeded data | Records | Report | Evidence |
+|---|---|---|---|
+| Shipments, `DEMO-SHIP-0001` to `0040`, each on a paid sale | 40 parcels and letters across 10 zones and all three service levels. Six extra rates add `Express` and `Registered` to the first three zones, making 16 rates | `/Reports/ShippingVolume`, `SqlReportQueryService.ShippingVolume` | `DemoSeed_ShippingVolumeReport_CountsEverySeededShipment`: 16 rows, 40 shipments |
+| Money orders, each on a paid sale with its fee | 20 at 5 branches: 5 with no check, 10 with a successful check and 5 with a failed check below the threshold. The five above 10,000 INR were all checked successfully | `/Reports/BranchAuditor`, `SqlReportQueryService.BranchAuditorReport` | `DemoSeed_BranchAuditorReport_CountsEverySeededMoneyOrder`: 5 branches, 20 orders, 15 checks |
+
+These 60 sales bring the seed to 270 sales with 270 payments. Each money order passes `MoneyOrderIdentityVerificationRule` as it is built. `IdentityVerification` masks each fictional eight-character document number, so only values like `****0001` are stored; `DemoSeed_StoresOnlyMaskedDocumentIdentifiers` checks every stored row. The sales go through `ICounterTransactionRepository.Add`, which stores those verifications. Seeding stops if any branch, staff member or product exists, so `DemoSeed_RunningAgain_DuplicatesNothing` finds the same row counts. `DemoSeed_RecordsReferenceValidBranchesAndStaff` checks the clerk, branch, line and rate references, and `DemoProfile_AuditorSeesTheSeededShipmentsAndMoneyOrders` signs in through the `demo` profile and reads both report screens.
+
+Focused runs on 2026-11-01:
+
+```powershell
+dotnet test tests/ApexPost.Infrastructure.Tests --no-build --filter "FullyQualifiedName~DemoSeed_|FullyQualifiedName~DemoCredentials_|FullyQualifiedName~DemoDataInitializerTests"
+dotnet test tests/ApexPost.Web.IntegrationTests --no-build --filter "FullyQualifiedName~DemoProfileTests|FullyQualifiedName~ShippingVolumeReportsControllerTests|FullyQualifiedName~BranchAuditorReportsControllerTests"
+```
+
+These passed 12 of 12 and 16 of 16. This is not a full-suite result.
 
 #### M3 traceability
 
@@ -716,6 +754,8 @@ The services keep their authorization checks and return the same report rows, so
 | F: query and command separation, no separate databases | `IReportQueryService` | This section, [ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md) | Stated above |
 | G: reports use query services or procedures | The four report services and the dashboard | This section | Web report tests pass on the new path; old and new output identical |
 | F: response DTOs for every screen | `IScreenQueryService`, `ScreenQueryApplicationService` | This section | Nine reads compared with the old path: same output |
+| F: request DTOs for every POST, with validation | `src/ApexPost.Web/Models` | This section | Every POST with input binds a validated view model. `TransactionsControllerAdministrationFormTests` covers valid, invalid and over-posted forms for `UpdateStaff` and `SetBranchStatus` |
+| F: over-posted `Status`, `Id` and audit fields have no effect | Request view models; `[FromRoute]` on `TransactionsController.Void` and `Refund` | This section | Tests read the stored rows for every form that changes business data. `TransactionsControllerOverPostingTests.cs`: `CreateStaff`, `CreateBranch` and `CreateProduct` (identity keys, `IsActive`, `CreatedBy`, `CreatedAtUtc`, `ModifiedAtUtc`), and `Reversal_OverPostedFields_HaveNoEffect` (`Status`, `Id`, `BranchCode`, `ClerkStaffId`, `OccurredAtUtc`, `ReversalReason`, audit fields). `StockControllerTests.Adjust_OverPostedFields_HaveNoEffect`: branch, delta, reason, staff, `Id` and audit fields. `Sale_IgnoresPostedStatusAndAuditFields`, `UpdateStaff_OverPostedFields_HaveNoEffect` and `SetBranchStatus_OverPostedFields_HaveNoEffect` cover the rest. On the create forms `Id`, `Code` and `Sku` are real inputs. A focused run of the affected test classes on 2026-11-01 passed 111 of 111 |
 
 **Test status after M5:** the whole solution builds with 0 warnings, and all 662 tests pass with no test file changed.
 
@@ -823,6 +863,7 @@ flowchart TD
 | Password guessing | Sign-in rate limit (429), PBKDF2, generic error message | Limit is per IP; shared NAT users share it |
 | Account enumeration by timing | Dummy hash for unknown IDs, at the same 600,000 iterations that every created credential uses | A credential provisioned out of band with more iterations would still take longer than the dummy |
 | Stolen or stale cookie | HttpOnly, Secure, SameSite cookie; per-request staff revalidation | Theft of a live cookie within its lifetime |
+| Posted form field overriding the route ID on a void or refund, which would reverse one sale while the audit named another | `[FromRoute]` binds `transactionId` from the URL only. `Reversal_PostedTransactionId_CannotRedirectItToAnotherSale` failed before this fix and checks the audit record. `Reversal_PostedForeignTransactionId_LeavesTheOtherBranchUntouched` and `Reversal_ForeignRouteWithPostedLocalId_IsStillRefused` cover other branches | None known on these two routes, the only POST routes with a route value |
 | CSRF | Antiforgery on every POST; SameSite=Lax | — |
 | XSS and clickjacking | CSP `default-src 'self'` (no inline script), `X-Frame-Options: DENY`, `frame-ancestors 'none'`, nosniff, no-referrer | — |
 | Cross-branch data access (IDOR) | Branch scoping from persisted staff in the services, plus `SameBranchOnly`; other branches' IDs return 404 or 403 | — |
@@ -899,26 +940,35 @@ flowchart TD
 
 ## 12. Configuration and demo
 
-`appsettings.json` holds only non-secret operational settings. Business values (tax rates, payment methods, shipping tax category and weight limits, money-order threshold, fee and accepted documents, low-stock threshold) and secrets (partner API key, demo password) must be supplied through user-secrets or the environment; there are no defaults. Startup rejects partial or invalid settings.
+`appsettings.json` holds only non-secret operational settings. Business values (tax rates, payment methods, shipping tax category and weight limits, money-order threshold, fee and accepted documents, low-stock threshold) and secrets (partner API key, demo password) must be supplied through user-secrets or the environment; there are no defaults. Startup rejects partial or invalid settings. The one exception is the `demo` launch profile, which supplies two fictional values so a goods sale works on the seed: `Transactions:TaxRates:ZeroRated` as `0`, and `Transactions:PaymentMethods:0` as `DEMO Cash`. A launch profile applies only to `dotnet run`, so a published application receives neither.
 
-`./scripts/run-demo.ps1` runs the opt-in demo seed with demo logins whose password comes from user-secrets ([ADR 0003](docs/adr/0003-opt-in-demo-data.md), [ADR 0010](docs/adr/0010-demo-logins-from-user-secrets.md)). The README lists the accounts and settings.
+`./scripts/run-demo.ps1` runs the opt-in demo seed with demo logins whose password comes from user-secrets ([ADR 0003](docs/adr/0003-opt-in-demo-data.md), [ADR 0010](docs/adr/0010-demo-logins-from-user-secrets.md)). The `DemoData__StaffPassword` environment variable takes precedence over user-secrets; the script then says so and does not show it. The README lists the accounts and settings.
+
+With `-ConnectionString`, the script runs on a disposable database. It accepts only an existing `ApexPost_Test_*` database using Windows authentication, with its files directly in `E:\SqlData\ApexPost\Tests`. It checks this through `master` and stops before migrating otherwise, and it never creates a database. `-Reset` deletes all data, so it needs `-ConnectionString`. The script also stops if port 7034 is in use. `RunDemoScriptTests` covers these rules with stand-ins for `dotnet` and `sqlcmd`, so those tests cannot reach a database.
 
 ## 13. Testing
 
-There are four xUnit projects: Domain (rules and value objects), Application (use cases with in-memory fakes and a spy Unit of Work), Infrastructure (SQL Server repositories, transactions and concurrency, plus the older JSON stores) and Web integration (`WebApplicationFactory` on a real SQL Server database: security headers, API key and IP, rate limits, CORS, maintenance, authentication, filters and controllers).
+There are four xUnit projects: Domain (rules and value objects), Application (use cases with in-memory fakes and a spy Unit of Work), Infrastructure (SQL Server repositories, transactions and concurrency) and Web integration (`WebApplicationFactory` on a real SQL Server database: security headers, API key and IP, rate limits, CORS, maintenance, authentication, filters and controllers).
 
-**Test database.** SQL tests run against a uniquely named `ApexPost_Test_*` database, built by the real migrations, with its files in `E:\SqlData\ApexPost\Tests`, and dropped when the run ends (`tests/Shared/DisposableSqlDatabase.cs`). It refuses any other name, so it cannot touch `ApexPostDb`, and it never falls back to the instance default on C:. The Web test host replaces the connection string with this database, and a test confirms it. Web tests seed through a test-only `SqlSnapshotRepository`, so their assertions stayed as they were. This decision is recorded here and has no ADR, because Part H requires a disposable test database and the assignment's ADR topics do not include it.
+**Test database.** SQL tests run against a uniquely named `ApexPost_Test_*` database, built by the real migrations, with its files in `E:\SqlData\ApexPost\Tests`, and dropped when the run ends (`tests/Shared/DisposableSqlDatabase.cs`). `SqlTestSettings` reads the server and folder from `APEXPOST_TEST_SQL_SERVER` and `APEXPOST_TEST_DATA_DIRECTORY` for other machines, and stops on an invalid value. It accepts only local instances, and a folder of at most 73 characters, because `QUOTENAME` returns `NULL` above 128 characters. Another folder also needs `APEXPOST_TEST_OTHER_MACHINE` set to `true`, and is refused while `E:\SqlData\ApexPost` exists. Before migrating, the fixture confirms from `master` that the database exists with exactly its two files in that folder, because EF Core would otherwise create a missing database in the default location. The fixture refuses any other name, so it cannot touch `ApexPostDb`, and it never falls back to the instance default on C:. The Web test host replaces the connection string with this database, and a test confirms it. Web tests seed through a test-only `SqlSnapshotRepository`, so their assertions stayed as they were. This decision is recorded here and has no ADR, because Part H requires a disposable test database and the assignment's ADR topics do not include it.
 
 Only the assignment's allowed libraries are used: xUnit, `Microsoft.AspNetCore.Mvc.Testing` and the Microsoft test SDK. Test doubles are hand-written (`FakeApexPostRepository`, a fixed `TimeProvider`, a fake identity-verification service), and every integration test host uses `ApexPostWebApplicationFactory`, which drops the developer's user-secrets so local settings cannot change results.
 
 | Project | Result | Main coverage |
 |---|---|---|
 | Domain | 224/224 | Stock, weight-limit, money-order verification and void/refund rules, pricing, transaction access (`CanView`) |
-| Application | 120/120 | One commit per use case and none on failure (spy Unit of Work), events once across a retry, multi-line counter sales, payment-method configuration, money orders as basket lines (fee, threshold, verification success, failure and timeout), dated reports, catalogue, clerk read access, password hashing and the dummy-hash timing |
-| Infrastructure | 159/159 | Index definitions against the migration, model, script and database, migration snapshots, repository translation, the `/sql` files and stored procedures on a real database, compared with the application's reports, least-privilege role, EF Core write order, SQL repositories and mapping, rollback of a failed sale, rowversion conflicts and retries, concurrent sales, constraints, migrations down and up, seed, credentials and audit store, JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed, database health check failure and cancellation paths |
-| Web | 228/228 | A real two-connection 409, rollback of a failed sale through a route, the Branch Manager void rule on SQL Server, error mappings on real routes, audit failures tested apart from business failures, Problem Details mappings, over-posting, SQL persistence registration, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
+| Application | 140/140 | Command mapping for every business form, refunds that copy the stored payment, One commit per use case and none on failure (spy Unit of Work), events once across a retry, multi-line counter sales, payment-method configuration, money orders as basket lines (fee, threshold, verification success, failure and timeout), dated reports, catalogue, clerk read access, password hashing and the dummy-hash timing |
+| Infrastructure | 240/240 | The SQL test settings' safety rules and the fixture's checks before migrating, the demo seed's shipments, money orders and reports, index definitions against the migration, model, script and database, migration snapshots, repository translation, the `/sql` files and stored procedures on a real database, compared with the application's reports, least-privilege role, EF Core write order, SQL repositories and mapping, rollback of a failed sale, rowversion conflicts and retries, concurrent sales, constraints, migrations down and up, seed, credentials and audit store, JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed, database health check failure and cancellation paths |
+| Web | 300/300 | Over-posted fields and route IDs, the demo report screens, the exception handler's 500 and 409 mapping, request DTOs on the administration forms, a real goods sale through the `demo` profile settings, the `run-demo.ps1` safety checks, a real two-connection 409, rollback of a failed sale through a route, the Branch Manager void rule on SQL Server, error mappings on real routes, audit failures tested apart from business failures, Problem Details mappings, over-posting, SQL persistence registration, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
 
-**Total: 731 of 731** at the M8 checkpoint on 2026-11-01, with 0 warnings on a clean build.
+**Total: 904 of 904** on 2026-11-01 at 15:30 UTC, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors.
+
+```powershell
+dotnet build ApexPost.slnx --no-incremental
+dotnet test ApexPost.slnx --no-build
+```
+
+The count rose by 12 from the earlier full run of 892 of 892, kept as history in the [test results](docs/evidence/week3-test-results.md): 42 tests were added and 30 were removed with the legacy JSON stores. During this run, 15 read-only samples on `master` found 0 sessions in `ApexPostDb`, and all 38 database file rows belonged to `ApexPost_Test_*` databases in `E:\SqlData\ApexPost\Tests`. Afterwards only `ApexPostDb` remained. A Postman CLI run on the same code passed 65 of 65 requests and 188 of 188 assertions; the test results list what it verified.
 
 The dummy-hash timing test compares the fastest of three runs and accepts a ratio of 0.6–1.6 against a real check; the old 210,000-iteration dummy measured about 0.35.
 
@@ -934,8 +984,12 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 - **Two read paths in the report services:** without `IReportQueryService`, a report service still calculates from repository reads. Only the unit tests use that path, so production query code is covered by the Web tests.
 - **Unrounded totals on two screens:** Daily Sales and the dashboard can show more than two decimals, such as `26.455 INR`. Stored values are correct, and [ADR 0017](docs/adr/0017-money-precision-and-rounding.md) leaves the screen format open.
 - **Browser error pages:** an unknown transaction on a browser route is an empty 404, and a 500 on a browser route is Problem Details JSON, not an HTML page.
-- **Offline terminals:** not built. No Part or deliverable requires them.
-- **Refund amounts can differ from payments:** on SQL Server, a `Refund` entry for a sale with a shipping price of more than 2 decimals can differ from its `Payment` entry by about one minor currency unit. `KnownDefect_RefundOfASaleWithShippingCanDifferFromItsPayment` pins it. The fix waits for trainer confirmation of the `Refund` entries ([ADR 0017](docs/adr/0017-money-precision-and-rounding.md)).
+- **Demo configuration:** the `demo` profile supplies what a goods sale needs, and the seed fills the shipping and money-order reports. New shipping or money-order sales, the low-stock report and the partner API need further settings, which the README lists.
+- **`run-demo.ps1` verification:** the full script ran on disposable databases only. Its default path was verified with stand-ins, not against the development database, and rejection of a file outside the approved folder was tested with fixed paths only.
+- **`IApexPostRepository` remains:** the JSON implementations are gone, but this interface stays for test doubles and `DemoDataInitializer`'s test-only instance path. No production service resolves it ([ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md)).
+- **SQL tests on another machine:** the server and folder are configurable, but those settings have only been tested without a database. The tests need Windows, Windows authentication and a local instance. Code cannot identify the development machine, so if `E:\SqlData\ApexPost` is missing there, only the `APEXPOST_TEST_OTHER_MACHINE` setting stands between a person and another folder.
+- **No Week 3 pull request:** Week 3 was merged to `master` directly. Earlier weeks used pull requests.
+- **Offline terminals:** not built ([ADR 0026](docs/adr/0026-offline-counter-terminals.md)). The Week 3 title and Lab Module 9 name offline work, but no Part or deliverable covers it.
 
 ## 15. Decision records
 

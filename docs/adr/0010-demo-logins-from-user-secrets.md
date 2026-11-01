@@ -10,10 +10,10 @@ The demo seed created staff records but no credentials, and no password was docu
 
 ## Decision
 
-- `DemoDataInitializer` is the only seed source. The `App_Data/SeedData` files are retired: nothing loads them, they are not maintained, and they remain in the tree only until the author removes them.
+- `DemoDataInitializer` is the only seed source. The `App_Data/SeedData` files were retired and have been removed, because nothing loaded them.
 - Demo logins are provisioned when `DemoData:Initialize` is true and `DemoData:StaffPassword` is set. `DemoCredentialProvisioner` hashes that password with PBKDF2-SHA256, using a random salt per staff member and the minimum supported iteration count. It adds a credential only for active seeded demo staff who have none yet, and writes them atomically to the existing separate credential file (ADR 0007). The application snapshot never contains credentials.
-- The password lives in user-secrets (the Web project now has a `UserSecretsId`). Startup rejects `DemoData:StaffPassword` outside the Development environment, and rejects a blank value.
-- `scripts/run-demo.ps1` is the one-command setup. It generates and stores a random password if none exists, prints the logins, and runs the `demo` launch profile. That profile keeps demo data, credentials and audit lines under `src/ApexPost.Web/data/demo/`, which git ignores.
+- The password lives in user-secrets (the Web project now has a `UserSecretsId`). The `DemoData__StaffPassword` environment variable takes precedence over it, because the application reads environment variables first. `run-demo.ps1` then says the password came from that variable, and neither shows it nor changes user-secrets. Startup rejects `DemoData:StaffPassword` outside the Development environment, and rejects a blank value.
+- `scripts/run-demo.ps1` is the one-command setup. It generates and stores a random password if none exists, prints the logins, and runs the `demo` launch profile. That profile seeds the SQL Server database, and credentials and audit entries are stored there too.
 
 ## Alternatives considered
 
@@ -23,4 +23,4 @@ The demo seed created staff records but no credentials, and no password was docu
 
 ## Consequences
 
-Each developer's demo password is local and random unless they choose one. Credentials are never overwritten, so changing the password needs `-Reset`, which deletes only `data/demo/`. Without the password the app still seeds data and warns that demo staff cannot sign in. Business values that the assignment leaves unspecified (tax rates, payment methods, parcel limits, money-order threshold and fee, low-stock threshold, partner key and limits) are still not seeded, so the workflows that need them stay disabled until they are configured.
+Each developer's demo password is local and random unless they choose one. Credentials are never overwritten, so changing the password needs a new empty database. `-Reset` deletes all data, so it only runs on a disposable `ApexPost_Test_*` database named with `-ConnectionString`. Without the password the app still seeds data and warns that demo staff cannot sign in. Business values that the assignment leaves unspecified (tax rates, payment methods, parcel limits, money-order threshold and fee, low-stock threshold, partner key and limits) are still not seeded. The `demo` profile supplies only the zero rate and the `DEMO Cash` method that a goods sale needs, and the other workflows stay disabled until they are configured.

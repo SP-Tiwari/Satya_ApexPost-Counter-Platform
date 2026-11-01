@@ -6,7 +6,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 
 - `src/ApexPost.Domain` — entities, value objects, rules, and reporting.
 - `src/ApexPost.Application` — use cases and persistence/security/audit abstractions.
-- `src/ApexPost.Infrastructure` — the EF Core SQL Server persistence layer (`ApexPostDbContext`, mappings, migrations, repositories and stores). The older JSON stores remain in the code, but the application no longer uses them.
+- `src/ApexPost.Infrastructure` — the EF Core SQL Server persistence layer (`ApexPostDbContext`, mappings, migrations, repositories and stores). SQL Server is the only persistence implementation.
 - `src/ApexPost.Web` — MVC controllers and views, authentication, middleware, and composition root.
 - `tests/*` — Domain, Application, Infrastructure, and Web integration tests.
 
@@ -35,7 +35,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 
 ## Run the demo
 
-Requirements: the .NET 10 SDK and a trusted HTTPS development certificate (`dotnet dev-certs https --trust`). The sign-in cookie is HTTPS-only.
+Requirements: the .NET 10 SDK, the `dotnet-ef` tool, a local SQL Server instance, and a trusted HTTPS development certificate (`dotnet dev-certs https --trust`). The sign-in cookie is HTTPS-only.
 
 From the repository root, run:
 
@@ -45,15 +45,15 @@ From the repository root, run:
 
 The script:
 
-1. Stores a randomly generated demo password in user-secrets as `DemoData:StaffPassword`, unless one is already set, and prints it.
-2. Applies the EF Core migrations to the database named in `ConnectionStrings:ApexPostDb`.
-3. Starts the app with the `demo` launch profile at <https://localhost:7034>. The profile uses the Development environment and sets `DemoData:Initialize=true`.
+1. Applies the EF Core migrations to the database named in `ConnectionStrings:ApexPostDb`. It stops first if port 7034 is already in use.
+2. Stores a randomly generated demo password in user-secrets as `DemoData:StaffPassword`, unless one is already set, and prints it. If the `DemoData__StaffPassword` environment variable is set, it takes precedence: the script says so, does not show it, and leaves user-secrets alone.
+3. Starts the app with the `demo` launch profile at <https://localhost:7034>. The profile uses the Development environment and sets `DemoData:Initialize=true`, plus the two fictional sale settings described below.
 
 Create the database first with `./scripts/setup-database.ps1` (see [SQL Server setup](#sql-server-setup)).
 
 On first start the app seeds the fictional demo data into the empty database, then creates sign-in credentials for the 20 demo staff. Only PBKDF2 hashes are written to `StaffCredentials`; the password itself is never written to the repository.
 
-Demo logins (all use the password the script prints):
+Demo logins (all use the password the script prints, or the value of `DemoData__StaffPassword` when that is set):
 
 | Staff ID | Role | Branch |
 |---|---|---|
@@ -65,15 +65,34 @@ Demo logins (all use the password the script prints):
 
 Other options:
 
-- **Use your own password:** run `./scripts/run-demo.ps1 -Password '<your demo password>'`.
-- **Start over:** `-Reset` reverts all migrations, which **deletes all data in that database**, so the seed and logins are recreated. You need this for a changed password to take effect, because existing logins are never overwritten.
+- **Use your own password:** run `./scripts/run-demo.ps1 -Password '<your demo password>'`. The script refuses `-Password` while `DemoData__StaffPassword` is set.
+- **Start over:** a changed password needs a new empty database, because existing logins are never overwritten. `-Reset` reverts all migrations, which **deletes all data**, so it only runs with `-ConnectionString` on a disposable database, and never on the database in user-secrets.
+- **Verify on a disposable database:** create an empty `ApexPost_Test_*` database yourself, with its data and log files directly in `E:\SqlData\ApexPost\Tests`. Then set the password in `DemoData__StaffPassword` and name that database with `-ConnectionString`, using Windows authentication. The script uses it for the migrations and the application, refuses `ApexPostDb` and any other name, and neither shows the password nor changes user-secrets. It checks the database through `master` first, and stops before migrating if the database is missing or any file is elsewhere. It never creates a database, which is why this check exists: EF Core would create a missing one in the instance's default location.
 - **Without the script:** run `dotnet user-secrets set DemoData:StaffPassword "<your demo password>" --project src/ApexPost.Web`, then `dotnet run --project src/ApexPost.Web --launch-profile demo`.
 
 `DemoData:StaffPassword` is only accepted in the Development environment; startup fails if it is set anywhere else. If demo data is enabled without it, the app starts but logs a warning, and the demo staff cannot sign in.
 
+### Make a sale
+
+A goods sale works straight after `./scripts/run-demo.ps1`, with no further setup:
+
+1. Sign in at <https://localhost:7034> as `demo-staff-01`, with the password the script prints.
+2. Open `/Transactions/Create`.
+3. Choose a counter terminal, the payment method `DEMO Cash`, and a product with a quantity. Leave the shipping option clear.
+4. Submit the form. The sale opens with the status Paid.
+
+The `demo` profile in `src/ApexPost.Web/Properties/launchSettings.json` supplies what this needs:
+
+| Setting | Demo value | Why |
+|---|---|---|
+| `Transactions:TaxRates:ZeroRated` | `0` | Every seeded product is `ZeroRated`, and a product with no rate is not offered |
+| `Transactions:PaymentMethods:0` | `DEMO Cash` | The fictional method the seeded sales use |
+
+These are fictional demo values, not business defaults. A launch profile applies only to `dotnet run`, and this one runs in Development, so a published application receives neither setting and sales stay disabled until they are configured.
+
 ### Workflows that need your configuration
 
-Sign-in, the dashboard, transaction history, details, voids and refunds, stock adjustment and administration work on the seed alone. Some workflows stay disabled until you supply the business values they need. The project ships no defaults for these, so choose your own values and set them with user-secrets, for example:
+Sign-in, the dashboard, transaction history, details, goods sales through the `demo` profile, voids and refunds, stock adjustment and administration work on the seed alone. Some workflows stay disabled until you supply the business values they need. The project ships no defaults for these, so choose your own values and set them with user-secrets, for example:
 
 ```powershell
 dotnet user-secrets set "Transactions:TaxRates:ZeroRated" "<rate>" --project src/ApexPost.Web
@@ -81,8 +100,8 @@ dotnet user-secrets set "Transactions:TaxRates:ZeroRated" "<rate>" --project src
 
 | Workflow | Settings |
 |---|---|
-| New counter sales | `Transactions:TaxRates:<TaxCategory>` for the categories you sell, and `Transactions:PaymentMethods:0`, `:1`, … |
-| Shipping lines | `Shipping:TaxCategory`, `Shipping:MaximumParcelWeightKilograms:<ServiceLevel>` (the seeded zones are `Standard`) |
+| New counter sales outside the `demo` profile | `Transactions:TaxRates:<TaxCategory>` for the categories you sell, and `Transactions:PaymentMethods:0`, `:1`, … |
+| Shipping lines | `Shipping:TaxCategory`, `Shipping:MaximumParcelWeightKilograms:<ServiceLevel>` (the first three seeded zones also have `Express` and `Registered` rates) |
 | Money orders | `MoneyOrders:HighValueThreshold:Amount` and `:Currency`, `MoneyOrders:Fee:Amount` and `:TaxCategory`, `MoneyOrders:Verification:AcceptedDocumentTypes:0`, … and `MoneyOrders:Verification:TimeoutSeconds` |
 | Low-stock report and alerts | `Reports:LowStockThreshold` |
 | Partner parcel-status API | see below |
@@ -213,14 +232,17 @@ The single seed source is `DemoDataInitializer` (`src/ApexPost.Infrastructure/Pe
 - 20 staff, covering every role in each branch
 - 30 products
 - stock for each product at every branch (150 rows)
-- 10 shipping zones with rates
-- 210 paid historical sales with payments, one every six hours back from seeding time
+- 10 shipping zones and 16 rates, with `Express` and `Registered` in the first three zones
+- 270 paid historical sales with payments, going back from seeding time
+  - 210 goods sales, one every six hours
+  - 40 shipment sales, `DEMO-SHIP-0001` to `0040`, across all zones, service levels and parcel and letter types
+  - 20 money-order sales at all 5 branches: 5 with no identity check, 10 with a successful check and 5 with a failed check below the threshold, with the shipment sales covering the 15 most recent days at one sale every six hours
 
 The sales are processed through the same domain service as real sales, so they deduct stock and the reports have recent dates.
 
 Set `DemoData:Initialize` to `true` to seed an empty database. The setting defaults to `false`. Seeding runs in one commit, happens only when no branches, staff or products exist, and never merges demo values into existing data.
 
-All seeded people and business values are marked or named `DEMO`. The seed contains no passwords, hashes, secrets or identity-document numbers; demo credentials are written only to `StaffCredentials`, as described above. Demo prices, shipping rates and zero tax rates are illustrative and must not be used as production values. Parcel limits, money-order thresholds and fees, and low-stock thresholds are not seeded.
+All seeded people and business values are marked or named `DEMO`. The seed contains no passwords, hashes or secrets, and its identity documents are fictional and stored only masked, such as `****0001`; demo credentials are written only to `StaffCredentials`, as described above. Demo prices, shipping rates and zero tax rates are illustrative and must not be used as production values. Parcel limits, money-order thresholds and fees, and low-stock thresholds are not seeded.
 
 ## Documentation and sample records
 
@@ -240,6 +262,14 @@ dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
 
-At the Week 3 checkpoint on 2026-11-01, all 731 tests passed with 0 warnings: Domain 224, Application 120, Infrastructure 159, Web 228.
+The latest full run, on 2026-11-01 at 15:30 UTC, passed 904 of 904 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 224, Application 140, Infrastructure 240, Web 300. A Postman CLI run on the same code passed 65 of 65 requests and 188 of 188 assertions. An earlier full run the same day, before the score-improvement changes, passed 892 of 892. The [test results](docs/evidence/week3-test-results.md) record all of these.
 
-The SQL tests need the local default SQL Server instance (`.`), Windows authentication with permission to create databases, and the `E:\SqlData\ApexPost` folder, because disposable test databases keep their files in `E:\SqlData\ApexPost\Tests`.
+The SQL tests need a local SQL Server instance and Windows authentication with permission to create databases. By default they use the instance `.` and keep disposable database files in `E:\SqlData\ApexPost\Tests`. On another machine, set these environment variables:
+
+| Variable | Default | Accepts |
+|---|---|---|
+| `APEXPOST_TEST_SQL_SERVER` | `.` | A local instance only: `.`, `(local)` or `localhost`, each with an optional `\INSTANCE`, or `(localdb)\NAME`. Remote hosts, IP addresses, ports and protocol prefixes are refused |
+| `APEXPOST_TEST_DATA_DIRECTORY` | `E:\SqlData\ApexPost\Tests` | An absolute local folder of at most 73 characters that the SQL Server service account can write to. No part may end in a dot or space |
+| `APEXPOST_TEST_OTHER_MACHINE` | Not set | `true`, required with any other data folder, to confirm this is not the development machine |
+
+An invalid value stops the tests, and they never fall back to another location. If `E:\SqlData\ApexPost` exists, the data folder cannot be changed. Before migrating, the fixture confirms the database exists with both files in the configured folder, and stops otherwise. It connects only to `master` and its own `ApexPost_Test_*` databases, so it can't reach `ApexPostDb`. These overrides have only been tested without a database, not in a full run on another machine.

@@ -27,4 +27,4 @@ There are no production defaults for these prices, tax values, or parcel limits.
 
 Operators must configure the applicable tax and weight settings and provision rate records before enabling the corresponding shipping workflow. Configuration mistakes are surfaced instead of silently substituted. Demo data, if explicitly initialized, contains visibly fictional rate fixtures and is not production policy.
 
-Relevant implementation: `src/ApexPost.Domain/ValueObjects/ShippingRate.cs`, `src/ApexPost.Domain/Services/ShippingPricingService.cs`, `src/ApexPost.Domain/Rules/ShippingWeightLimitRule.cs`, `src/ApexPost.Application/Services/MixedBasketApplicationService.cs`, `src/ApexPost.Infrastructure/Persistence/JsonApexPostRepository.cs`, and `src/ApexPost.Web/Program.cs`.
+Relevant implementation: `src/ApexPost.Domain/ValueObjects/ShippingRate.cs`, `src/ApexPost.Domain/Services/ShippingPricingService.cs`, `src/ApexPost.Domain/Rules/ShippingWeightLimitRule.cs`, `src/ApexPost.Application/Services/MixedBasketApplicationService.cs`, `src/ApexPost.Infrastructure/Persistence/Sql/Configurations/ShippingConfigurations.cs`, and `src/ApexPost.Web/Program.cs`.

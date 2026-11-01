@@ -3,6 +3,39 @@ using ApexPost.Application.Validation;
 
 namespace ApexPost.Application.Services;
 
+// The input of each administration form. The acting staff ID is a separate
+// argument, because it comes from the sign-in claim and never from a form.
+public sealed record CreateStaffCommand(
+	string Id,
+	string Name,
+	string Email,
+	StaffRole Role,
+	string HomeBranchCode);
+
+public sealed record UpdateStaffCommand(
+	string StaffId,
+	StaffRole Role,
+	string HomeBranchCode,
+	bool IsActive);
+
+public sealed record CreateBranchCommand(
+	string Code,
+	string Name,
+	string Region,
+	string OpeningHours,
+	string TerminalId,
+	string TerminalName);
+
+public sealed record SetBranchStatusCommand(string Code, bool IsActive);
+
+public sealed record CreateProductCommand(
+	string Sku,
+	string Name,
+	ProductCategory Category,
+	decimal UnitPrice,
+	string Currency,
+	TaxCategory TaxCategory);
+
 /// <summary>
 /// Administrative master-data use cases.  The Web layer deliberately supplies only
 /// the acting staff ID; authorization is rechecked against persisted staff data.
@@ -44,6 +77,14 @@ public sealed class AdministrationApplicationService
 		return new ApexPostSnapshot(branches, staff, products, [], [], [], [], [], []);
 	}
 
+	public Task AddStaffAsync(string administratorId, CreateStaffCommand command,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		return AddStaffAsync(administratorId, command.Id, command.Name, command.Email,
+			command.Role, command.HomeBranchCode, cancellationToken);
+	}
+
 	public Task AddStaffAsync(string administratorId, string id, string name,
 		string email, StaffRole role, string homeBranchCode,
 		CancellationToken cancellationToken = default) =>
@@ -63,6 +104,14 @@ public sealed class AdministrationApplicationService
 			await _unitOfWork.SaveChangesAsync(token).ConfigureAwait(false);
 		}, cancellationToken);
 
+	public Task UpdateStaffAsync(string administratorId, UpdateStaffCommand command,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		return UpdateStaffAsync(administratorId, command.StaffId, command.Role,
+			command.HomeBranchCode, command.IsActive, cancellationToken);
+	}
+
 	public Task UpdateStaffAsync(string administratorId, string staffId, StaffRole role,
 		string homeBranchCode, bool isActive, CancellationToken cancellationToken = default) =>
 		_unitOfWork.ExecuteInTransactionAsync(async token =>
@@ -77,6 +126,14 @@ public sealed class AdministrationApplicationService
 			if (isActive) staff.Activate(); else staff.Deactivate();
 			await _unitOfWork.SaveChangesAsync(token).ConfigureAwait(false);
 		}, cancellationToken);
+
+	public Task AddBranchAsync(string administratorId, CreateBranchCommand command,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		return AddBranchAsync(administratorId, command.Code, command.Name, command.Region,
+			command.OpeningHours, command.TerminalId, command.TerminalName, cancellationToken);
+	}
 
 	public Task AddBranchAsync(string administratorId, string code, string name,
 		string region, string openingHours, string terminalId, string terminalName,
@@ -97,6 +154,14 @@ public sealed class AdministrationApplicationService
 			await _unitOfWork.SaveChangesAsync(token).ConfigureAwait(false);
 		}, cancellationToken);
 
+	public Task SetBranchStatusAsync(string administratorId, SetBranchStatusCommand command,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		return SetBranchStatusAsync(
+			administratorId, command.Code, command.IsActive, cancellationToken);
+	}
+
 	public Task SetBranchStatusAsync(string administratorId, string code, bool isActive,
 		CancellationToken cancellationToken = default) =>
 		_unitOfWork.ExecuteInTransactionAsync(async token =>
@@ -108,6 +173,14 @@ public sealed class AdministrationApplicationService
 			if (isActive) branch.Reopen(); else branch.Close();
 			await _unitOfWork.SaveChangesAsync(token).ConfigureAwait(false);
 		}, cancellationToken);
+
+	public Task AddProductAsync(string administratorId, CreateProductCommand command,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		return AddProductAsync(administratorId, command.Sku, command.Name, command.Category,
+			command.UnitPrice, command.Currency, command.TaxCategory, cancellationToken);
+	}
 
 	public async Task AddProductAsync(string administratorId, string sku, string name,
 		ProductCategory category, decimal unitPrice, string currency, TaxCategory taxCategory,

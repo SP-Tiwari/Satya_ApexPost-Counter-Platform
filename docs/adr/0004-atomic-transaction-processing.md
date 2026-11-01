@@ -30,4 +30,4 @@ The application and domain layers enforce the rules. The MVC controller handles 
 
 A failed callback saves nothing, and duplicate transaction IDs cannot be processed twice. Twenty concurrent one-unit sales against 10 in stock gave exactly 10 successes (confirmed by the trainer's run). This is in-process coordination only; it is not a multi-process transaction guarantee.
 
-Relevant implementation: `src/ApexPost.Application/Services/MixedBasketApplicationService.cs`, `src/ApexPost.Application/Services/TransactionApplicationService.cs`, `src/ApexPost.Domain/Services/SaleProcessingService.cs`, `src/ApexPost.Infrastructure/Persistence/JsonApexPostRepository.cs`, and `src/ApexPost.Web/Controllers/TransactionsController.cs`.
+Relevant implementation: `src/ApexPost.Application/Services/MixedBasketApplicationService.cs`, `src/ApexPost.Application/Services/TransactionApplicationService.cs`, `src/ApexPost.Domain/Services/SaleProcessingService.cs`, `src/ApexPost.Infrastructure/Persistence/Sql/SqlUnitOfWork.cs`, and `src/ApexPost.Web/Controllers/TransactionsController.cs`.

@@ -55,8 +55,7 @@ public sealed class StockController(
 		{
 			await stockAdjustments.AdjustStockAsync(
 				staffId,
-				model.ProductSku!,
-				model.QuantityChange!.Value,
+				new AdjustStockCommand(model.ProductSku!, model.QuantityChange!.Value),
 				cancellationToken);
 			TempData["StockAdjustmentStatus"] = "Stock adjusted.";
 			return RedirectToAction(nameof(Adjust));

@@ -41,4 +41,9 @@ public interface ICounterTransactionRepository
 	void Add(TransactionBasket basket);
 
 	void AddPayment(Payment payment);
+
+	// The transaction's Payment entry, not a Refund, or null when it took no money.
+	Task<Payment?> FindPaymentAsync(
+		Guid transactionId,
+		CancellationToken cancellationToken = default);
 }

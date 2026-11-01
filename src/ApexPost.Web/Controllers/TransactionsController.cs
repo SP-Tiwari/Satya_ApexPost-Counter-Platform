@@ -458,19 +458,22 @@ public sealed class TransactionsController : Controller, IInvalidModelStateHandl
 		}
 	}
 
+	// [FromRoute] on both reversals: MVC reads form values first, so a posted
+	// transactionId would otherwise replace the one in the URL, which the audit records.
 	[HttpPost("{transactionId:guid}/void")]
 	[Authorize(Policy = ApexPostPolicies.BranchManagerOnly)]
 	[ValidateAntiForgeryToken]
 	[Audited]
 	public Task<IActionResult> Void(
-		Guid transactionId,
+		[FromRoute] Guid transactionId,
 		TransactionActionViewModel model,
 		CancellationToken cancellationToken) =>
 		ChangeStatusAsync(
 			transactionId,
 			model,
 			"Transaction voided.",
-			_transactions.VoidAsync,
+			(staffId, token) => _transactions.VoidAsync(
+				staffId, new VoidTransactionCommand(transactionId, model.Reason), token),
 			cancellationToken);
 
 	[HttpPost("{transactionId:guid}/refund")]
@@ -478,21 +481,22 @@ public sealed class TransactionsController : Controller, IInvalidModelStateHandl
 	[ValidateAntiForgeryToken]
 	[Audited]
 	public Task<IActionResult> Refund(
-		Guid transactionId,
+		[FromRoute] Guid transactionId,
 		TransactionActionViewModel model,
 		CancellationToken cancellationToken) =>
 		ChangeStatusAsync(
 			transactionId,
 			model,
 			"Transaction refunded.",
-			_transactions.RefundAsync,
+			(staffId, token) => _transactions.RefundAsync(
+				staffId, new RefundTransactionCommand(transactionId, model.Reason), token),
 			cancellationToken);
 
 	private async Task<IActionResult> ChangeStatusAsync(
 		Guid transactionId,
 		TransactionActionViewModel model,
 		string successMessage,
-		Func<Guid, string, string, CancellationToken, Task> changeStatus,
+		Func<string, CancellationToken, Task> changeStatus,
 		CancellationToken cancellationToken)
 	{
 		if (transactionId == Guid.Empty)
@@ -514,11 +518,7 @@ public sealed class TransactionsController : Controller, IInvalidModelStateHandl
 
 		try
 		{
-			await changeStatus(
-				transactionId,
-				staffId,
-				model.Reason,
-				cancellationToken);
+			await changeStatus(staffId, cancellationToken);
 			TempData["TransactionActionStatus"] = successMessage;
 			return RedirectToAction(
 				nameof(Details), new { transactionId });
