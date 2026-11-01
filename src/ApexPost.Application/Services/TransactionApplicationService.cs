@@ -4,6 +4,10 @@ using ApexPost.Domain.Events;
 
 namespace ApexPost.Application.Services;
 
+public sealed record VoidTransactionCommand(Guid TransactionId, string Reason);
+
+public sealed record RefundTransactionCommand(Guid TransactionId, string Reason);
+
 public sealed class TransactionApplicationService
 {
 	private readonly IStaffRepository _staff;
@@ -152,7 +156,7 @@ public sealed class TransactionApplicationService
 			_processingRule.Process(staff, branch, basket, branchStocks);
 
 			var occurredAtUtc = _timeProvider.GetUtcNow();
-			RecordPaymentEntry(basket, PaymentEntryType.Payment, occurredAtUtc);
+			RecordPaymentEntry(basket, occurredAtUtc);
 			committedEvents =
 			[
 				new TransactionCompletedEvent(
@@ -168,6 +172,15 @@ public sealed class TransactionApplicationService
 		}, cancellationToken).ConfigureAwait(false);
 
 		_events?.Publish(committedEvents);
+	}
+
+	public Task VoidAsync(
+		string staffId,
+		VoidTransactionCommand command,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		return VoidAsync(command.TransactionId, staffId, command.Reason, cancellationToken);
 	}
 
 	public async Task VoidAsync(
@@ -190,7 +203,8 @@ public sealed class TransactionApplicationService
 			// A paid sale took money, so voiding it reverses that money. An
 			// open basket took none.
 			if (wasPaid)
-				RecordPaymentEntry(basket, PaymentEntryType.Refund, occurredAtUtc);
+				await RecordRefundEntryAsync(basket, occurredAtUtc, token)
+					.ConfigureAwait(false);
 
 			committedEvent = new TransactionVoidedEvent(
 				basket.Id,
@@ -202,6 +216,15 @@ public sealed class TransactionApplicationService
 		}, cancellationToken).ConfigureAwait(false);
 
 		_events?.Publish([committedEvent!]);
+	}
+
+	public Task RefundAsync(
+		string staffId,
+		RefundTransactionCommand command,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		return RefundAsync(command.TransactionId, staffId, command.Reason, cancellationToken);
 	}
 
 	public async Task RefundAsync(
@@ -220,7 +243,8 @@ public sealed class TransactionApplicationService
 			_voidRefundRule.Refund(staff, basket, reason, branchStocks);
 
 			var occurredAtUtc = _timeProvider.GetUtcNow();
-			RecordPaymentEntry(basket, PaymentEntryType.Refund, occurredAtUtc);
+			await RecordRefundEntryAsync(basket, occurredAtUtc, token)
+				.ConfigureAwait(false);
 			committedEvent = new TransactionRefundedEvent(
 				basket.Id,
 				basket.BranchCode,
@@ -254,12 +278,9 @@ public sealed class TransactionApplicationService
 		return (basket, staff, branchStocks);
 	}
 
-	// The workflow has one method per sale and no way to choose another for a
-	// reversal, so the entry records the sale's method. A basket without sale
-	// details has no method, and a zero total moved no money.
+	// A basket without sale details has no method, and a zero total moved no money.
 	private void RecordPaymentEntry(
 		TransactionBasket basket,
-		PaymentEntryType type,
 		DateTimeOffset occurredAtUtc)
 	{
 		var total = basket.Total;
@@ -268,11 +289,34 @@ public sealed class TransactionApplicationService
 			_transactions.AddPayment(new Payment(
 				Guid.NewGuid(),
 				basket.Id,
-				type,
+				PaymentEntryType.Payment,
 				total,
 				saleDetails.PaymentMethod,
 				occurredAtUtc));
 		}
+	}
+
+	// A refund returns exactly what was paid, so it copies the stored Payment. The
+	// basket's total can differ from it once rounded lines are reloaded (ADR 0017).
+	// A basket with no stored payment took no money, so it writes nothing.
+	private async Task RecordRefundEntryAsync(
+		TransactionBasket basket,
+		DateTimeOffset occurredAtUtc,
+		CancellationToken cancellationToken)
+	{
+		var payment = await _transactions
+			.FindPaymentAsync(basket.Id, cancellationToken)
+			.ConfigureAwait(false);
+		if (payment is null)
+			return;
+
+		_transactions.AddPayment(new Payment(
+			Guid.NewGuid(),
+			basket.Id,
+			PaymentEntryType.Refund,
+			payment.Amount,
+			payment.PaymentMethod,
+			occurredAtUtc));
 	}
 
 	private Task<IReadOnlyList<BranchStock>> GetStockForBasketAsync(

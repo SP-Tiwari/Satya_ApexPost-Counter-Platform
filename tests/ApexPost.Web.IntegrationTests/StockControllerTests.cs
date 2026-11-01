@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -245,6 +246,58 @@ public sealed class StockControllerTests : IAsyncLifetime
 			stock => stock.BranchCode == new BranchCode("BR01")).Quantity);
 	}
 
+	// BranchCode and BranchName are real view-model properties, there to redisplay
+	// the form, so these fields do bind. Only the service's own values may be stored.
+	[Fact]
+	public async Task Adjust_OverPostedFields_HaveNoEffect()
+	{
+		await SeedAsync([CreateManager()]);
+		using var client = CreateClient(
+			_factory, "BranchManager", ManagerId, "BR01");
+		var token = await GetAntiforgeryTokenAsync(client);
+		var postedId = Guid.NewGuid();
+		var form = await CreateForm(ProductSku, 3, token, "BR02").ReadAsStringAsync();
+
+		var response = await client.PostAsync(
+			"/Stock/Adjust",
+			new StringContent(
+				form +
+				"&BranchName=Changed&Quantity=999&Delta=99&Reason=attacker" +
+				"&ChangedByStaffId=someone-else&StockAdjustmentId=" + postedId +
+				"&Id=" + postedId +
+				"&OccurredAtUtc=2000-01-01&CreatedBy=attacker" +
+				"&CreatedAtUtc=2000-01-01&ModifiedAtUtc=2000-01-01",
+				System.Text.Encoding.UTF8,
+				"application/x-www-form-urlencoded"));
+
+		Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+		var snapshot = await LoadSnapshotAsync();
+		Assert.Equal(7, Assert.Single(
+			snapshot.BranchStocks,
+			stock => stock.BranchCode == new BranchCode("BR01")).Quantity);
+		Assert.Equal(20, Assert.Single(
+			snapshot.BranchStocks,
+			stock => stock.BranchCode == new BranchCode("BR02")).Quantity);
+		await using var context = TestSqlServer.Database.CreateContext();
+		var stored = await context.Database
+			.SqlQuery<AdjustmentColumns>(
+				$"""
+				SELECT StockAdjustmentId, BranchCode, Delta, Reason, ChangedByStaffId,
+					OccurredAtUtc, CreatedBy, CreatedAtUtc, ModifiedAtUtc
+				FROM dbo.StockAdjustments
+				""")
+			.SingleAsync();
+		Assert.NotEqual(postedId, stored.StockAdjustmentId);
+		Assert.Equal("BR01", stored.BranchCode);
+		Assert.Equal(3, stored.Delta);
+		Assert.Equal("Manual stock adjustment", stored.Reason);
+		Assert.Equal(ManagerId, stored.ChangedByStaffId);
+		Assert.NotEqual(2000, stored.OccurredAtUtc.Year);
+		Assert.Equal(ManagerId, stored.CreatedBy);
+		Assert.NotEqual(2000, stored.CreatedAtUtc.Year);
+		Assert.Null(stored.ModifiedAtUtc);
+	}
+
 	private async Task SeedAsync(
 		IEnumerable<Staff> staff,
 		bool includeHomeStock = true,
@@ -386,6 +439,17 @@ public sealed class StockControllerTests : IAsyncLifetime
 			"09:00-17:00",
 			[new CounterTerminal($"COUNTER-{branchCode}", "Counter")]);
 	}
+
+	private sealed record AdjustmentColumns(
+		Guid StockAdjustmentId,
+		string BranchCode,
+		int Delta,
+		string Reason,
+		string ChangedByStaffId,
+		DateTime OccurredAtUtc,
+		string CreatedBy,
+		DateTime CreatedAtUtc,
+		DateTime? ModifiedAtUtc);
 
 	private static Staff CreateManager() =>
 		new(

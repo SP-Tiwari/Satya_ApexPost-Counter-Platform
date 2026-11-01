@@ -10,7 +10,7 @@ The demo seed created staff records but no credentials, and no password was docu
 
 ## Decision
 
-- `DemoDataInitializer` is the only seed source. The `App_Data/SeedData` files are retired: nothing loads them, they are not maintained, and they remain in the tree only until the author removes them.
+- `DemoDataInitializer` is the only seed source. The `App_Data/SeedData` files were retired and have been removed, because nothing loaded them.
 - Demo logins are provisioned when `DemoData:Initialize` is true and `DemoData:StaffPassword` is set. `DemoCredentialProvisioner` hashes that password with PBKDF2-SHA256, using a random salt per staff member and the minimum supported iteration count. It adds a credential only for active seeded demo staff who have none yet, and writes them atomically to the existing separate credential file (ADR 0007). The application snapshot never contains credentials.
 - The password lives in user-secrets (the Web project now has a `UserSecretsId`). The `DemoData__StaffPassword` environment variable takes precedence over it, because the application reads environment variables first. `run-demo.ps1` then says the password came from that variable, and neither shows it nor changes user-secrets. Startup rejects `DemoData:StaffPassword` outside the Development environment, and rejects a blank value.
 - `scripts/run-demo.ps1` is the one-command setup. It generates and stores a random password if none exists, prints the logins, and runs the `demo` launch profile. That profile seeds the SQL Server database, and credentials and audit entries are stored there too.

@@ -6,7 +6,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 
 - `src/ApexPost.Domain` — entities, value objects, rules, and reporting.
 - `src/ApexPost.Application` — use cases and persistence/security/audit abstractions.
-- `src/ApexPost.Infrastructure` — the EF Core SQL Server persistence layer (`ApexPostDbContext`, mappings, migrations, repositories and stores). The older JSON stores remain in the code, but the application no longer uses them.
+- `src/ApexPost.Infrastructure` — the EF Core SQL Server persistence layer (`ApexPostDbContext`, mappings, migrations, repositories and stores). SQL Server is the only persistence implementation.
 - `src/ApexPost.Web` — MVC controllers and views, authentication, middleware, and composition root.
 - `tests/*` — Domain, Application, Infrastructure, and Web integration tests.
 
@@ -101,7 +101,7 @@ dotnet user-secrets set "Transactions:TaxRates:ZeroRated" "<rate>" --project src
 | Workflow | Settings |
 |---|---|
 | New counter sales outside the `demo` profile | `Transactions:TaxRates:<TaxCategory>` for the categories you sell, and `Transactions:PaymentMethods:0`, `:1`, … |
-| Shipping lines | `Shipping:TaxCategory`, `Shipping:MaximumParcelWeightKilograms:<ServiceLevel>` (the seeded zones are `Standard`) |
+| Shipping lines | `Shipping:TaxCategory`, `Shipping:MaximumParcelWeightKilograms:<ServiceLevel>` (the first three seeded zones also have `Express` and `Registered` rates) |
 | Money orders | `MoneyOrders:HighValueThreshold:Amount` and `:Currency`, `MoneyOrders:Fee:Amount` and `:TaxCategory`, `MoneyOrders:Verification:AcceptedDocumentTypes:0`, … and `MoneyOrders:Verification:TimeoutSeconds` |
 | Low-stock report and alerts | `Reports:LowStockThreshold` |
 | Partner parcel-status API | see below |
@@ -232,14 +232,17 @@ The single seed source is `DemoDataInitializer` (`src/ApexPost.Infrastructure/Pe
 - 20 staff, covering every role in each branch
 - 30 products
 - stock for each product at every branch (150 rows)
-- 10 shipping zones with rates
-- 210 paid historical sales with payments, one every six hours back from seeding time
+- 10 shipping zones and 16 rates, with `Express` and `Registered` in the first three zones
+- 270 paid historical sales with payments, going back from seeding time
+  - 210 goods sales, one every six hours
+  - 40 shipment sales, `DEMO-SHIP-0001` to `0040`, across all zones, service levels and parcel and letter types
+  - 20 money-order sales at all 5 branches: 5 with no identity check, 10 with a successful check and 5 with a failed check below the threshold, with the shipment sales covering the 15 most recent days at one sale every six hours
 
 The sales are processed through the same domain service as real sales, so they deduct stock and the reports have recent dates.
 
 Set `DemoData:Initialize` to `true` to seed an empty database. The setting defaults to `false`. Seeding runs in one commit, happens only when no branches, staff or products exist, and never merges demo values into existing data.
 
-All seeded people and business values are marked or named `DEMO`. The seed contains no passwords, hashes, secrets or identity-document numbers; demo credentials are written only to `StaffCredentials`, as described above. Demo prices, shipping rates and zero tax rates are illustrative and must not be used as production values. Parcel limits, money-order thresholds and fees, and low-stock thresholds are not seeded.
+All seeded people and business values are marked or named `DEMO`. The seed contains no passwords, hashes or secrets, and its identity documents are fictional and stored only masked, such as `****0001`; demo credentials are written only to `StaffCredentials`, as described above. Demo prices, shipping rates and zero tax rates are illustrative and must not be used as production values. Parcel limits, money-order thresholds and fees, and low-stock thresholds are not seeded.
 
 ## Documentation and sample records
 
@@ -259,7 +262,7 @@ dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
 
-On 2026-11-01, all 892 tests passed with 0 warnings: Domain 224, Application 120, Infrastructure 261, Web 287. The [test results](docs/evidence/week3-test-results.md) record the run.
+The latest full run, on 2026-11-01 at 15:30 UTC, passed 904 of 904 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 224, Application 140, Infrastructure 240, Web 300. A Postman CLI run on the same code passed 65 of 65 requests and 188 of 188 assertions. An earlier full run the same day, before the score-improvement changes, passed 892 of 892. The [test results](docs/evidence/week3-test-results.md) record all of these.
 
 The SQL tests need a local SQL Server instance and Windows authentication with permission to create databases. By default they use the instance `.` and keep disposable database files in `E:\SqlData\ApexPost\Tests`. On another machine, set these environment variables:
 

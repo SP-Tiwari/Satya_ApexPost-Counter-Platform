@@ -1,0 +1,2310 @@
+{
+  "info": {
+    "name": "ApexPost Week 3 manual checks",
+    "description": "Run by docs/evidence/m7/run-postman.ps1 against a disposable database. To import into the Postman app, set baseUrl, apiKey and password yourself.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const body = pm.response.text();",
+          "const tokens = body.match(/name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"/);",
+          "if (tokens) pm.collectionVariables.set('token', tokens[1]);",
+          "pm.test('has a correlation ID and nosniff', () => {",
+          "  pm.response.to.have.header('X-Correlation-ID');",
+          "  pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.eql('nosniff');",
+          "});",
+          "if (pm.response.code >= 400) {",
+          "  pm.test('error exposes no internal detail', () => {",
+          "    ['Exception', 'StackTrace', '   at ', 'Microsoft.', 'ApexPost.Infrastructure', 'SqlClient',",
+          "      'UQ_', 'PK_', 'duplicate key', 'dbo.', '(Parameter ', 'E:\\\\'].forEach(text =>",
+          "      pm.expect(body).to.not.include(text));",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1 Health",
+      "item": [
+        {
+          "name": "Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('reports Healthy', () => pm.expect(pm.response.json().status).to.eql('Healthy'));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Database health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/database"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 Partner API errors",
+      "item": [
+        {
+          "name": "No API key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('empty body', () => pm.expect(pm.response.text()).to.eql(''));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/integration/parcel-status/UNKNOWN-1"
+          }
+        },
+        {
+          "name": "Wrong API key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('empty body', () => pm.expect(pm.response.text()).to.eql(''));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "wrong-key"
+              }
+            ],
+            "url": "{{baseUrl}}/integration/parcel-status/UNKNOWN-1"
+          }
+        },
+        {
+          "name": "Invalid shipment ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Problem Details', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.status).to.eql(400);",
+                  "  pm.expect(json.title).to.eql(\"Invalid shipment ID.\");",
+                  "  pm.expect(json).to.not.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/integration/parcel-status/bad%21id"
+          }
+        },
+        {
+          "name": "Unknown shipment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Problem Details', () => {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.status).to.eql(404);",
+                  "  pm.expect(json.title).to.eql(\"Not Found\");",
+                  "  pm.expect(json).to.not.have.property('detail');",
+                  "});",
+                  "pm.test('body correlationId matches the header', () =>",
+                  "  pm.expect(pm.response.json().correlationId).to.eql(pm.response.headers.get('X-Correlation-ID')));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/integration/parcel-status/UNKNOWN-1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 Anonymous access",
+      "item": [
+        {
+          "name": "Report redirects to sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));",
+                  "pm.test('redirects to sign-in', () =>",
+                  "  pm.expect(pm.response.headers.get('Location')).to.include('/Account/SignIn'));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Reports/LowStock"
+          }
+        },
+        {
+          "name": "Open sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn"
+          }
+        },
+        {
+          "name": "Sign-in without an antiforgery token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "StaffId",
+                  "value": "demo-staff-01",
+                  "type": "text"
+                },
+                {
+                  "key": "Password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Wrong password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test(\"shows: Staff ID or password is incorrect.\", () => pm.expect(pm.response.text()).to.include(\"Staff ID or password is incorrect.\"));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "StaffId",
+                  "value": "demo-staff-01",
+                  "type": "text"
+                },
+                {
+                  "key": "Password",
+                  "value": "not-the-password",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 Report baseline",
+      "item": [
+        {
+          "name": "Manager: open sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn"
+          }
+        },
+        {
+          "name": "Manager: sign in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "StaffId",
+                  "value": "demo-staff-02",
+                  "type": "text"
+                },
+                {
+                  "key": "Password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Daily sales before the sale",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('today', new Date().toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const row = pm.response.text().match(/<td>([0-9.]+) INR<\\/td>\\s*<td>([0-9.]+) INR<\\/td>\\s*<td>([0-9.]+) INR<\\/td>/);",
+                  "pm.collectionVariables.set('totalBefore', row ? row[3] : '0');"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Reports/DailySales?businessDate={{today}}"
+          }
+        },
+        {
+          "name": "Manager: open a page for its sign-out form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Reports/LowStock"
+          }
+        },
+        {
+          "name": "Manager: sign out",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignOut",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 Clerk sale on SQL Server",
+      "item": [
+        {
+          "name": "Clerk: open sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn"
+          }
+        },
+        {
+          "name": "Clerk: sign in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "StaffId",
+                  "value": "demo-staff-01",
+                  "type": "text"
+                },
+                {
+                  "key": "Password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Open sale form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const id = pm.response.text().match(/id=\"TransactionId\" name=\"TransactionId\" value=\"([^\"]+)\"/);",
+                  "pm.test('form issues a transaction ID', () => pm.expect(id).to.not.be.null);",
+                  "pm.collectionVariables.set('transactionId', id[1]);"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/Create"
+          }
+        },
+        {
+          "name": "Rejected sale: parcel over the weight limit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test(\"shows: kg\", () => pm.expect(pm.response.text()).to.include(\"kg\"));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/Create",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "TransactionId",
+                  "value": "{{transactionId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "CounterTerminalId",
+                  "value": "DEMO-T01-01",
+                  "type": "text"
+                },
+                {
+                  "key": "PaymentMethod",
+                  "value": "Cash",
+                  "type": "text"
+                },
+                {
+                  "key": "GoodsSku",
+                  "value": "DEMO-SKU-002",
+                  "type": "text"
+                },
+                {
+                  "key": "GoodsQuantity",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "IncludeShipping",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "ShippingType",
+                  "value": "Parcel",
+                  "type": "text"
+                },
+                {
+                  "key": "WeightKilograms",
+                  "value": "31",
+                  "type": "text"
+                },
+                {
+                  "key": "LengthCm",
+                  "value": "10",
+                  "type": "text"
+                },
+                {
+                  "key": "WidthCm",
+                  "value": "20",
+                  "type": "text"
+                },
+                {
+                  "key": "HeightCm",
+                  "value": "30",
+                  "type": "text"
+                },
+                {
+                  "key": "DestinationZone",
+                  "value": "DEMO-ZONE-01",
+                  "type": "text"
+                },
+                {
+                  "key": "ServiceLevel",
+                  "value": "Standard",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Open sale form again",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const id = pm.response.text().match(/id=\"TransactionId\" name=\"TransactionId\" value=\"([^\"]+)\"/);",
+                  "pm.test('form issues a transaction ID', () => pm.expect(id).to.not.be.null);",
+                  "pm.collectionVariables.set('transactionId', id[1]);"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/Create"
+          }
+        },
+        {
+          "name": "Sale",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));",
+                  "pm.test('redirects to the sale', () =>",
+                  "  pm.expect(pm.response.headers.get('Location')).to.include(pm.collectionVariables.get('transactionId')));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/Create",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "TransactionId",
+                  "value": "{{transactionId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "CounterTerminalId",
+                  "value": "DEMO-T01-01",
+                  "type": "text"
+                },
+                {
+                  "key": "PaymentMethod",
+                  "value": "Cash",
+                  "type": "text"
+                },
+                {
+                  "key": "GoodsSku",
+                  "value": "DEMO-SKU-002",
+                  "type": "text"
+                },
+                {
+                  "key": "GoodsQuantity",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "IncludeShipping",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "ShippingType",
+                  "value": "Parcel",
+                  "type": "text"
+                },
+                {
+                  "key": "WeightKilograms",
+                  "value": "1.25",
+                  "type": "text"
+                },
+                {
+                  "key": "LengthCm",
+                  "value": "10",
+                  "type": "text"
+                },
+                {
+                  "key": "WidthCm",
+                  "value": "20",
+                  "type": "text"
+                },
+                {
+                  "key": "HeightCm",
+                  "value": "30",
+                  "type": "text"
+                },
+                {
+                  "key": "DestinationZone",
+                  "value": "DEMO-ZONE-01",
+                  "type": "text"
+                },
+                {
+                  "key": "ServiceLevel",
+                  "value": "Standard",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sale summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('saleTotal', pm.response.json().total);",
+                  "pm.test('sale is Paid', () => pm.expect(pm.response.json().status).to.eql('Paid'));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/{{transactionId}}/summary"
+          }
+        },
+        {
+          "name": "Shipping label",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const label = pm.response.text().match(/aria-label=\"Label ([^\"]+)\"/);",
+                  "pm.test('label shows the shipment', () => pm.expect(label).to.not.be.null);",
+                  "pm.collectionVariables.set('shipmentId', label[1]);"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/{{transactionId}}/label"
+          }
+        },
+        {
+          "name": "Partner reads the new shipment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('status comes from SQL Server', () => {",
+                  "  pm.expect(json.shipmentId).to.eql(pm.collectionVariables.get('shipmentId'));",
+                  "  pm.expect(json.type).to.eql('Parcel');",
+                  "  pm.expect(json.serviceLevel).to.eql('Standard');",
+                  "  pm.expect(json.destinationZone).to.eql('DEMO-ZONE-01');",
+                  "  pm.expect(json.transactionStatus).to.eql('Paid');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/integration/parcel-status/{{shipmentId}}"
+          }
+        },
+        {
+          "name": "Clerk cannot void",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));",
+                  "pm.test('redirects to access denied', () =>",
+                  "  pm.expect(pm.response.headers.get('Location')).to.include('/Account/AccessDenied'));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/{{transactionId}}/void",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "Reason",
+                  "value": "Entered in error",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Access denied page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Account/AccessDenied"
+          }
+        },
+        {
+          "name": "Refused void changed nothing",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('sale is still Paid', () => pm.expect(pm.response.json().status).to.eql('Paid'));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/{{transactionId}}/summary"
+          }
+        },
+        {
+          "name": "Empty transaction ID reaches the handler",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Problem Details', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.status).to.eql(400);",
+                  "  pm.expect(json.title).to.eql(\"The request is not valid.\");",
+                  "  pm.expect(json).to.not.have.property('detail');",
+                  "});",
+                  "pm.test('body correlationId matches the header', () =>",
+                  "  pm.expect(pm.response.json().correlationId).to.eql(pm.response.headers.get('X-Correlation-ID')));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "name": "Unknown transaction",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('empty body', () => pm.expect(pm.response.text()).to.eql(''));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/11111111-1111-1111-1111-111111111111"
+          }
+        },
+        {
+          "name": "Clerk: open a page for its sign-out form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/Create"
+          }
+        },
+        {
+          "name": "Clerk: sign out",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignOut",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 Branch Manager void",
+      "item": [
+        {
+          "name": "Manager: open sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn"
+          }
+        },
+        {
+          "name": "Manager: sign in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "StaffId",
+                  "value": "demo-staff-02",
+                  "type": "text"
+                },
+                {
+                  "key": "Password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Daily sales include the sale",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const row = pm.response.text().match(/<td>([0-9.]+) INR<\\/td>\\s*<td>([0-9.]+) INR<\\/td>\\s*<td>([0-9.]+) INR<\\/td>/);",
+                  "pm.collectionVariables.set('totalAfter', row ? row[3] : '0');",
+                  "console.log('Daily sales rose by ' + (Number(pm.collectionVariables.get('totalAfter')) - Number(pm.collectionVariables.get('totalBefore'))).toFixed(3) + '; sale total ' + pm.collectionVariables.get('saleTotal'));",
+                  "pm.test('total rose by the tax-inclusive sale total', () => pm.expect(",
+                  "  Number(pm.collectionVariables.get('totalAfter')) - Number(pm.collectionVariables.get('totalBefore'))",
+                  ").to.be.closeTo(Number(pm.collectionVariables.get('saleTotal')), 0.001));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Reports/DailySales?businessDate={{today}}"
+          }
+        },
+        {
+          "name": "Open the sale",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/{{transactionId}}"
+          }
+        },
+        {
+          "name": "Manager voids the sale",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/{{transactionId}}/void",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "Reason",
+                  "value": "Entered in error",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sale is voided",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"shows: Voided\", () => pm.expect(pm.response.text()).to.include(\"Voided\"));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/{{transactionId}}/summary"
+          }
+        },
+        {
+          "name": "Daily sales drop the voided sale",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const row = pm.response.text().match(/<td>([0-9.]+) INR<\\/td>\\s*<td>([0-9.]+) INR<\\/td>\\s*<td>([0-9.]+) INR<\\/td>/);",
+                  "pm.collectionVariables.set('totalVoided', row ? row[3] : '0');",
+                  "pm.test('total is back to the baseline', () => pm.expect(",
+                  "  Number(pm.collectionVariables.get('totalVoided'))",
+                  ").to.be.closeTo(Number(pm.collectionVariables.get('totalBefore')), 0.001));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Reports/DailySales?businessDate={{today}}"
+          }
+        },
+        {
+          "name": "Partner sees the void",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status is Voided', () => pm.expect(pm.response.json().transactionStatus).to.eql('Voided'));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/integration/parcel-status/{{shipmentId}}"
+          }
+        },
+        {
+          "name": "Low stock report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"shows: DEMO-SKU-001\", () => pm.expect(pm.response.text()).to.include(\"DEMO-SKU-001\"));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Reports/LowStock"
+          }
+        },
+        {
+          "name": "A second void is a conflict",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/{{transactionId}}/void",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "Reason",
+                  "value": "Entered in error",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Posted transaction ID cannot redirect a void",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/{{transactionId}}/void",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "Reason",
+                  "value": "Entered in error",
+                  "type": "text"
+                },
+                {
+                  "key": "transactionId",
+                  "value": "00000000-0000-0000-0000-000000000006",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sale named only in the form stays Paid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"shows: Paid\", () => pm.expect(pm.response.text()).to.include(\"Paid\"));",
+                  "pm.test(\"never shows: Voided\", () => pm.expect(pm.response.text()).to.not.include(\"Voided\"));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/00000000-0000-0000-0000-000000000006/summary"
+          }
+        },
+        {
+          "name": "Refund a seeded shipment sale",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/00000000-0000-0000-0001-000000000006/refund",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "Reason",
+                  "value": "Damaged in transit",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Seeded shipment sale is refunded",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"shows: Refunded\", () => pm.expect(pm.response.text()).to.include(\"Refunded\"));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Transactions/00000000-0000-0000-0001-000000000006/summary"
+          }
+        },
+        {
+          "name": "Open stock adjustment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Stock/Adjust"
+          }
+        },
+        {
+          "name": "Adjust stock through its command",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Stock/Adjust",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "ProductSku",
+                  "value": "DEMO-SKU-003",
+                  "type": "text"
+                },
+                {
+                  "key": "QuantityChange",
+                  "value": "1",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Money orders show masked documents only",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"shows: ****0006\", () => pm.expect(pm.response.text()).to.include(\"****0006\"));",
+                  "pm.test(\"shows: ****0016\", () => pm.expect(pm.response.text()).to.include(\"****0016\"));",
+                  "pm.test('never shows an unmasked document number', () => pm.expect(pm.response.text()).to.not.match(/DEMO[0-9]{4}/));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/MoneyOrders/Index"
+          }
+        },
+        {
+          "name": "Manager: open a page for its sign-out form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Reports/LowStock"
+          }
+        },
+        {
+          "name": "Manager: sign out",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignOut",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7 Administrator error mappings",
+      "item": [
+        {
+          "name": "Administrator: open sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn"
+          }
+        },
+        {
+          "name": "Administrator: sign in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Account/SignIn",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "StaffId",
+                  "value": "demo-staff-04",
+                  "type": "text"
+                },
+                {
+                  "key": "Password",
+                  "value": "{{password}}",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Open administration",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/Index"
+          }
+        },
+        {
+          "name": "Existing SKU",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test(\"shows: already exists\", () => pm.expect(pm.response.text()).to.include(\"already exists\"));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/CreateProduct",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "Sku",
+                  "value": "DEMO-SKU-001",
+                  "type": "text"
+                },
+                {
+                  "key": "Name",
+                  "value": "Duplicate",
+                  "type": "text"
+                },
+                {
+                  "key": "Category",
+                  "value": "Stationery",
+                  "type": "text"
+                },
+                {
+                  "key": "UnitPrice",
+                  "value": "10.00",
+                  "type": "text"
+                },
+                {
+                  "key": "Currency",
+                  "value": "INR",
+                  "type": "text"
+                },
+                {
+                  "key": "TaxCategory",
+                  "value": "Standard",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unknown staff",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/UpdateStaff",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "staffId",
+                  "value": "nobody",
+                  "type": "text"
+                },
+                {
+                  "key": "role",
+                  "value": "CounterClerk",
+                  "type": "text"
+                },
+                {
+                  "key": "homeBranchCode",
+                  "value": "DM01",
+                  "type": "text"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unknown branch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/SetBranchStatus",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "code",
+                  "value": "ZZ99",
+                  "type": "text"
+                },
+                {
+                  "key": "isActive",
+                  "value": "false",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Invalid branch code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/UpdateStaff",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "staffId",
+                  "value": "demo-staff-01",
+                  "type": "text"
+                },
+                {
+                  "key": "role",
+                  "value": "CounterClerk",
+                  "type": "text"
+                },
+                {
+                  "key": "homeBranchCode",
+                  "value": "X",
+                  "type": "text"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8 Command endpoints and seeded reports",
+      "item": [
+        {
+          "name": "Create a branch through its command",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/CreateBranch",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "Code",
+                  "value": "DM09",
+                  "type": "text"
+                },
+                {
+                  "key": "Name",
+                  "value": "DEMO Postman Branch",
+                  "type": "text"
+                },
+                {
+                  "key": "Region",
+                  "value": "DEMO Region 09",
+                  "type": "text"
+                },
+                {
+                  "key": "OpeningHours",
+                  "value": "Demo hours only",
+                  "type": "text"
+                },
+                {
+                  "key": "TerminalId",
+                  "value": "DEMO-T09-01",
+                  "type": "text"
+                },
+                {
+                  "key": "TerminalName",
+                  "value": "DEMO Counter 1",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create staff through its command",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/CreateStaff",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "Id",
+                  "value": "demo-postman-01",
+                  "type": "text"
+                },
+                {
+                  "key": "Name",
+                  "value": "DEMO Postman Staff",
+                  "type": "text"
+                },
+                {
+                  "key": "Email",
+                  "value": "demo.postman01@example.invalid",
+                  "type": "text"
+                },
+                {
+                  "key": "Role",
+                  "value": "CounterClerk",
+                  "type": "text"
+                },
+                {
+                  "key": "HomeBranchCode",
+                  "value": "DM09",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update staff through its command",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/UpdateStaff",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "StaffId",
+                  "value": "demo-postman-01",
+                  "type": "text"
+                },
+                {
+                  "key": "Role",
+                  "value": "Auditor",
+                  "type": "text"
+                },
+                {
+                  "key": "HomeBranchCode",
+                  "value": "DM09",
+                  "type": "text"
+                },
+                {
+                  "key": "IsActive",
+                  "value": "true",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Set branch status through its command",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/SetBranchStatus",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "Code",
+                  "value": "DM09",
+                  "type": "text"
+                },
+                {
+                  "key": "IsActive",
+                  "value": "false",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create a product through its command",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 302', () => pm.response.to.have.status(302));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/CreateProduct",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "__RequestVerificationToken",
+                  "value": "{{token}}",
+                  "type": "text"
+                },
+                {
+                  "key": "Sku",
+                  "value": "DEMO-PM-01",
+                  "type": "text"
+                },
+                {
+                  "key": "Name",
+                  "value": "DEMO Postman Product",
+                  "type": "text"
+                },
+                {
+                  "key": "Category",
+                  "value": "Packaging",
+                  "type": "text"
+                },
+                {
+                  "key": "UnitPrice",
+                  "value": "12.50",
+                  "type": "text"
+                },
+                {
+                  "key": "Currency",
+                  "value": "INR",
+                  "type": "text"
+                },
+                {
+                  "key": "TaxCategory",
+                  "value": "ZeroRated",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Administration lists the new records",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"shows: DM09\", () => pm.expect(pm.response.text()).to.include(\"DM09\"));",
+                  "pm.test(\"shows: demo-postman-01\", () => pm.expect(pm.response.text()).to.include(\"demo-postman-01\"));",
+                  "pm.test(\"shows: DEMO-PM-01\", () => pm.expect(pm.response.text()).to.include(\"DEMO-PM-01\"));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Administration/Index"
+          }
+        },
+        {
+          "name": "Shipping volume shows the seeded shipments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"shows: DEMO-ZONE-01\", () => pm.expect(pm.response.text()).to.include(\"DEMO-ZONE-01\"));",
+                  "pm.test(\"shows: DEMO-ZONE-10\", () => pm.expect(pm.response.text()).to.include(\"DEMO-ZONE-10\"));",
+                  "pm.test(\"shows: Standard\", () => pm.expect(pm.response.text()).to.include(\"Standard\"));",
+                  "pm.test(\"shows: Express\", () => pm.expect(pm.response.text()).to.include(\"Express\"));",
+                  "pm.test(\"shows: Registered\", () => pm.expect(pm.response.text()).to.include(\"Registered\"));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Reports/ShippingVolume"
+          }
+        },
+        {
+          "name": "Branch auditor shows the seeded money orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"shows: DM01\", () => pm.expect(pm.response.text()).to.include(\"DM01\"));",
+                  "pm.test(\"shows: DM02\", () => pm.expect(pm.response.text()).to.include(\"DM02\"));",
+                  "pm.test(\"shows: DM03\", () => pm.expect(pm.response.text()).to.include(\"DM03\"));",
+                  "pm.test(\"shows: DM04\", () => pm.expect(pm.response.text()).to.include(\"DM04\"));",
+                  "pm.test(\"shows: DM05\", () => pm.expect(pm.response.text()).to.include(\"DM05\"));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/Reports/BranchAuditor"
+          }
+        }
+      ]
+    }
+  ]
+}

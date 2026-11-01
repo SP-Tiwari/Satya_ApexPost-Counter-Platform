@@ -42,14 +42,17 @@ This has been live since the M3 cutover, and `MoneyAboveTwoDecimals_IsRoundedAtT
 
 - There is one documented rule in one place.
 - A sale's in-memory total can differ from its reloaded total by a fraction of a currency unit. Tests in the testing phase must pin this.
-- **Known defect, not yet fixed: a refund can differ from its payment.** The `Payment` entry rounds the unrounded in-memory total. A `Refund` entry rounds the total calculated after reloading, when a line's price has already been rounded.
+- **Fixed on 2026-11-01: a refund now equals its payment.** The project owner approved the rule that a refund must equal the amount originally paid. `RecordRefundEntryAsync` copies the amount and method of the stored `Payment` entry, read through `ICounterTransactionRepository.FindPaymentAsync`. Domain arithmetic, the schema and this ADR's rounding rule did not change.
+
+  The earlier defect: the `Payment` entry rounded the unrounded in-memory total, and the `Refund` entry rounded the total calculated after reloading a line already rounded.
 
   | Example sale | Total | Stored entry |
   |---|---|---|
   | Payment, with shipping at 12.255 | 5,123.9609 | 5,123.96 |
-  | Refund, with shipping reloaded as 12.26 | 5,123.9668 | 5,123.97 |
+  | Refund before the fix, with shipping reloaded as 12.26 | 5,123.9668 | 5,123.97 |
+  | Refund after the fix | Not calculated | Copy of the payment |
 
-  **Measured** on 2026-10-31 in the M3 live run against a disposable database: a voided sale stored a `Payment` of 5,123.96 and a `Refund` of 5,123.97. The effect is limited to sales with a price of more than 2 decimals, which in practice means shipping lines, and to about one minor currency unit. It affects `Payments` on SQL Server, so it is live since the M3 cutover. The fix is held until the trainer confirms the `Refund` entries ([ADR 0020](0020-repository-and-unit-of-work-boundaries.md)), because it depends on that rule. A likely fix is to reuse the amount of the stored `Payment` entry.
+  **Measured** on 2026-10-31 in the M3 live run against a disposable database, before the fix: a voided sale stored a `Payment` of 5,123.96 and a `Refund` of 5,123.97. `Reversal_OfASaleWithShipping_RefundsExactlyTheStoredPayment` now proves equality on a sale whose reloaded total rounds differently, for a void and a refund.
 - T-SQL reports in M4 must calculate tax the same way: stored line amounts × stored rates, rounded only for display.
 - **Open: the Daily Sales screen and the dashboard show unrounded sums.** They calculate in `PaidSalesSummary`, not in T-SQL, so the rule above does not cover them, and they can show three or more decimals. One sale with a parcel added 26.455 INR. `usp_DailyBranchSales` rounds the same sum to two decimals. This ADR does not settle the screen format: fixed two decimals would also turn `20` into `20.00`, against the display behaviour described above. Stored values and calculations are correct either way.
 - Dimensions use `decimal(8,2)` with no converter, because no calculation uses them.

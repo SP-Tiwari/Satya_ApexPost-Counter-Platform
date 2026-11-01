@@ -4,7 +4,7 @@ using ApexPost.Application.Validation;
 
 namespace ApexPost.Application.Tests.Services;
 
-public sealed class UnitOfWorkBoundaryTests
+public sealed partial class UnitOfWorkBoundaryTests
 {
 	private const string ClerkId = "clerk-1";
 	private const string ManagerId = "manager-1";
@@ -124,6 +124,78 @@ public sealed class UnitOfWorkBoundaryTests
 		Assert.Single(store.Payments, payment => payment.Type == PaymentEntryType.Refund);
 	}
 
+	// The stored entry deliberately disagrees with the basket total and method,
+	// so only a copy of that entry can pass.
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Reversal_CopiesTheStoredPayment(bool voided)
+	{
+		var (sales, store, _, repository) = CreateSales();
+		var request = Sale(quantity: 1);
+		await sales.CreateAndProcessAsync(ClerkId, request);
+		store.Payments.Clear();
+		store.AddPayment(new Payment(
+			Guid.NewGuid(),
+			request.TransactionId,
+			PaymentEntryType.Payment,
+			new Money(7.77m, "INR"),
+			"Stored method",
+			DateTimeOffset.UtcNow));
+		var (service, _) = CreateTransactions(repository, store);
+
+		await ReverseAsync(service, request.TransactionId, voided);
+
+		var refund = Assert.Single(
+			store.Payments, payment => payment.Type == PaymentEntryType.Refund);
+		Assert.Equal(new Money(7.77m, "INR"), refund.Amount);
+		Assert.Equal("Stored method", refund.PaymentMethod);
+		Assert.Equal(request.TransactionId, refund.TransactionId);
+	}
+
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Reversal_WithNoStoredPayment_WritesNoRefundEntry(bool voided)
+	{
+		var (sales, store, _, repository) = CreateSales();
+		var request = Sale(quantity: 1);
+		await sales.CreateAndProcessAsync(ClerkId, request);
+		store.Payments.Clear();
+		var (service, unitOfWork) = CreateTransactions(repository, store);
+
+		await ReverseAsync(service, request.TransactionId, voided);
+
+		Assert.Equal(1, unitOfWork.Commits);
+		Assert.Empty(store.Payments);
+	}
+
+	[Fact]
+	public async Task VoidOfOpenBasket_WritesNoRefundEntry()
+	{
+		var (_, store, _, repository) = CreateSales();
+		var basket = TransactionBasket.Reconstitute(
+			Guid.NewGuid(),
+			"INR",
+			new Dictionary<TaxCategory, decimal> { [TaxCategory.ZeroRated] = 0m },
+			[],
+			TransactionPaymentStatus.Open,
+			[],
+			Branch);
+		await store.ExecuteInTransactionAsync(async token =>
+		{
+			store.Add(basket);
+			await store.SaveChangesAsync(token);
+			return true;
+		});
+		var (service, unitOfWork) = CreateTransactions(repository, store);
+
+		await service.VoidAsync(basket.Id, ManagerId, "Abandoned");
+
+		Assert.Equal(1, unitOfWork.Commits);
+		Assert.Empty(store.Payments);
+	}
+
 	[Fact]
 	public async Task Void_WithOverLongReason_NeverCommits()
 	{
@@ -177,6 +249,14 @@ public sealed class UnitOfWorkBoundaryTests
 			AdministratorId, ProductCategory.Packaging, decimal.MaxValue));
 		Assert.Equal(1, unitOfWork.Commits);
 	}
+
+	private static Task ReverseAsync(
+		TransactionApplicationService service,
+		Guid transactionId,
+		bool voided) =>
+		voided
+			? service.VoidAsync(transactionId, ManagerId, "Mistake")
+			: service.RefundAsync(transactionId, ManagerId, "Damaged");
 
 	private static CounterBasketRequest Sale(int quantity) => new(
 		Guid.NewGuid(),

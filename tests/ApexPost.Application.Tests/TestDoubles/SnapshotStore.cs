@@ -218,6 +218,13 @@ internal sealed class SnapshotStore
 		Payments.Add(payment);
 	}
 
+	public Task<Payment?> FindPaymentAsync(
+		Guid transactionId,
+		CancellationToken cancellationToken = default) =>
+		Task.FromResult(Payments.SingleOrDefault(
+			payment => payment.TransactionId == transactionId &&
+				payment.Type == PaymentEntryType.Payment));
+
 	public Task<IReadOnlyList<MoneyOrder>> GetMoneyOrdersAsync(
 		CancellationToken cancellationToken = default) =>
 		ReadAsync(set => Copy(set.MoneyOrders), cancellationToken);

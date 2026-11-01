@@ -7,6 +7,8 @@ public sealed record StockAdjustmentCatalog(
 	Branch Branch,
 	IReadOnlyList<BranchStock> BranchStocks);
 
+public sealed record AdjustStockCommand(string ProductSku, int QuantityChange);
+
 public sealed class StockAdjustmentApplicationService
 {
 	// The adjustment screen does not ask for a reason, but the history row
@@ -62,6 +64,16 @@ public sealed class StockAdjustmentApplicationService
 			.GetForBranchAsync(staff.HomeBranchCode, cancellationToken)
 			.ConfigureAwait(false);
 		return new StockAdjustmentCatalog(branch, branchStocks);
+	}
+
+	public Task AdjustStockAsync(
+		string staffId,
+		AdjustStockCommand command,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		return AdjustStockAsync(
+			staffId, command.ProductSku, command.QuantityChange, cancellationToken);
 	}
 
 	public async Task AdjustStockAsync(

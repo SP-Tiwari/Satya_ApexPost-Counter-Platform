@@ -41,13 +41,13 @@
 |---|---|
 | **Required by the brief** | A sale saves its payment with the transaction and lines (`AssignmentWeek03.txt`, line 104) |
 | **Implemented, pending trainer confirmation** | A refund writes a `Refund` entry. Voiding a **paid** sale also writes a `Refund` entry |
-| **Implemented, pending trainer confirmation** | Both entries use the sale's reloaded total and the sale's method |
+| **Approved by the project owner on 2026-11-01** | Both entries equal the amount originally paid: they copy the amount and method of the stored `Payment` entry |
 
 The two `Refund` entries are **inferred, not approved**. No source requires them: the brief mentions voids and refunds without any ledger entry, the trainer's remarks ask only for stock to be returned, and ADR 0011 covers stock and money orders only. They were added so that the ledger would not show money taken and never returned. They are not final business rules until the trainer confirms them, and no ledger behaviour should be built on them before then.
 
-**Known defect in these entries:** a `Refund` entry can differ from its `Payment` entry by a small amount. See [ADR 0017](0017-money-precision-and-rounding.md). The fix is held until the trainer confirms the rule.
+The approval covers the amount only. Whether a paid-sale void should write a `Refund` entry at all remains a question for the trainer. See [ADR 0017](0017-money-precision-and-rounding.md) for the fix.
 
-Voiding an open basket writes nothing. A basket without sale details, or with a zero total, writes no entry.
+Voiding an open basket writes nothing. A basket with no stored `Payment` entry took no money, so its reversal writes no entry.
 
 **Identity verification:** `SqlCounterTransactionRepository` loads `IdentityVerificationRecord` rows in one query per read, and restores them with `MoneyOrder.RestoreIdentityVerification`, which never replaces a recorded value.
 
@@ -69,4 +69,4 @@ Voiding an open basket writes nothing. A basket without sale details, or with a 
 
 - A catalogue page reads sequentially instead of in parallel, because a `DbContext` cannot run two operations at once.
 - Reports and the dashboard use query services since M5 ([DESIGN.md section 4.8](../../DESIGN.md#48-query-services-and-read-projections)). Parcel status still loads its transaction, untracked, through the repository.
-- `IApexPostRepository`, `ApexPostSnapshot` and the JSON stores remain, unused by the application, because existing tests compile against them. `AdministrationApplicationService.GetSnapshotAsync` still returns `ApexPostSnapshot` as a simple container.
+- `IApexPostRepository` and `ApexPostSnapshot` remain, unused by production services, because test doubles depend on them. The JSON stores were removed in Week 3. `AdministrationApplicationService.GetSnapshotAsync` still returns `ApexPostSnapshot` as a simple container.

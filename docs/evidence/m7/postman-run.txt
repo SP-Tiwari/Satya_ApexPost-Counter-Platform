@@ -1,0 +1,536 @@
+﻿Postman CLI 1.75.0
+Run at 2026-11-01 15:42:55Z against an application built from the working tree.
+
+No authorization data found. Please use the `postman login` command.
+Refer:https://learning.postman.com/docs/postman-cli/postman-cli-options/#postman-login
+
+Running your collection...
+postman
+
+ApexPost Week 3 manual checks
+
+Folder 1 Health
+Sub-folder Health
+
+  GET http://127.0.0.1:5199/health [200 OK, 412 B, 37 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  reports Healthy
+
+Sub-folder Database health
+
+  GET http://127.0.0.1:5199/health/database [200 OK, 471 B, 304 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Folder 2 Partner API errors
+Sub-folder No API key
+
+  GET http://127.0.0.1:5199/integration/parcel-status/UNKNOWN-1 [401 Unauthorized, 346 B, 5 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 401
+  Pass  empty body
+
+Sub-folder Wrong API key
+
+  GET http://127.0.0.1:5199/integration/parcel-status/UNKNOWN-1 [401 Unauthorized, 346 B, 3 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 401
+  Pass  empty body
+
+Sub-folder Invalid shipment ID
+
+  GET http://127.0.0.1:5199/integration/parcel-status/bad%21id [400 Bad Request, 454 B, 57 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  400 Problem Details
+
+Sub-folder Unknown shipment
+
+  GET http://127.0.0.1:5199/integration/parcel-status/UNKNOWN-1 [404 Not Found, 620 B, 160 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  404 Problem Details
+  Pass  body correlationId matches the header
+
+Folder 3 Anonymous access
+Sub-folder Report redirects to sign-in
+
+  GET http://127.0.0.1:5199/Reports/LowStock [302 Found, 419 B, 10 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+  Pass  redirects to sign-in
+
+Sub-folder Open sign-in
+
+  GET http://127.0.0.1:5199/Account/SignIn [200 OK, 4.9 KB, 147 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Sign-in without an antiforgery token
+
+  POST http://127.0.0.1:5199/Account/SignIn [400 Bad Request, 345 B, 31 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 400
+
+Sub-folder Wrong password
+
+  POST http://127.0.0.1:5199/Account/SignIn [401 Unauthorized, 4.79 KB, 327 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 401
+  Pass  shows: Staff ID or password is incorrect.
+
+Folder 4 Report baseline
+Sub-folder Manager: open sign-in
+
+  GET http://127.0.0.1:5199/Account/SignIn [200 OK, 4.66 KB, 6 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Manager: sign in
+
+  POST http://127.0.0.1:5199/Account/SignIn [302 Found, 1.07 KB, 172 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Daily sales before the sale
+
+  GET http://127.0.0.1:5199/Reports/DailySales?businessDate=2026-11-01 [200 OK, 5.4 KB, 139 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Manager: open a page for its sign-out form
+
+  GET http://127.0.0.1:5199/Reports/LowStock [200 OK, 5.92 KB, 86 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Manager: sign out
+
+  POST http://127.0.0.1:5199/Account/SignOut [302 Found, 571 B, 19 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Folder 5 Clerk sale on SQL Server
+Sub-folder Clerk: open sign-in
+
+  GET http://127.0.0.1:5199/Account/SignIn [200 OK, 4.66 KB, 5 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Clerk: sign in
+
+  POST http://127.0.0.1:5199/Account/SignIn [302 Found, 1.07 KB, 162 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Open sale form
+
+  GET http://127.0.0.1:5199/Transactions/Create [200 OK, 19.76 KB, 243 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  form issues a transaction ID
+
+Sub-folder Rejected sale: parcel over the weight limit
+
+  POST http://127.0.0.1:5199/Transactions/Create [409 Conflict, 20.08 KB, 216 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 409
+  Pass  shows: kg
+
+Sub-folder Open sale form again
+
+  GET http://127.0.0.1:5199/Transactions/Create [200 OK, 19.76 KB, 19 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  form issues a transaction ID
+
+Sub-folder Sale
+
+  POST http://127.0.0.1:5199/Transactions/Create [302 Found, 684 B, 94 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+  Pass  redirects to the sale
+
+Sub-folder Sale summary
+
+  GET http://127.0.0.1:5199/Transactions/69511e60-d0a0-4221-96d5-17492d23b429/summary [200 OK, 899 B, 129 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  sale is Paid
+
+Sub-folder Shipping label
+
+  GET http://127.0.0.1:5199/Transactions/69511e60-d0a0-4221-96d5-17492d23b429/label [200 OK, 5.11 KB, 31 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  label shows the shipment
+
+Sub-folder Partner reads the new shipment
+
+  GET http://127.0.0.1:5199/integration/parcel-status/e884587a62d54a40bcabfac5b8ed7eb5 [200 OK, 642 B, 13 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  status comes from SQL Server
+
+Sub-folder Clerk cannot void
+
+  POST http://127.0.0.1:5199/Transactions/69511e60-d0a0-4221-96d5-17492d23b429/void [302 Found, 465 B, 7 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+  Pass  redirects to access denied
+
+Sub-folder Access denied page
+
+  GET http://127.0.0.1:5199/Account/AccessDenied [403 Forbidden, 3.76 KB, 16 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 403
+
+Sub-folder Refused void changed nothing
+
+  GET http://127.0.0.1:5199/Transactions/69511e60-d0a0-4221-96d5-17492d23b429/summary [200 OK, 899 B, 12 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  sale is still Paid
+
+Sub-folder Empty transaction ID reaches the handler
+
+  GET http://127.0.0.1:5199/Transactions/00000000-0000-0000-0000-000000000000 [400 Bad Request, 688 B, 24 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  400 Problem Details
+  Pass  body correlationId matches the header
+
+Sub-folder Unknown transaction
+
+  GET http://127.0.0.1:5199/Transactions/11111111-1111-1111-1111-111111111111 [404 Not Found, 343 B, 7 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 404
+  Pass  empty body
+
+Sub-folder Clerk: open a page for its sign-out form
+
+  GET http://127.0.0.1:5199/Transactions/Create [200 OK, 19.76 KB, 14 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Clerk: sign out
+
+  POST http://127.0.0.1:5199/Account/SignOut [302 Found, 571 B, 10 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Folder 6 Branch Manager void
+Sub-folder Manager: open sign-in
+
+  GET http://127.0.0.1:5199/Account/SignIn [200 OK, 4.66 KB, 6 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Manager: sign in
+
+  POST http://127.0.0.1:5199/Account/SignIn [302 Found, 1.07 KB, 144 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Daily sales include the sale
+
+  GET http://127.0.0.1:5199/Reports/DailySales?businessDate=2026-11-01 [200 OK, 5.4 KB, 14 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  -
+  | 'Daily sales rose by 26.455; sale total 26.455'
+  -
+  Pass  total rose by the tax-inclusive sale total
+
+Sub-folder Open the sale
+
+  GET http://127.0.0.1:5199/Transactions/69511e60-d0a0-4221-96d5-17492d23b429 [200 OK, 8.34 KB, 23 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Manager voids the sale
+
+  POST http://127.0.0.1:5199/Transactions/69511e60-d0a0-4221-96d5-17492d23b429/void [302 Found, 684 B, 239 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Sale is voided
+
+  GET http://127.0.0.1:5199/Transactions/69511e60-d0a0-4221-96d5-17492d23b429/summary [200 OK, 901 B, 9 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  shows: Voided
+
+Sub-folder Daily sales drop the voided sale
+
+  GET http://127.0.0.1:5199/Reports/DailySales?businessDate=2026-11-01 [200 OK, 5.4 KB, 22 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  total is back to the baseline
+
+Sub-folder Partner sees the void
+
+  GET http://127.0.0.1:5199/integration/parcel-status/e884587a62d54a40bcabfac5b8ed7eb5 [200 OK, 644 B, 10 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  status is Voided
+
+Sub-folder Low stock report
+
+  GET http://127.0.0.1:5199/Reports/LowStock [200 OK, 5.92 KB, 12 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  shows: DEMO-SKU-001
+
+Sub-folder A second void is a conflict
+
+  POST http://127.0.0.1:5199/Transactions/69511e60-d0a0-4221-96d5-17492d23b429/void [409 Conflict, 7.03 KB, 46 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 409
+
+Sub-folder Posted transaction ID cannot redirect a void
+
+  POST http://127.0.0.1:5199/Transactions/69511e60-d0a0-4221-96d5-17492d23b429/void [409 Conflict, 6.96 KB, 20 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 409
+
+Sub-folder Sale named only in the form stays Paid
+
+  GET http://127.0.0.1:5199/Transactions/00000000-0000-0000-0000-000000000006/summary [200 OK, 766 B, 8 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  shows: Paid
+  Pass  never shows: Voided
+
+Sub-folder Refund a seeded shipment sale
+
+  POST http://127.0.0.1:5199/Transactions/00000000-0000-0000-0001-000000000006/refund [302 Found, 684 B, 34 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Seeded shipment sale is refunded
+
+  GET http://127.0.0.1:5199/Transactions/00000000-0000-0000-0001-000000000006/summary [200 OK, 808 B, 8 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  shows: Refunded
+
+Sub-folder Open stock adjustment
+
+  GET http://127.0.0.1:5199/Stock/Adjust [200 OK, 14.1 KB, 80 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Adjust stock through its command
+
+  POST http://127.0.0.1:5199/Stock/Adjust [302 Found, 689 B, 92 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Money orders show masked documents only
+
+  GET http://127.0.0.1:5199/MoneyOrders/Index [200 OK, 6.95 KB, 64 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  shows: ****0006
+  Pass  shows: ****0016
+  Pass  never shows an unmasked document number
+
+Sub-folder Manager: open a page for its sign-out form
+
+  GET http://127.0.0.1:5199/Reports/LowStock [200 OK, 5.92 KB, 15 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Manager: sign out
+
+  POST http://127.0.0.1:5199/Account/SignOut [302 Found, 571 B, 10 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Folder 7 Administrator error mappings
+Sub-folder Administrator: open sign-in
+
+  GET http://127.0.0.1:5199/Account/SignIn [200 OK, 4.66 KB, 5 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Administrator: sign in
+
+  POST http://127.0.0.1:5199/Account/SignIn [302 Found, 1.07 KB, 139 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Open administration
+
+  GET http://127.0.0.1:5199/Administration/Index [200 OK, 36.22 KB, 119 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+
+Sub-folder Existing SKU
+
+  POST http://127.0.0.1:5199/Administration/CreateProduct [409 Conflict, 36.23 KB, 36 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 409
+  Pass  shows: already exists
+
+Sub-folder Unknown staff
+
+  POST http://127.0.0.1:5199/Administration/UpdateStaff [404 Not Found, 36.25 KB, 34 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 404
+
+Sub-folder Unknown branch
+
+  POST http://127.0.0.1:5199/Administration/SetBranchStatus [404 Not Found, 36.25 KB, 29 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 404
+
+Sub-folder Invalid branch code
+
+  POST http://127.0.0.1:5199/Administration/UpdateStaff [400 Bad Request, 36.26 KB, 16 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  error exposes no internal detail
+  Pass  status 400
+
+Folder 8 Command endpoints and seeded reports
+Sub-folder Create a branch through its command
+
+  POST http://127.0.0.1:5199/Administration/CreateBranch [302 Found, 372 B, 30 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Create staff through its command
+
+  POST http://127.0.0.1:5199/Administration/CreateStaff [302 Found, 372 B, 43 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Update staff through its command
+
+  POST http://127.0.0.1:5199/Administration/UpdateStaff [302 Found, 372 B, 18 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Set branch status through its command
+
+  POST http://127.0.0.1:5199/Administration/SetBranchStatus [302 Found, 372 B, 17 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Create a product through its command
+
+  POST http://127.0.0.1:5199/Administration/CreateProduct [302 Found, 372 B, 17 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 302
+
+Sub-folder Administration lists the new records
+
+  GET http://127.0.0.1:5199/Administration/Index [200 OK, 38.82 KB, 12 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  shows: DM09
+  Pass  shows: demo-postman-01
+  Pass  shows: DEMO-PM-01
+
+Sub-folder Shipping volume shows the seeded shipments
+
+  GET http://127.0.0.1:5199/Reports/ShippingVolume [200 OK, 6.96 KB, 84 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  shows: DEMO-ZONE-01
+  Pass  shows: DEMO-ZONE-10
+  Pass  shows: Standard
+  Pass  shows: Express
+  Pass  shows: Registered
+
+Sub-folder Branch auditor shows the seeded money orders
+
+  GET http://127.0.0.1:5199/Reports/BranchAuditor [200 OK, 5.75 KB, 65 ms]
+  Pass  has a correlation ID and nosniff
+  Pass  status 200
+  Pass  shows: DM01
+  Pass  shows: DM02
+  Pass  shows: DM03
+  Pass  shows: DM04
+  Pass  shows: DM05
+
+----------------------------------------------------------------------
+|                         |            executed |             failed |
+--------------------------+---------------------+---------------------
+|              iterations |                   1 |                  0 |
+--------------------------+---------------------+---------------------
+|                requests |                  65 |                  0 |
+--------------------------+---------------------+---------------------
+|            test-scripts |                 130 |                  0 |
+--------------------------+---------------------+---------------------
+|      prerequest-scripts |                   1 |                  0 |
+--------------------------+---------------------+---------------------
+|              assertions |                 188 |                  0 |
+----------------------------------------------------------------------
+| total run duration: 9.4 s                                          |
+----------------------------------------------------------------------
+| total data received: 415.39 KB (approx)                            |
+----------------------------------------------------------------------
+| average response time: 61 ms [min: 3 ms, max: 327 ms, s.d.: 75 ms] |
+----------------------------------------------------------------------
+Postman credentials are required for publishing run details to Postman cloud.
+Please specify it by using the `postman login` command
+
+Database state after the run:
+Status Transactions
+------ ------------
+Paid 269
+Refunded 1
+Voided 1
+Action StatusCode Outcome Entries
+------ ---------- ------- -------
+Adjust 302 Succeeded 1
+CreateBranch 302 Succeeded 1
+CreateProduct 302 Succeeded 1
+CreateProduct 409 Rejected 1
+CreateStaff 302 Succeeded 1
+Refund 302 Succeeded 1
+SetBranchStatus 302 Succeeded 1
+SetBranchStatus 404 Rejected 1
+UpdateStaff 302 Succeeded 1
+UpdateStaff 400 Rejected 1
+UpdateStaff 404 Rejected 1
+Void 302 Succeeded 1
+Void 409 Rejected 2
+Action StatusCode AuditedRoute
+------ ---------- ------------
+Void 302 {"action":"Void","controller":"Transactions","transactionId":"69511e60-d0a0-4221-96d5-17492d23b429"}
+Void 409 {"action":"Void","controller":"Transactions","transactionId":"69511e60-d0a0-4221-96d5-17492d23b429"}
+Void 409 {"action":"Void","controller":"Transactions","transactionId":"69511e60-d0a0-4221-96d5-17492d23b429"}
+Refund 302 {"action":"Refund","controller":"Transactions","transactionId":"00000000-0000-0000-0001-000000000006"}
+EntryType Entries
+--------- -------
+Payment 271
+Refund 2
+TransactionId Paid Refunded
+------------- ---- --------
+00000000-0000-0000-0001-000000000006 17.50 17.50
+69511E60-D0A0-4221-96D5-17492D23B429 26.46 26.46
+IdentityRows MaskedRows
+------------ ----------
+15 15
+Shipments MoneyOrders
+--------- -----------
+41 20
+StockOfDemoSku002AfterSaleAndVoid
+---------------------------------
+10

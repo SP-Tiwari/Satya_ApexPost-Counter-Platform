@@ -10,6 +10,7 @@ public sealed class DemoProfileTests
 {
 	private const string Password = "fictional-demo-test-password";
 	private const string Clerk = "demo-staff-01";
+	private const string Auditor = "demo-staff-03";
 
 	[Fact]
 	public async Task DemoProfile_ClerkCompletesASaleOnTheSeedAlone()
@@ -51,6 +52,27 @@ public sealed class DemoProfileTests
 	}
 
 	[Fact]
+	public async Task DemoProfile_AuditorSeesTheSeededShipmentsAndMoneyOrders()
+	{
+		await using var factory = CreateDemoFactory();
+		using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+		{
+			BaseAddress = new Uri("https://localhost"),
+			AllowAutoRedirect = false
+		});
+		await SignInAsync(client, Auditor);
+
+		var shipping = await client.GetStringAsync("/Reports/ShippingVolume");
+		var moneyOrders = await client.GetStringAsync("/Reports/BranchAuditor");
+
+		Assert.Contains("DEMO-ZONE-01", shipping, StringComparison.Ordinal);
+		Assert.Contains("Express", shipping, StringComparison.Ordinal);
+		Assert.Contains("Registered", shipping, StringComparison.Ordinal);
+		foreach (var branch in new[] { "DM01", "DM02", "DM03", "DM04", "DM05" })
+			Assert.Contains(branch, moneyOrders, StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public void DemoProfile_RunsInDevelopmentAndHoldsNoSecrets()
 	{
 		var settings = DemoSettings();
@@ -83,12 +105,12 @@ public sealed class DemoProfileTests
 			StringComparison.Ordinal);
 	}
 
-	private static async Task SignInAsync(HttpClient client)
+	private static async Task SignInAsync(HttpClient client, string staffId = Clerk)
 	{
 		var page = await client.GetStringAsync("/Account/SignIn");
 		using var form = new FormUrlEncodedContent(
 		[
-			new("StaffId", Clerk),
+			new("StaffId", staffId),
 			new("Password", Password),
 			new("__RequestVerificationToken", Token(page))
 		]);

@@ -142,25 +142,52 @@ public sealed class SqlPersistenceTests(SqlTestHost host) : IAsyncLifetime
 		Assert.Equal(11.26m, shipping);
 	}
 
-	// Pins the known defect in ADR 0017, so a fix shows up here. The entries
-	// themselves are pending trainer confirmation; this is not an approved rule.
-	[Fact]
-	public async Task KnownDefect_RefundOfASaleWithShippingCanDifferFromItsPayment()
+	// The sale from ADR 0017: reloading its rounded shipping line gives a total
+	// that rounds differently, so copying the stored payment is what makes these equal.
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Reversal_OfASaleWithShipping_RefundsExactlyTheStoredPayment(bool voided)
 	{
 		var request = Sale(Stationery, 3, withShippingAndMoneyOrder: true);
 		await host.InRequestAsync(services =>
 			host.Sales(services).CreateAndProcessAsync(ClerkId, request));
+		var reloaded = await host.InRequestAsync(services => host.Transactions(services)
+			.GetTransactionBasketAsync(request.TransactionId, ManagerId));
 
-		await host.InRequestAsync(services => host.Transactions(services)
-			.VoidAsync(request.TransactionId, ManagerId, "Mistake"));
+		await host.InRequestAsync(services => voided
+			? host.Transactions(services).VoidAsync(request.TransactionId, ManagerId, "Mistake")
+			: host.Transactions(services).RefundAsync(request.TransactionId, ManagerId, "Damaged"));
 
 		var entries = await host.QueryAsync(context => context.Payments
 			.Select(payment => new { payment.Type, payment.Amount.Amount })
 			.ToArrayAsync());
 		var paid = entries.Single(entry => entry.Type == PaymentEntryType.Payment).Amount;
 		var refunded = entries.Single(entry => entry.Type == PaymentEntryType.Refund).Amount;
-		Assert.NotEqual(paid, refunded);
-		Assert.True(Math.Abs(paid - refunded) <= 0.01m);
+		Assert.Equal(paid, refunded);
+		Assert.NotEqual(
+			paid, Math.Round(reloaded.Total.Amount, 2, MidpointRounding.AwayFromZero));
+	}
+
+	[Fact]
+	public async Task FindPayment_ReturnsThePaymentEntryNotItsRefund()
+	{
+		var request = Sale(Stationery, 1);
+		await host.InRequestAsync(services =>
+			host.Sales(services).CreateAndProcessAsync(ClerkId, request));
+		await host.InRequestAsync(services => host.Transactions(services)
+			.RefundAsync(request.TransactionId, ManagerId, "Damaged"));
+
+		var (found, missing) = await host.InRequestAsync(async services =>
+		{
+			var repository = services.GetRequiredService<ICounterTransactionRepository>();
+			return (
+				await repository.FindPaymentAsync(request.TransactionId),
+				await repository.FindPaymentAsync(Guid.NewGuid()));
+		});
+
+		Assert.Equal(PaymentEntryType.Payment, found?.Type);
+		Assert.Null(missing);
 	}
 
 	[Fact]
@@ -511,7 +538,7 @@ public sealed class SqlPersistenceTests(SqlTestHost host) : IAsyncLifetime
 			Assert.Equal(20, await context.Staff.CountAsync());
 			Assert.Equal(30, await context.Products.CountAsync());
 			Assert.Equal(10, await context.ShippingZones.CountAsync());
-			Assert.Equal(10, await context.ShippingRates.CountAsync());
+			Assert.Equal(16, await context.ShippingRates.CountAsync());
 			Assert.True(await context.CounterTransactions.CountAsync() >= 200);
 			Assert.Equal(
 				await context.CounterTransactions.CountAsync(),
@@ -520,6 +547,167 @@ public sealed class SqlPersistenceTests(SqlTestHost host) : IAsyncLifetime
 			return true;
 		});
 	}
+
+	[Fact]
+	public async Task DemoSeed_CreatesShipmentsAcrossZonesServiceLevelsAndTypes()
+	{
+		await SeedDemoAsync();
+
+		await host.QueryAsync(async context =>
+		{
+			var shipments = await context.Shipments.AsNoTracking().ToArrayAsync();
+			Assert.Equal(40, shipments.Length);
+			Assert.Equal(10, shipments.Select(entry => entry.DestinationZone).Distinct().Count());
+			Assert.Equal(
+				Enum.GetValues<ShippingServiceLevel>().Length,
+				shipments.Select(entry => entry.ServiceLevel).Distinct().Count());
+			Assert.Equal(
+				Enum.GetValues<ShippingItemType>().Length,
+				shipments.Select(entry => entry.Type).Distinct().Count());
+			return true;
+		});
+	}
+
+	[Fact]
+	public async Task DemoSeed_CreatesMoneyOrdersAtEveryBranchWithinTheVerificationRule()
+	{
+		await SeedDemoAsync();
+
+		await host.QueryAsync(async context =>
+		{
+			var orders = await context.MoneyOrders.AsNoTracking().ToArrayAsync();
+			Assert.Equal(20, orders.Length);
+			Assert.Equal(
+				5, orders.Select(entry => entry.ProcessingBranchCode).Distinct().Count());
+			Assert.All(orders, entry =>
+			{
+				Assert.StartsWith("DEMO Sender ", entry.Sender, StringComparison.Ordinal);
+				Assert.StartsWith("DEMO Recipient ", entry.Recipient, StringComparison.Ordinal);
+			});
+			Assert.Equal(0, await ScalarAsync(context, $"""
+				SELECT COUNT(*) AS Value
+				FROM dbo.MoneyOrders AS o
+				LEFT JOIN dbo.IdentityVerifications AS v ON v.MoneyOrderId = o.MoneyOrderId
+				WHERE o.Amount > 10000 AND ISNULL(v.IsSuccessful, 0) = 0
+				"""));
+			return true;
+		});
+	}
+
+	[Fact]
+	public async Task DemoSeed_RunningAgain_DuplicatesNothing()
+	{
+		await SeedDemoAsync();
+		var before = await CountDemoRowsAsync();
+
+		var second = await host.InRequestAsync(services =>
+			services.GetRequiredService<SqlDemoDataSeeder>().InitializeAsync());
+
+		Assert.False(second);
+		Assert.Equal(before, await CountDemoRowsAsync());
+		Assert.Equal((270, 40, 20, 15, 270), before);
+	}
+
+	[Fact]
+	public async Task DemoSeed_ShippingVolumeReport_CountsEverySeededShipment()
+	{
+		await SeedDemoAsync();
+
+		var rows = await host.InRequestAsync(services =>
+			services.GetRequiredService<IReportQueryService>().GetShippingVolumeAsync());
+
+		Assert.Equal(16, rows.Count);
+		Assert.Equal(40, rows.Sum(row => row.ShipmentCount));
+		Assert.Contains(rows, row => row.ServiceLevel == ShippingServiceLevel.Express);
+		Assert.Contains(rows, row => row.ServiceLevel == ShippingServiceLevel.Registered);
+	}
+
+	[Fact]
+	public async Task DemoSeed_BranchAuditorReport_CountsEverySeededMoneyOrder()
+	{
+		await SeedDemoAsync();
+
+		var rows = await host.InRequestAsync(services =>
+			services.GetRequiredService<IReportQueryService>().GetBranchAuditorReportAsync());
+
+		Assert.Equal(5, rows.Count);
+		Assert.Equal(20, rows.Sum(row => row.MoneyOrderCount));
+		Assert.Equal(15, rows.Sum(row => row.IdentityVerificationCount));
+		Assert.Equal(10, rows.Sum(row => row.SuccessfulIdentityVerificationCount));
+		Assert.Equal(5, rows.Sum(row => row.FailedIdentityVerificationCount));
+	}
+
+	[Fact]
+	public async Task DemoSeed_StoresOnlyMaskedDocumentIdentifiers()
+	{
+		await SeedDemoAsync();
+
+		await host.QueryAsync(async context =>
+		{
+			var identifiers = await context.Database
+				.SqlQuery<string>(
+					$"SELECT MaskedDocumentIdentifier AS Value FROM dbo.IdentityVerifications")
+				.ToArrayAsync();
+			Assert.Equal(15, identifiers.Length);
+			Assert.All(identifiers, identifier => Assert.Matches(@"\A\*{4}[0-9]{4}\z", identifier));
+			Assert.Equal(0, await ScalarAsync(context, $"""
+				SELECT COUNT(*) AS Value
+				FROM dbo.TransactionLines
+				WHERE Description LIKE '%DEMO00%'
+				"""));
+			return true;
+		});
+	}
+
+	[Fact]
+	public async Task DemoSeed_RecordsReferenceValidBranchesAndStaff()
+	{
+		await SeedDemoAsync();
+
+		await host.QueryAsync(async context =>
+		{
+			Assert.Equal(0, await ScalarAsync(context, $"""
+				SELECT COUNT(*) AS Value
+				FROM dbo.CounterTransactions AS t
+				LEFT JOIN dbo.Staff AS s ON s.StaffId = t.ClerkStaffId
+				WHERE s.StaffId IS NULL OR s.HomeBranchCode <> t.BranchCode
+				"""));
+			Assert.Equal(0, await ScalarAsync(context, $"""
+				SELECT COUNT(*) AS Value
+				FROM dbo.MoneyOrders AS o
+				INNER JOIN dbo.TransactionLines AS l ON l.MoneyOrderId = o.MoneyOrderId
+				INNER JOIN dbo.CounterTransactions AS t ON t.TransactionId = l.TransactionId
+				WHERE t.BranchCode <> o.ProcessingBranchCode
+				"""));
+			Assert.Equal(40, await ScalarAsync(context, $"""
+				SELECT COUNT(*) AS Value
+				FROM dbo.Shipments AS s
+				INNER JOIN dbo.TransactionLines AS l ON l.ShipmentId = s.ShipmentId
+				INNER JOIN dbo.ShippingRates AS r
+					ON r.ZoneCode = s.ZoneCode AND r.ServiceLevel = s.ServiceLevel
+				"""));
+			return true;
+		});
+	}
+
+	private async Task SeedDemoAsync()
+	{
+		await DeleteSeededRowsAsync();
+		Assert.True(await host.InRequestAsync(services =>
+			services.GetRequiredService<SqlDemoDataSeeder>().InitializeAsync()));
+	}
+
+	private Task<(int Transactions, int Shipments, int MoneyOrders, int Verifications, int Payments)>
+		CountDemoRowsAsync() =>
+		host.QueryAsync(async context => (
+			await context.CounterTransactions.CountAsync(),
+			await context.Shipments.CountAsync(),
+			await context.MoneyOrders.CountAsync(),
+			await context.IdentityVerifications.CountAsync(),
+			await context.Payments.CountAsync()));
+
+	private static Task<int> ScalarAsync(ApexPostDbContext context, FormattableString sql) =>
+		context.Database.SqlQuery<int>(sql).SingleAsync();
 
 	[Fact]
 	public async Task DemoCredentials_ProvisionEachDemoStaffMemberOnce()
