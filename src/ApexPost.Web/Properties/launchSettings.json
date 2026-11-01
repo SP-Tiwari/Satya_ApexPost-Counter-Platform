@@ -26,7 +26,9 @@
       "applicationUrl": "https://localhost:7034",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DemoData__Initialize": "true"
+        "DemoData__Initialize": "true",
+        "Transactions__TaxRates__ZeroRated": "0",
+        "Transactions__PaymentMethods__0": "DEMO Cash"
       }
     }
   }

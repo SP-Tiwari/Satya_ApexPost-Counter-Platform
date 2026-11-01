@@ -35,7 +35,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 
 ## Run the demo
 
-Requirements: the .NET 10 SDK and a trusted HTTPS development certificate (`dotnet dev-certs https --trust`). The sign-in cookie is HTTPS-only.
+Requirements: the .NET 10 SDK, the `dotnet-ef` tool, a local SQL Server instance, and a trusted HTTPS development certificate (`dotnet dev-certs https --trust`). The sign-in cookie is HTTPS-only.
 
 From the repository root, run:
 
@@ -45,15 +45,15 @@ From the repository root, run:
 
 The script:
 
-1. Stores a randomly generated demo password in user-secrets as `DemoData:StaffPassword`, unless one is already set, and prints it.
-2. Applies the EF Core migrations to the database named in `ConnectionStrings:ApexPostDb`.
-3. Starts the app with the `demo` launch profile at <https://localhost:7034>. The profile uses the Development environment and sets `DemoData:Initialize=true`.
+1. Applies the EF Core migrations to the database named in `ConnectionStrings:ApexPostDb`. It stops first if port 7034 is already in use.
+2. Stores a randomly generated demo password in user-secrets as `DemoData:StaffPassword`, unless one is already set, and prints it. If the `DemoData__StaffPassword` environment variable is set, it takes precedence: the script says so, does not show it, and leaves user-secrets alone.
+3. Starts the app with the `demo` launch profile at <https://localhost:7034>. The profile uses the Development environment and sets `DemoData:Initialize=true`, plus the two fictional sale settings described below.
 
 Create the database first with `./scripts/setup-database.ps1` (see [SQL Server setup](#sql-server-setup)).
 
 On first start the app seeds the fictional demo data into the empty database, then creates sign-in credentials for the 20 demo staff. Only PBKDF2 hashes are written to `StaffCredentials`; the password itself is never written to the repository.
 
-Demo logins (all use the password the script prints):
+Demo logins (all use the password the script prints, or the value of `DemoData__StaffPassword` when that is set):
 
 | Staff ID | Role | Branch |
 |---|---|---|
@@ -65,15 +65,34 @@ Demo logins (all use the password the script prints):
 
 Other options:
 
-- **Use your own password:** run `./scripts/run-demo.ps1 -Password '<your demo password>'`.
-- **Start over:** `-Reset` reverts all migrations, which **deletes all data in that database**, so the seed and logins are recreated. You need this for a changed password to take effect, because existing logins are never overwritten.
+- **Use your own password:** run `./scripts/run-demo.ps1 -Password '<your demo password>'`. The script refuses `-Password` while `DemoData__StaffPassword` is set.
+- **Start over:** a changed password needs a new empty database, because existing logins are never overwritten. `-Reset` reverts all migrations, which **deletes all data**, so it only runs with `-ConnectionString` on a disposable database, and never on the database in user-secrets.
+- **Verify on a disposable database:** create an empty `ApexPost_Test_*` database yourself, with its data and log files directly in `E:\SqlData\ApexPost\Tests`. Then set the password in `DemoData__StaffPassword` and name that database with `-ConnectionString`, using Windows authentication. The script uses it for the migrations and the application, refuses `ApexPostDb` and any other name, and neither shows the password nor changes user-secrets. It checks the database through `master` first, and stops before migrating if the database is missing or any file is elsewhere. It never creates a database, which is why this check exists: EF Core would create a missing one in the instance's default location.
 - **Without the script:** run `dotnet user-secrets set DemoData:StaffPassword "<your demo password>" --project src/ApexPost.Web`, then `dotnet run --project src/ApexPost.Web --launch-profile demo`.
 
 `DemoData:StaffPassword` is only accepted in the Development environment; startup fails if it is set anywhere else. If demo data is enabled without it, the app starts but logs a warning, and the demo staff cannot sign in.
 
+### Make a sale
+
+A goods sale works straight after `./scripts/run-demo.ps1`, with no further setup:
+
+1. Sign in at <https://localhost:7034> as `demo-staff-01`, with the password the script prints.
+2. Open `/Transactions/Create`.
+3. Choose a counter terminal, the payment method `DEMO Cash`, and a product with a quantity. Leave the shipping option clear.
+4. Submit the form. The sale opens with the status Paid.
+
+The `demo` profile in `src/ApexPost.Web/Properties/launchSettings.json` supplies what this needs:
+
+| Setting | Demo value | Why |
+|---|---|---|
+| `Transactions:TaxRates:ZeroRated` | `0` | Every seeded product is `ZeroRated`, and a product with no rate is not offered |
+| `Transactions:PaymentMethods:0` | `DEMO Cash` | The fictional method the seeded sales use |
+
+These are fictional demo values, not business defaults. A launch profile applies only to `dotnet run`, and this one runs in Development, so a published application receives neither setting and sales stay disabled until they are configured.
+
 ### Workflows that need your configuration
 
-Sign-in, the dashboard, transaction history, details, voids and refunds, stock adjustment and administration work on the seed alone. Some workflows stay disabled until you supply the business values they need. The project ships no defaults for these, so choose your own values and set them with user-secrets, for example:
+Sign-in, the dashboard, transaction history, details, goods sales through the `demo` profile, voids and refunds, stock adjustment and administration work on the seed alone. Some workflows stay disabled until you supply the business values they need. The project ships no defaults for these, so choose your own values and set them with user-secrets, for example:
 
 ```powershell
 dotnet user-secrets set "Transactions:TaxRates:ZeroRated" "<rate>" --project src/ApexPost.Web
@@ -81,7 +100,7 @@ dotnet user-secrets set "Transactions:TaxRates:ZeroRated" "<rate>" --project src
 
 | Workflow | Settings |
 |---|---|
-| New counter sales | `Transactions:TaxRates:<TaxCategory>` for the categories you sell, and `Transactions:PaymentMethods:0`, `:1`, … |
+| New counter sales outside the `demo` profile | `Transactions:TaxRates:<TaxCategory>` for the categories you sell, and `Transactions:PaymentMethods:0`, `:1`, … |
 | Shipping lines | `Shipping:TaxCategory`, `Shipping:MaximumParcelWeightKilograms:<ServiceLevel>` (the seeded zones are `Standard`) |
 | Money orders | `MoneyOrders:HighValueThreshold:Amount` and `:Currency`, `MoneyOrders:Fee:Amount` and `:TaxCategory`, `MoneyOrders:Verification:AcceptedDocumentTypes:0`, … and `MoneyOrders:Verification:TimeoutSeconds` |
 | Low-stock report and alerts | `Reports:LowStockThreshold` |
@@ -240,6 +259,6 @@ dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
 
-At the Week 3 checkpoint on 2026-11-01, all 731 tests passed with 0 warnings: Domain 224, Application 120, Infrastructure 159, Web 228.
+At the Week 3 checkpoint on 2026-11-01, all 787 tests passed with 0 warnings: Domain 224, Application 120, Infrastructure 159, Web 284.
 
 The SQL tests need the local default SQL Server instance (`.`), Windows authentication with permission to create databases, and the `E:\SqlData\ApexPost` folder, because disposable test databases keep their files in `E:\SqlData\ApexPost\Tests`.

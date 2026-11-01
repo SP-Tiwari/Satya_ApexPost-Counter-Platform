@@ -46,21 +46,21 @@ public sealed class AdministrationController(AdministrationApplicationService ad
 	}
 
 	[HttpPost, ValidateAntiForgeryToken, Audited]
-	public async Task<IActionResult> SetBranchStatus(string code, bool isActive, CancellationToken cancellationToken)
+	public async Task<IActionResult> SetBranchStatus(SetBranchStatusViewModel model, CancellationToken cancellationToken)
 	{
-		try { await administration.SetBranchStatusAsync(StaffId(), code, isActive, cancellationToken); return RedirectToAction(nameof(Index)); }
+		if (!ModelState.IsValid) return await BadFormAsync(cancellationToken);
+		try { await administration.SetBranchStatusAsync(StaffId(), model.Code!, model.IsActive!.Value, cancellationToken); return RedirectToAction(nameof(Index)); }
 		catch (Exception exception) when (exception is ArgumentException or KeyNotFoundException) { return await RejectAsync(exception, cancellationToken); }
 	}
 
 	[HttpPost, ValidateAntiForgeryToken, Audited]
-	public async Task<IActionResult> UpdateStaff(
-		string staffId, StaffRole role, string homeBranchCode, bool isActive,
-		CancellationToken cancellationToken)
+	public async Task<IActionResult> UpdateStaff(UpdateStaffViewModel model, CancellationToken cancellationToken)
 	{
+		if (!ModelState.IsValid) return await BadFormAsync(cancellationToken);
 		try
 		{
 			await administration.UpdateStaffAsync(
-				StaffId(), staffId, role, homeBranchCode, isActive, cancellationToken);
+				StaffId(), model.StaffId!, model.Role!.Value, model.HomeBranchCode!, model.IsActive, cancellationToken);
 			return RedirectToAction(nameof(Index));
 		}
 		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)

@@ -18,6 +18,15 @@ public sealed class CreateStaffViewModel
 	[Required, StringLength(10)] public string? HomeBranchCode { get; set; }
 }
 
+public sealed class UpdateStaffViewModel
+{
+	[Required, StringLength(50)] public string? StaffId { get; set; }
+	[Required] public StaffRole? Role { get; set; }
+	[Required, StringLength(10)] public string? HomeBranchCode { get; set; }
+	// A checkbox: an unchecked box is not posted, which means inactive.
+	public bool IsActive { get; set; }
+}
+
 public sealed class CreateBranchViewModel
 {
 	[Required, StringLength(10)] public string? Code { get; set; }
@@ -26,6 +35,12 @@ public sealed class CreateBranchViewModel
 	[Required, StringLength(100)] public string? OpeningHours { get; set; }
 	[Required, StringLength(50)] public string? TerminalId { get; set; }
 	[Required, StringLength(100)] public string? TerminalName { get; set; }
+}
+
+public sealed class SetBranchStatusViewModel
+{
+	[Required, StringLength(10)] public string? Code { get; set; }
+	[Required] public bool? IsActive { get; set; }
 }
 
 public sealed class CreateProductViewModel

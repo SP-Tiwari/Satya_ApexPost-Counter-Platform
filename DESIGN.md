@@ -1,6 +1,6 @@
 # ApexPost Counter Platform — Design
 
-This document describes the platform as implemented on the `feature/week3-sql-persistence` branch. Where something is planned but not built, it says so. Decisions are recorded as ADRs in [docs/adr/](docs/adr/); a short request-flow walkthrough is in [docs/architecture.md](docs/architecture.md). **The application runs on SQL Server** since Week 3 M3 ([section 4.6](#46-sql-server-cutover)). The schema is in [section 4.4](#44-sql-server-schema), and the repositories in [section 4.5](#45-repositories-and-unit-of-work).
+This document describes the platform as implemented on the `master` branch. Where something is planned but not built, it says so. Decisions are recorded as ADRs in [docs/adr/](docs/adr/); a short request-flow walkthrough is in [docs/architecture.md](docs/architecture.md). **The application runs on SQL Server** since Week 3 M3 ([section 4.6](#46-sql-server-cutover)). The schema is in [section 4.4](#44-sql-server-schema), and the repositories in [section 4.5](#45-repositories-and-unit-of-work).
 
 ## 1. Architecture
 
@@ -716,6 +716,7 @@ The services keep their authorization checks and return the same report rows, so
 | F: query and command separation, no separate databases | `IReportQueryService` | This section, [ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md) | Stated above |
 | G: reports use query services or procedures | The four report services and the dashboard | This section | Web report tests pass on the new path; old and new output identical |
 | F: response DTOs for every screen | `IScreenQueryService`, `ScreenQueryApplicationService` | This section | Nine reads compared with the old path: same output |
+| F: request DTOs for every POST, with validation | `src/ApexPost.Web/Models` | This section | Every POST with input binds a validated view model. `TransactionsControllerAdministrationFormTests` covers valid, invalid and over-posted forms for `UpdateStaff` and `SetBranchStatus` |
 
 **Test status after M5:** the whole solution builds with 0 warnings, and all 662 tests pass with no test file changed.
 
@@ -899,9 +900,11 @@ flowchart TD
 
 ## 12. Configuration and demo
 
-`appsettings.json` holds only non-secret operational settings. Business values (tax rates, payment methods, shipping tax category and weight limits, money-order threshold, fee and accepted documents, low-stock threshold) and secrets (partner API key, demo password) must be supplied through user-secrets or the environment; there are no defaults. Startup rejects partial or invalid settings.
+`appsettings.json` holds only non-secret operational settings. Business values (tax rates, payment methods, shipping tax category and weight limits, money-order threshold, fee and accepted documents, low-stock threshold) and secrets (partner API key, demo password) must be supplied through user-secrets or the environment; there are no defaults. Startup rejects partial or invalid settings. The one exception is the `demo` launch profile, which supplies two fictional values so a goods sale works on the seed: `Transactions:TaxRates:ZeroRated` as `0`, and `Transactions:PaymentMethods:0` as `DEMO Cash`. A launch profile applies only to `dotnet run`, so a published application receives neither.
 
-`./scripts/run-demo.ps1` runs the opt-in demo seed with demo logins whose password comes from user-secrets ([ADR 0003](docs/adr/0003-opt-in-demo-data.md), [ADR 0010](docs/adr/0010-demo-logins-from-user-secrets.md)). The README lists the accounts and settings.
+`./scripts/run-demo.ps1` runs the opt-in demo seed with demo logins whose password comes from user-secrets ([ADR 0003](docs/adr/0003-opt-in-demo-data.md), [ADR 0010](docs/adr/0010-demo-logins-from-user-secrets.md)). The `DemoData__StaffPassword` environment variable takes precedence over user-secrets; the script then says so and does not show it. The README lists the accounts and settings.
+
+With `-ConnectionString`, the script runs on a disposable database. It accepts only an existing `ApexPost_Test_*` database using Windows authentication, with its files directly in `E:\SqlData\ApexPost\Tests`. It checks this through `master` and stops before migrating otherwise, and it never creates a database. `-Reset` deletes all data, so it needs `-ConnectionString`. The script also stops if port 7034 is in use. `RunDemoScriptTests` covers these rules with stand-ins for `dotnet` and `sqlcmd`, so those tests cannot reach a database.
 
 ## 13. Testing
 
@@ -916,9 +919,9 @@ Only the assignment's allowed libraries are used: xUnit, `Microsoft.AspNetCore.M
 | Domain | 224/224 | Stock, weight-limit, money-order verification and void/refund rules, pricing, transaction access (`CanView`) |
 | Application | 120/120 | One commit per use case and none on failure (spy Unit of Work), events once across a retry, multi-line counter sales, payment-method configuration, money orders as basket lines (fee, threshold, verification success, failure and timeout), dated reports, catalogue, clerk read access, password hashing and the dummy-hash timing |
 | Infrastructure | 159/159 | Index definitions against the migration, model, script and database, migration snapshots, repository translation, the `/sql` files and stored procedures on a real database, compared with the application's reports, least-privilege role, EF Core write order, SQL repositories and mapping, rollback of a failed sale, rowversion conflicts and retries, concurrent sales, constraints, migrations down and up, seed, credentials and audit store, JSON persistence, migration from each schema version 1–6 to 7, rejection of fields newer than the file's version, concurrency, demo seed, database health check failure and cancellation paths |
-| Web | 228/228 | A real two-connection 409, rollback of a failed sale through a route, the Branch Manager void rule on SQL Server, error mappings on real routes, audit failures tested apart from business failures, Problem Details mappings, over-posting, SQL persistence registration, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
+| Web | 284/284 | Request DTOs on the administration forms, a real goods sale through the `demo` profile settings, the `run-demo.ps1` safety checks, a real two-connection 409, rollback of a failed sale through a route, the Branch Manager void rule on SQL Server, error mappings on real routes, audit failures tested apart from business failures, Problem Details mappings, over-posting, SQL persistence registration, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
 
-**Total: 731 of 731** at the M8 checkpoint on 2026-11-01, with 0 warnings on a clean build.
+**Total: 787 of 787** at the checkpoint on 2026-11-01, with 0 warnings on a clean build.
 
 The dummy-hash timing test compares the fastest of three runs and accepts a ratio of 0.6–1.6 against a real check; the old 210,000-iteration dummy measured about 0.35.
 
@@ -934,7 +937,11 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 - **Two read paths in the report services:** without `IReportQueryService`, a report service still calculates from repository reads. Only the unit tests use that path, so production query code is covered by the Web tests.
 - **Unrounded totals on two screens:** Daily Sales and the dashboard can show more than two decimals, such as `26.455 INR`. Stored values are correct, and [ADR 0017](docs/adr/0017-money-precision-and-rounding.md) leaves the screen format open.
 - **Browser error pages:** an unknown transaction on a browser route is an empty 404, and a 500 on a browser route is Problem Details JSON, not an HTML page.
-- **Offline terminals:** not built. No Part or deliverable requires them.
+- **Demo configuration:** the `demo` profile supplies only what a goods sale needs. Shipping, money orders, the low-stock report and the partner API need further settings, which the README lists.
+- **`run-demo.ps1` verification:** the full script ran on disposable databases only. Its default path was verified with stand-ins, not against the development database, and rejection of a file outside the approved folder was tested with fixed paths only.
+- **Legacy JSON code:** `JsonApexPostRepository`, `JsonAuditStore`, `JsonStaffCredentialRepository` and `IApexPostRepository` remain in `src`, unused by the application ([ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md)).
+- **No Week 3 pull request:** Week 3 was merged to `master` directly. Earlier weeks used pull requests.
+- **Offline terminals:** not built ([ADR 0026](docs/adr/0026-offline-counter-terminals.md)). The Week 3 title and Lab Module 9 name offline work, but no Part or deliverable covers it.
 - **Refund amounts can differ from payments:** on SQL Server, a `Refund` entry for a sale with a shipping price of more than 2 decimals can differ from its `Payment` entry by about one minor currency unit. `KnownDefect_RefundOfASaleWithShippingCanDifferFromItsPayment` pins it. The fix waits for trainer confirmation of the `Refund` entries ([ADR 0017](docs/adr/0017-money-precision-and-rounding.md)).
 
 ## 15. Decision records
