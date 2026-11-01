@@ -47,10 +47,14 @@ A later change to a procedure needs a new migration, so existing databases recei
 
 - adds a snapshot of the new text in its own history folder, with its own `EmbeddedResource` line;
 - applies that snapshot with `ALTER PROCEDURE`, which fails if the procedure is missing, through `StoredProcedureScripts.ReadSnapshotAsAlter`;
-- runs it with `sp_executesql`, because `ALTER PROCEDURE` must start a batch;
+- runs it as dynamic SQL, because `ALTER PROCEDURE` must start a batch and the idempotent script runs each migration inside an `IF` block;
 - restores the earlier text in `Down` from the earlier migration's snapshot.
 
-`Procedures_AreDeployedByTheMigrationFromTheRepositoryFiles` fails if `sql/procedures` changes without such a migration, because it compares the database after all migrations with the current files.
+**Why `sp_executesql`.** Dynamic SQL is the technical requirement, and `EXEC(N'...')` would meet it equally well. `sp_executesql` passes no parameters here and gives no technical benefit. It was chosen so that `EXEC(N'--` in the script still means a statement that creates a procedure, which `IdempotentScript_CreatesEachProcedureThroughExec` counts. That test now also counts the `ALTER` and checks that it belongs to `AddDailyBranchSalesRecompile`.
+
+`Procedures_MatchTheRepositoryFilesAfterAllMigrations` fails if `sql/procedures` changes without such a migration, because it compares the database after all migrations with the current files.
+
+`ProcedureMigrationTests` checks the rest: the hash of each snapshot, that only snapshots are embedded, that each migration deploys its own snapshot, the stop at `AddStoredProcedures`, and upgrade, rollback and re-upgrade with a data row.
 
 `AddDailyBranchSalesRecompile` is the only source of `OPTION (RECOMPILE)` in `usp_DailyBranchSales`. [recompile-migration.txt](../evidence/m6/recompile-migration.txt) records fresh installation, upgrade from the committed script, rollback and re-upgrade. A procedure deployed by the idempotent script differs from its file only in leading spaces, because EF Core indents the script block, including inside the `EXEC` string.
 

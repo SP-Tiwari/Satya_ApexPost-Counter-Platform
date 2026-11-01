@@ -44,3 +44,19 @@ A disposable-database probe on 2026-10-31 gave these results. `SqlPersistenceTes
 | A rival change forced on every attempt | 5 attempts, then `ConcurrencyConflictException` |
 
 The first result depends on timing. A heavier load can exhaust the retries while stock remains, so the guarantee is that stock is never negative and units sold match the stock decrease, not that every available unit sells.
+
+### What the client receives
+
+`TransactionsControllerConcurrencyTests.cs` runs these conflicts through HTTP. A second, independent connection commits a stock change after the request has read the row and just before it writes.
+
+| Scenario | Response |
+|---|---|
+| A rival commits once, and stock remains | The retry succeeds on current stock, and the sale redirects |
+| A rival takes the stock | 409 with the sale form and its error. Stock stays at 0, and no sale is saved |
+| A conflict on every attempt | 5 attempts, then a 409 form saying another change was made at the same time. The entered values stay on the form, except the identity document number, which the form always clears. Nothing is saved, and the audit entry is `Rejected` |
+
+**A conflict is answered with a view, not Problem Details, on every real route.** The sale, void, refund and stock adjustment actions catch `InvalidOperationException` before the exception handler sees it. The brief allows this ("HTTP 409 or a view error"), and the form keeps what the clerk entered, so real browser routes stay this way. The sale action catches `ConcurrencyConflictException` first and gives it its own message. Void, refund and stock adjustment keep their general messages.
+
+`ApplicationExceptionHandler` still maps `ConcurrencyConflictException` to a 409 Problem Details response. No real route reaches that mapping today, because `SetBranchStatus`, the one action that does not catch the exception, writes no rowversion table. `UncaughtConflict_ReturnsSafeProblemDetailsWith409` proves it with a real conflict through a test-only endpoint.
+
+A raw `DbUpdateConcurrencyException` does not reach the Web layer, because every `SaveChangesAsync` in the application services runs inside `ExecuteInTransactionAsync`. The handler has no mapping for it, so one raised outside that method would be a 500.

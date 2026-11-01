@@ -21,7 +21,7 @@ Part C requires indexes designed from measured workloads, with the order of key 
 
 The first and third indexes replace `IX_CounterTransactions_BranchCode` and `IX_Shipments_ZoneCode`, whose columns they start with, so no foreign key loses its index.
 
-**`IncludeProperties` limit.** It cannot name a complex property, so `UnitPrice`, `Amount`, `Currency` and `Fee` are in the reviewed migration, and the model lists only the scalar includes. The harness saves index definitions from the migration and from the measured database, and they are identical.
+**`IncludeProperties` limit.** It cannot name a complex property, so `UnitPrice`, `Amount`, `Currency` and `Fee` are in the reviewed migration, and the model lists only the scalar includes. The harness saves index definitions from the migration and from the measured database, and they are identical. `IndexDefinitionTests` keeps them that way, and allows the model to differ from the migration only by these columns.
 
 **`usp_DailyBranchSales` gains `OPTION (RECOMPILE)`.** Its dates are local variables, so the optimizer guessed 24,612 rows where 71 were actual, and chose joins that took 1.3 seconds. With the hint it takes 1 ms. The results do not change, and each call pays one compile, which is acceptable for a report that is not on a screen. The separate `AddDailyBranchSalesRecompile` migration deploys it, as ADR 0023 requires, and its `Down` restores the earlier text.
 
@@ -39,5 +39,5 @@ The first and third indexes replace `IX_CounterTransactions_BranchCode` and `IX_
 - **`IX_BranchStock_Quantity` is the weakest choice.** Reads fall from 8,562 to 133, but elapsed time does not improve, its only user is the all-branch mode of `usp_LowStockReport`, which no screen uses, and every sale pays to maintain it (3.8% of log). It stays because Part D requires that mode. It is the first to remove if write load matters more.
 - **`IX_Shipments_ZoneCode_ServiceLevel` slows the shipping volume report.** CPU rises from 140 to 249 ms, because the plan leaves batch mode. Shipment search falls from 13,771 reads to 61, which justifies it.
 - The covering money-order index stores customer names twice. They are fictional here and are not identity documents, and its includes hold no document data.
-- The clustered GUID key fragments under random inserts, as measured in `PERFORMANCE.md`. It stays for the offline design, and production would need index maintenance.
+- The clustered GUID key fragments under random inserts, as measured in `PERFORMANCE.md`. It stays because it rejects a repeated submission of the same transaction ID, and production would need index maintenance.
 - A database that already has the earlier procedure text receives the hint from `AddDailyBranchSalesRecompile`. [recompile-migration.txt](../evidence/m6/recompile-migration.txt) records the upgrade, rollback and repeat runs. The migration deploys the same text that was measured, so the measurements stand.

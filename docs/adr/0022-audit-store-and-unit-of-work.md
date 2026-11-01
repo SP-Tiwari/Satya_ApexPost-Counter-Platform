@@ -17,7 +17,7 @@ Week 2 had a gap: a failed audit write after a successful commit escaped the fil
 
 | Failure | Result |
 |---|---|
-| The business action fails | The unit of work rolls back. The audit entry still commits, recording the rejection |
+| The business action fails | The unit of work rolls back. The audit entry still commits: `Rejected` for a refused request, `Failed` with status 500 for an unexpected error |
 | The audit write fails | The business change stays committed. The response is unchanged, and the failure is logged |
 
 The audit write uses `CancellationToken.None`, so a client disconnecting cannot drop the record of an action that already ran.
@@ -27,10 +27,10 @@ The audit write uses `CancellationToken.None`, so a client disconnecting cannot 
 - **Share the request's unit of work.** A rollback would erase the record of the failed attempt, which is the entry an auditor most needs. The audit filter also runs after the commit, so it would need a second commit anyway.
 - **Keep the audit file alongside SQL Server.** No shared failure, but the brief requires `AuditEntries`, and auditors could not query it with the business data.
 - **Fail the request when audit fails.** It would guarantee an entry per action, but a clerk would see an error for a completed sale, and the brief says audit must not break the business transaction.
-- **An outbox for audit entries.** It could guarantee delivery after a failure, but that is new infrastructure. Offline and outbox work stays design-only this week.
+- **An outbox for audit entries.** It could guarantee delivery after a failure, but that is new infrastructure, and the assignment does not require it.
 
 ## Consequences
 
 - An action can succeed without an audit entry if the audit write fails. That shows up in the logs, not the table.
 - Each audited request uses a second short-lived `DbContext`.
-- `CounterScreensIntegrationTests` covers the two failure paths separately: `AuditWriteFailure_LeavesTheSaleCommittedAndTheResponseUnchanged` and `BusinessFailure_RollsBackButKeepsItsAuditRecord`.
+- `CounterScreensIntegrationTests` covers the two failure paths separately: `AuditWriteFailure_LeavesTheSaleCommittedAndTheResponseUnchanged` and `BusinessFailure_RollsBackButKeepsItsAuditRecord`. That second test is refused before it writes, so `CreateTransaction_FailureAfterWriting_RollsBackAndKeepsItsAuditRecord` covers a failure after the rows are written.
