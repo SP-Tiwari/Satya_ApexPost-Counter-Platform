@@ -142,6 +142,27 @@ The script:
 2. Creates an empty `ApexPostDb` from [sql/setup/create-database.sql](sql/setup/create-database.sql). An existing database is left untouched.
 3. Stores the connection string in user-secrets as `ConnectionStrings:ApexPostDb`, unless one is already set. It uses Windows authentication and trusts the local self-signed certificate, so it is for development only.
 
+### Local development database
+
+This database has already been created and provisioned on the project owner's development machine. It is available only there, so other developers and evaluators need their own.
+
+| Item | Value |
+|---|---|
+| SQL Server instance | `(localdb)\MSSQLLocalDB` |
+| Database name | `ApexPostDb` |
+| Authentication | Windows Authentication |
+| Status | Already created and provisioned on the development machine |
+| Migrations | 4 of 4 applied |
+| Tables | 19 application tables, plus the EF Core migration history table |
+| Indexes | 41 application indexes, plus the migration history index |
+| Stored procedures | 3 |
+
+This is a local development database only; it is not a shared or remotely accessible database.
+
+Other developers and evaluators may use their own SQL Server instance. To provision a database on another machine, use the existing EF Core migrations or SQL scripts described in this section.
+
+The application reads its local connection string from ASP.NET Core User Secrets, as `ConnectionStrings:ApexPostDb`. Each developer configures their own connection string locally in User Secrets. Connection strings are never committed to the repository.
+
 ### Set up the database with SSMS instead
 
 Use these steps if you prefer SQL Server Management Studio to the script. **These instructions have not yet been independently tested**: `ApexPostDb` was created with the script above, not through SSMS.
@@ -160,7 +181,7 @@ Use these steps if you prefer SQL Server Management Studio to the script. **Thes
 6. From the repository root, store the connection string:
 
    ```powershell
-   dotnet user-secrets set "ConnectionStrings:ApexPostDb" "Server=.;Database=ApexPostDb;Integrated Security=True;Encrypt=True;TrustServerCertificate=True" --project src/ApexPost.Web
+   dotnet user-secrets set "ConnectionStrings:ApexPostDb" "<your-connection-string>" --project src/ApexPost.Web
    ```
 
 ### Create the tables
@@ -168,7 +189,7 @@ Use these steps if you prefer SQL Server Management Studio to the script. **Thes
 The schema comes from the EF Core migration `InitialCreate`. The application does not migrate itself at startup, so this step is required before the first run. `./scripts/run-demo.ps1` does it for you. The tool's design-time factory holds no connection string, so name the target database with `--connection`:
 
 ```powershell
-dotnet ef database update --connection "Server=.;Database=ApexPostDb;Integrated Security=True;Encrypt=True;TrustServerCertificate=True" --project src/ApexPost.Infrastructure --startup-project src/ApexPost.Web --context ApexPostDbContext
+dotnet ef database update --connection "<your-connection-string>" --project src/ApexPost.Infrastructure --startup-project src/ApexPost.Web --context ApexPostDbContext
 ```
 
 Or apply the idempotent script, which is safe to run more than once. `sqlcmd` needs `-I` because the schema has filtered indexes:

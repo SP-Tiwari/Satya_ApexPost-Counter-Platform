@@ -476,7 +476,7 @@ Identity documents are stored only as `****` plus the last four characters, in `
 
 The application never calls `EnsureCreated()` or migrates at startup. `InitialCreate` was reviewed by hand. The review made `CreatedBy`, `RowVersion` and `TransactionLines.TransactionId` non-nullable, and added the composite counter foreign key by hand.
 
-**`ApexPostDb` itself has not been migrated.** It is still empty; verification used a separate disposable database.
+**Historical note, at the end of M1:** `ApexPostDb` on the default instance had not been migrated. Verification used a separate disposable database.
 
 #### M1 traceability
 
@@ -622,7 +622,7 @@ These passed 12 of 12 and 16 of 16. This is not a full-suite result.
 
 #### M3 traceability
 
-Verified on 2026-10-31 by running the real application over HTTPS against a disposable seeded database in `E:\SqlData\ApexPost\Tests`, since dropped. That run was one-off. The repeatable equivalents are in [section 13](#13-testing). `ApexPostDb` itself has not been migrated.
+Verified on 2026-10-31 by running the real application over HTTPS against a disposable seeded database in `E:\SqlData\ApexPost\Tests`, since dropped. That run was one-off. The repeatable equivalents are in [section 13](#13-testing). `ApexPostDb` on the default instance was not migrated for that run.
 
 | Assignment requirement | Implementation | Documentation | Verification evidence |
 |---|---|---|---|
