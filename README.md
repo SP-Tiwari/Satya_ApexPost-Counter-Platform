@@ -250,7 +250,7 @@ All seeded people and business values are marked or named `DEMO`. The seed conta
 - [Request flow](docs/architecture.md): a counter sale end to end
 - [Architecture Decision Records](docs/adr/)
 - [Performance evidence](PERFORMANCE.md): execution plans, before and after measurements, index trade-offs and generated SQL
-- [Saved evidence](docs/evidence/): T-SQL runs (`m4`), query counts and SQL (`m5`), and plans and measurements (`m6`)
+- [Saved evidence](docs/evidence/): T-SQL runs (`m4`), query counts and SQL (`m5`), plans and measurements (`m6`), and the Postman CLI collection, runner and output ([`m7`](docs/evidence/m7/README.md))
 - [Audit sample](data/AUDIT-SAMPLE.json) — the 12 lines of `audit-events.jsonl` written during a local diagnostic run against seeded demo data (sign-in, stock adjustment, a manager's and a clerk's sale with their transaction IDs, void and refund, including rejected attempts), exported unchanged as a JSON array; not application state.
 
 ## Build and test
