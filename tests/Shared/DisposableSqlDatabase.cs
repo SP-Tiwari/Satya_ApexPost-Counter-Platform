@@ -87,9 +87,17 @@ internal sealed class DisposableSqlDatabase : IDisposable
 			$"{NamePrefix}{Guid.NewGuid():N}");
 		database.RunOnServer(CreateSql, includeDirectory: true);
 
-		using var context = database.CreateContext();
-		context.Database.Migrate();
-		return database;
+		try
+		{
+			using var context = database.CreateContext();
+			context.Database.Migrate();
+			return database;
+		}
+		catch
+		{
+			database.Dispose();
+			throw;
+		}
 	}
 
 	public ApexPostDbContext CreateContext() =>

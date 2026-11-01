@@ -1,3 +1,4 @@
+using ApexPost.Application.Persistence;
 using ApexPost.Application.Verification;
 using ApexPost.Domain.Notifications;
 using ApexPost.Web.Filters;
@@ -302,6 +303,16 @@ public sealed class TransactionsController : Controller, IInvalidModelStateHandl
 				string.Empty,
 				"One or more transaction values are invalid.");
 			Response.StatusCode = StatusCodes.Status400BadRequest;
+			return View(await BuildCreateViewModelAsync(
+				model, staffId, cancellationToken));
+		}
+		// Derives from InvalidOperationException, so it must stay above that catch.
+		catch (ConcurrencyConflictException)
+		{
+			ModelState.AddModelError(
+				string.Empty,
+				"The transaction was not processed because another change was made at the same time. Review the form and submit it again.");
+			Response.StatusCode = StatusCodes.Status409Conflict;
 			return View(await BuildCreateViewModelAsync(
 				model, staffId, cancellationToken));
 		}

@@ -64,11 +64,17 @@ public sealed class SqlProductRepository(ApexPostDbContext database)
 
 	public void Add(Product product) => database.Products.Add(product);
 
+	// A value multiplied with this column takes the column's decimal(18,2) type,
+	// which would round a multiplier such as 1.125. Whole numbers keep their
+	// value, so the multiplier is sent as a ratio.
 	public Task<int> RevisePricesAsync(
 		ProductCategory category,
 		decimal multiplier,
 		CancellationToken cancellationToken = default)
 	{
+		var scale = (multiplier / DecimalScale.OneWithFullScale).Scale;
+		var denominator = 1m / new decimal(1, 0, 0, false, scale);
+		var numerator = multiplier * denominator;
 		var modifiedAtUtc = DateTime.UtcNow;
 		return database.Products
 			.Where(product => product.Category == category)
@@ -76,7 +82,8 @@ public sealed class SqlProductRepository(ApexPostDbContext database)
 				setters => setters
 					.SetProperty(
 						product => product.UnitPrice.Amount,
-						product => Math.Round(product.UnitPrice.Amount * multiplier, 2))
+						product => Math.Round(
+							product.UnitPrice.Amount * numerator / denominator, 2))
 					.SetProperty(
 						product => EF.Property<DateTime?>(product, ModifiedAtUtc),
 						modifiedAtUtc),

@@ -4,9 +4,12 @@ using Microsoft.AspNetCore.Diagnostics;
 namespace ApexPost.Web.Middleware;
 
 // Maps errors that reach the exception handler to Problem Details. Controllers
-// answer most of these themselves; anything not listed stays a 500.
+// answer most of these themselves; anything not listed is a 500. Left unhandled,
+// that 500 has no body on an MVC route. Once handled, the framework no longer
+// logs it, so it is logged here.
 public sealed class ApplicationExceptionHandler(
-	IProblemDetailsService problemDetails) : IExceptionHandler
+	IProblemDetailsService problemDetails,
+	ILogger<ApplicationExceptionHandler> logger) : IExceptionHandler
 {
 	public async ValueTask<bool> TryHandleAsync(
 		HttpContext httpContext,
@@ -27,10 +30,10 @@ public sealed class ApplicationExceptionHandler(
 			ArgumentException => (
 				StatusCodes.Status400BadRequest,
 				"The request is not valid."),
-			_ => (0, string.Empty)
+			_ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.")
 		};
-		if (status == 0)
-			return false;
+		if (status == StatusCodes.Status500InternalServerError)
+			logger.LogError(exception, "An unexpected error reached the exception handler.");
 
 		httpContext.Response.StatusCode = status;
 		return await problemDetails.TryWriteAsync(new ProblemDetailsContext

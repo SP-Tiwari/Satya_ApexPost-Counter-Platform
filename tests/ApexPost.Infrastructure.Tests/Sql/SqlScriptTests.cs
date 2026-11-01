@@ -295,7 +295,7 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 	}
 
 	[Fact]
-	public async Task Procedures_AreDeployedByTheMigrationFromTheRepositoryFiles()
+	public async Task Procedures_MatchTheRepositoryFilesAfterAllMigrations()
 	{
 		foreach (var name in new[] { "usp_DailyBranchSales", "usp_LowStockReport", "usp_AdjustStock" })
 		{
@@ -314,6 +314,17 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 
 		Assert.Equal(3, Regex.Count(script, @"CREATE OR ALTER PROCEDURE"));
 		Assert.Equal(3, Regex.Count(script, @"EXEC\(N'--"));
+
+		// A plain "ALTER PROCEDURE" would also match inside CREATE OR ALTER PROCEDURE.
+		var alter = Assert.Single(Regex.Matches(script, @"(?<!OR )ALTER PROCEDURE (dbo\.\w+)"));
+		Assert.Equal("dbo.usp_DailyBranchSales", alter.Groups[1].Value);
+		Assert.Equal(1, Regex.Count(script, @"EXEC sp_executesql N'--"));
+
+		var recompile = ProcedureMigrationTests.MigrationBlock(
+			script, ProcedureMigrationTests.RecompileId);
+		Assert.Contains("EXEC sp_executesql N'--", recompile);
+		Assert.Contains(alter.Value, recompile);
+		Assert.Contains("OPTION (RECOMPILE)", recompile);
 	}
 
 	[Fact]
@@ -578,10 +589,10 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 	private static decimal TwoPlaces(decimal value) =>
 		Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
-	private static string Normalize(string sql) =>
+	internal static string Normalize(string sql) =>
 		Regex.Replace(sql.ReplaceLineEndings("\n").Trim(), @"CREATE\s+(OR ALTER\s+)?PROCEDURE", "CREATE PROCEDURE");
 
-	private static string ReadScript(params string[] path) =>
+	internal static string ReadScript(params string[] path) =>
 		File.ReadAllText(Path.Combine([AppContext.BaseDirectory, "sql", .. path]));
 
 	private string MasterConnectionString() =>

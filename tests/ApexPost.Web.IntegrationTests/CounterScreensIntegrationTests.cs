@@ -386,6 +386,32 @@ public sealed class CounterScreensIntegrationTests : IAsyncLifetime
 			(await client.GetAsync($"/integration/parcel-status/{shipmentId}")).StatusCode);
 	}
 
+	[Theory]
+	[InlineData("0000000000000000000000000000dead", 404, "Not Found")]
+	[InlineData("bad%20id!", 400, "Invalid shipment ID.")]
+	public async Task ParcelStatus_ErrorsAreSafeProblemDetails(
+		string shipmentId,
+		int status,
+		string title)
+	{
+		await SeedSaleAsync("clerk-1");
+		using var client = _factory.CreateClient();
+		client.DefaultRequestHeaders.Add("X-API-Key", PartnerKey);
+
+		var response = await client.GetAsync($"/integration/parcel-status/{shipmentId}");
+
+		Assert.Equal(status, (int)response.StatusCode);
+		Assert.StartsWith(
+			"application/problem+json",
+			response.Content.Headers.ContentType?.ToString());
+		var body = await response.Content.ReadAsStringAsync();
+		using var problem = JsonDocument.Parse(body);
+		Assert.Equal(status, problem.RootElement.GetProperty("status").GetInt32());
+		Assert.Equal(title, problem.RootElement.GetProperty("title").GetString());
+		Assert.DoesNotContain("Exception", body, StringComparison.OrdinalIgnoreCase);
+		Assert.DoesNotContain("clerk-1", body, StringComparison.Ordinal);
+	}
+
 	[Fact]
 	public async Task ParcelStatus_AllowsTheConfiguredWidgetOrigin()
 	{
