@@ -2,7 +2,7 @@
 
 A scripted Postman check of the API and error responses, last run on 2026-11-01 at 15:42 UTC with **Postman CLI 1.75.0**. It is automated, and **no Postman desktop demonstration was performed**. The test suites remain the main evidence. All data is fictional. `ApexPostDb` was not used.
 
-**This run replaces the earlier ones.** The application was built from the working tree, including the uncommitted Milestones 1–5 changes. The original 50 requests are unchanged, and 15 were added for route tampering, refunds, stock adjustment, every administration command, the seeded reports and masked identity values. There is no environment file: the runner generates the API key and password for each run and never saves them.
+**This run replaces the earlier ones.** The application was built from the Milestones 1–5 changes, committed afterwards as `b785fb2` and merged to `master` through pull request #24. The original 50 requests are unchanged, and 15 were added for route tampering, refunds, stock adjustment, every administration command, the seeded reports and masked identity values. There is no environment file: the runner generates the API key and password for each run and never saves them.
 
 | File | Shows |
 |---|---|

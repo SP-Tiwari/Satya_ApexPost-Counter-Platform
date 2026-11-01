@@ -9,7 +9,7 @@ Build, test and Postman results for the Week 3 solution, recorded from the actua
 | Build started | 2026-11-01 15:30:35 UTC |
 | Tests started | 2026-11-01 15:30:45 UTC |
 | Tests finished | 2026-11-01 15:32:03 UTC |
-| Code | Branch `feature/week3-score-improvements` at `1f0863a`, plus the uncommitted Milestones 1–5 changes. No file in `src` or `tests` changed after this build |
+| Code | The Milestones 1–5 changes, committed afterwards as `b785fb2` and merged to `master` through pull request #24. No file in `src` or `tests` changed between this build and that commit |
 | .NET SDK | 10.0.402 |
 | Target framework | `net10.0` |
 | Operating system | Windows 10.0.22000.2538 |

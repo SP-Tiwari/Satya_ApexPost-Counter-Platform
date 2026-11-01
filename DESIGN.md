@@ -507,7 +507,7 @@ Verification ran on 2026-10-31 on SQL Server 2025 (17.0) Enterprise Evaluation, 
 | Plan: health check through EF Core | `SqlServerConnectivityHealthCheck.cs` | Mapping reference, README | `/health/database` returned `200 Healthy`; the existing health check tests passed |
 | Week 2 rules preserved | Domain changes in ADR 0019 | ADR 0019 | All 558 existing tests passed after the `Payments.PaymentMethod` correction: Domain 213, Application 110, Infrastructure 38, Web 197. No test file was modified. These tests verify existing behaviour on JSON persistence, not the new SQL persistence. SQL schema and mapping were verified separately with throwaway probes on disposable databases, which are not repeatable automated tests |
 
-**Not implemented in M1:** repositories and the Unit of Work, stamping of `ModifiedAtUtc` and the real `CreatedBy`, seed data, and automated SQL tests. Those belong to later milestones.
+**Historical note, at the end of M1:** repositories and the Unit of Work, stamping of `ModifiedAtUtc` and the real `CreatedBy`, seed data, and automated SQL tests were not yet implemented. Later milestones delivered them.
 
 ### 4.5 Repositories and Unit of Work
 
@@ -582,7 +582,7 @@ Verification first ran on 2026-10-31 on a disposable database, using throwaway p
 | Numeric limits | `InputLimits.Ensure`, `MixedBasketApplicationService`, `AdministrationApplicationService` | ADR 0020 | Oversized weight rejected with no rows written |
 | Failed use case clears tracked state | `SqlUnitOfWork.ExecuteInTransactionAsync` | ADR 0020 | No tracked entries after a failed attempt; tracked entries kept after a success |
 
-**Not implemented in M2:** the report and dashboard query services. Tests for fakes, a spy Unit of Work and over-posting followed in the M3 testing phase.
+**Historical note, at the end of M2:** the report and dashboard query services were not yet implemented; M5 delivered them. Tests for fakes, a spy Unit of Work and over-posting followed in the M3 testing phase.
 
 ### 4.6 SQL Server cutover
 
@@ -988,7 +988,7 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 - **`run-demo.ps1` verification:** the full script ran on disposable databases only. Its default path was verified with stand-ins, not against the development database, and rejection of a file outside the approved folder was tested with fixed paths only.
 - **`IApexPostRepository` remains:** the JSON implementations are gone, but this interface stays for test doubles and `DemoDataInitializer`'s test-only instance path. No production service resolves it ([ADR 0020](docs/adr/0020-repository-and-unit-of-work-boundaries.md)).
 - **SQL tests on another machine:** the server and folder are configurable, but those settings have only been tested without a database. The tests need Windows, Windows authentication and a local instance. Code cannot identify the development machine, so if `E:\SqlData\ApexPost` is missing there, only the `APEXPOST_TEST_OTHER_MACHINE` setting stands between a person and another folder.
-- **No Week 3 pull request:** Week 3 was merged to `master` directly. Earlier weeks used pull requests.
+- **Week 3 pull requests:** the main Week 3 work was merged to `master` directly. The final improvements were delivered through pull request #24.
 - **Offline terminals:** not built ([ADR 0026](docs/adr/0026-offline-counter-terminals.md)). The Week 3 title and Lab Module 9 name offline work, but no Part or deliverable covers it.
 
 ## 15. Decision records
