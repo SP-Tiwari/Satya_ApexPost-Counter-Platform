@@ -1,0 +1,16 @@
+﻿TableName IndexName IndexType IndexRows UsedMb
+--------- --------- --------- --------- ------
+BranchStock IX_BranchStock_Sku NONCLUSTERED 1000000 30
+BranchStock PK_BranchStock CLUSTERED 1000000 64
+CounterTransactions IX_CounterTransactions_BranchCode NONCLUSTERED 2000000 60
+CounterTransactions IX_CounterTransactions_ClerkStaffId NONCLUSTERED 2000000 80
+CounterTransactions PK_CounterTransactions CLUSTERED 2000000 250
+MoneyOrders IX_MoneyOrders_ProcessingBranchCode NONCLUSTERED 400000 12
+MoneyOrders PK_MoneyOrders CLUSTERED 400000 55
+Shipments IX_Shipments_ZoneCode NONCLUSTERED 1000000 39
+Shipments PK_Shipments CLUSTERED 1000000 104
+TransactionLines IX_TransactionLines_MoneyOrderId NONCLUSTERED 400000 11
+TransactionLines IX_TransactionLines_ShipmentId NONCLUSTERED 1000000 33
+TransactionLines IX_TransactionLines_Sku NONCLUSTERED 4400000 112
+TransactionLines IX_TransactionLines_TransactionId NONCLUSTERED 4400000 128
+TransactionLines PK_TransactionLines CLUSTERED 4400000 638

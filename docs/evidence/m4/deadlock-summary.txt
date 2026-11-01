@@ -1,0 +1,14 @@
+﻿## After opposite order, from 40 each
+
+Sku Quantity
+--- --------
+DEMO-SKU-001 39
+DEMO-SKU-002 39
+
+## After same order, from 40 each
+
+Sku Quantity
+--- --------
+DEMO-SKU-001 38
+DEMO-SKU-002 38
+

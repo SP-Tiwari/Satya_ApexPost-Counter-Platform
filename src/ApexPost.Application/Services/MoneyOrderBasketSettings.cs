@@ -34,9 +34,9 @@ public sealed record MoneyOrderBasketSettings
 
 public sealed record MoneyOrderBasketRequest(
 	[property: GreaterThanZero] decimal Amount,
-	[property: NotBlank] string Sender,
-	[property: NotBlank] string Recipient,
-	string? DocumentType,
+	[property: NotBlank, MaximumLength(InputLimits.PartyName)] string Sender,
+	[property: NotBlank, MaximumLength(InputLimits.PartyName)] string Recipient,
+	[property: MaximumLength(InputLimits.DocumentType)] string? DocumentType,
 	string? DocumentIdentifier)
 {
 	// Keep the full document identifier out of logs and exception messages.

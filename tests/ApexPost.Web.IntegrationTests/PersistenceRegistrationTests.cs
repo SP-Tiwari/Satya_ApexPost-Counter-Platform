@@ -1,48 +1,65 @@
+using ApexPost.Application.Auditing;
 using ApexPost.Application.Persistence;
-using ApexPost.Infrastructure.Persistence;
+using ApexPost.Application.Security;
+using ApexPost.Infrastructure.Persistence.Sql;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace ApexPost.Web.IntegrationTests;
 
 public sealed class PersistenceRegistrationTests : IAsyncLifetime
 {
-	private string _storageDirectory = null!;
-	private string? _resolvedStorageDirectory;
 	private WebApplicationFactory<Program> _factory = null!;
 
 	public Task InitializeAsync()
 	{
-		_storageDirectory = $"persistence-test-{Guid.NewGuid():N}";
-		_factory = new ApexPostWebApplicationFactory()
-			.WithWebHostBuilder(builder =>
-				builder.UseSetting("Storage:Directory", _storageDirectory));
+		_factory = new ApexPostWebApplicationFactory();
 		return Task.CompletedTask;
 	}
 
-	public async Task DisposeAsync()
+	public async Task DisposeAsync() => await _factory.DisposeAsync();
+
+	[Fact]
+	public void Services_ResolveSqlServerPersistence()
 	{
-		await _factory.DisposeAsync();
-		if (_resolvedStorageDirectory is not null &&
-			Directory.Exists(_resolvedStorageDirectory))
-		{
-			Directory.Delete(_resolvedStorageDirectory, recursive: true);
-		}
+		using var scope = _factory.Services.CreateScope();
+		var services = scope.ServiceProvider;
+
+		Assert.IsType<SqlBranchRepository>(services.GetRequiredService<IBranchRepository>());
+		Assert.IsType<SqlProductRepository>(services.GetRequiredService<IProductRepository>());
+		Assert.IsType<SqlStockRepository>(services.GetRequiredService<IStockRepository>());
+		Assert.IsType<SqlCounterTransactionRepository>(
+			services.GetRequiredService<ICounterTransactionRepository>());
+		Assert.IsType<SqlStaffRepository>(services.GetRequiredService<IStaffRepository>());
+		Assert.IsType<SqlUnitOfWork>(services.GetRequiredService<IUnitOfWork>());
+		Assert.IsType<SqlStaffCredentialRepository>(
+			services.GetRequiredService<IStaffCredentialRepository>());
+		Assert.IsType<SqlAuditStore>(services.GetRequiredService<IAuditStore>());
 	}
 
 	[Fact]
-	public async Task Services_ResolveRepositoryUsingConfiguredStorageDirectory()
+	public void Requests_ShareOneDbContextPerScope()
 	{
-		var services = _factory.Services;
-		var repository = services.GetRequiredService<IApexPostRepository>();
-		var environment = services.GetRequiredService<IWebHostEnvironment>();
-		_resolvedStorageDirectory = Path.Combine(
-			environment.ContentRootPath,
-			_storageDirectory);
+		using var first = _factory.Services.CreateScope();
+		using var second = _factory.Services.CreateScope();
 
-		Assert.IsType<JsonApexPostRepository>(repository);
-		Assert.Empty((await repository.LoadAsync()).Branches);
-		await repository.SaveAsync(ApexPostSnapshot.Empty);
-		Assert.True(File.Exists(Path.Combine(
-			_resolvedStorageDirectory,
-			"apexpost.json")));
+		Assert.Same(
+			first.ServiceProvider.GetRequiredService<ApexPostDbContext>(),
+			first.ServiceProvider.GetRequiredService<ApexPostDbContext>());
+		Assert.NotSame(
+			first.ServiceProvider.GetRequiredService<ApexPostDbContext>(),
+			second.ServiceProvider.GetRequiredService<ApexPostDbContext>());
+	}
+
+	[Fact]
+	public void TestHost_UsesTheDisposableDatabase_NeverTheDevelopmentOne()
+	{
+		using var scope = _factory.Services.CreateScope();
+		var context = scope.ServiceProvider.GetRequiredService<ApexPostDbContext>();
+		var configured = _factory.Services.GetRequiredService<IConfiguration>()
+			.GetConnectionString("ApexPostDb");
+
+		Assert.StartsWith("ApexPost_Test_", context.Database.GetDbConnection().Database);
+		Assert.DoesNotContain("=ApexPostDb;", configured, StringComparison.Ordinal);
 	}
 }

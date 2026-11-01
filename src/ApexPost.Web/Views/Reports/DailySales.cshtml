@@ -1,4 +1,4 @@
-@model IReadOnlyList<ApexPost.Domain.Reporting.DailySalesReportRow>
+@model IReadOnlyList<ApexPost.Web.Models.DailySalesRowViewModel>
 
 @{
     ViewData["Title"] = "Daily sales report";
@@ -37,11 +37,11 @@ else
             @foreach (var row in Model)
             {
                 <tr>
-                    <td>@row.BranchCode.Value</td>
+                    <td>@row.BranchCode</td>
                     <td>@row.BusinessDate</td>
-                    <td>@row.RetailSales.Amount @row.RetailSales.Currency</td>
-                    <td>@row.ServiceSales.Amount @row.ServiceSales.Currency</td>
-                    <td>@row.TotalSales.Amount @row.TotalSales.Currency</td>
+                    <td>@row.RetailSales @row.Currency</td>
+                    <td>@row.ServiceSales @row.Currency</td>
+                    <td>@row.TotalSales @row.Currency</td>
                 </tr>
             }
         </tbody>

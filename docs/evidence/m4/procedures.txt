@@ -1,0 +1,54 @@
+﻿## EXEC dbo.usp_DailyBranchSales @BranchCode = 'DM01', @Date = '20261031';
+
+BranchCode BusinessDate Currency RetailSales ServiceSales TotalSales
+---------- ------------ -------- ----------- ------------ ----------
+DM01 2026-10-31 INR 25.96 17.70 43.66
+
+## EXEC dbo.usp_DailyBranchSales @BranchCode = 'NOPE', @Date = '20261031';
+
+Msg 51001, Level 16, State 1, Procedure dbo.usp_DailyBranchSales, Line 28
+Branch 'NOPE' was not found.
+
+## EXEC dbo.usp_LowStockReport @BranchCode = 'DM02', @Threshold = 5;
+
+BranchCode Sku Quantity Threshold
+---------- --- -------- ---------
+DM02 DEMO-SKU-001 3 5
+
+## EXEC dbo.usp_LowStockReport @Threshold = 40;
+
+BranchCode Sku Quantity Threshold
+---------- --- -------- ---------
+DM01 DEMO-SKU-001 40 40
+DM01 DEMO-SKU-002 40 40
+DM02 DEMO-SKU-001 3 40
+
+## EXEC dbo.usp_LowStockReport @Threshold = -1;
+
+Msg 51000, Level 16, State 1, Procedure dbo.usp_LowStockReport, Line 13
+Low-stock threshold cannot be negative.
+
+## EXEC dbo.usp_AdjustStock @BranchCode = 'DM01', @Sku = 'DEMO-SKU-001', @Delta = -5, @Reason = N'DEMO damaged stock', @ChangedBy = 'demo-staff-02';
+
+StockAdjustmentId NewQuantity
+----------------- -----------
+1A29DB07-0BE5-4FAB-8042-3F762794B302 35
+
+## EXEC dbo.usp_AdjustStock @BranchCode = 'DM01', @Sku = 'DEMO-SKU-001', @Delta = -500, @Reason = N'DEMO count', @ChangedBy = 'demo-staff-02';
+
+Msg 51003, Level 16, State 1, Procedure dbo.usp_AdjustStock, Line 76
+Insufficient stock available.
+
+## EXEC dbo.usp_AdjustStock @BranchCode = 'DM01', @Sku = 'DEMO-SKU-001', @Delta = 1, @Reason = N'DEMO count', @ChangedBy = 'demo-staff-01';
+
+Msg 51002, Level 16, State 1, Procedure dbo.usp_AdjustStock, Line 50
+An active Branch Manager is required to adjust stock.
+
+## OPTION (RECOMPILE) plan for @BranchCode = 'DM01'
+
+Clustered Index Seek
+
+## OPTION (RECOMPILE) plan for @BranchCode = NULL
+
+Clustered Index Scan
+

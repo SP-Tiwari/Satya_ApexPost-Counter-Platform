@@ -7,14 +7,23 @@ public sealed class BranchAuditorReportApplicationService
 	private const string DeniedMessage =
 		"An active Auditor or Administrator is required to access branch auditor reports.";
 
-	private readonly IApexPostRepository _repository;
+	private readonly IStaffRepository _staff;
+	private readonly ICounterTransactionRepository _transactions;
+	private readonly IReportQueryService? _queries;
 	private readonly BranchAuditorReportService _reportService = new();
 
+	// Without it, the report is calculated from repository reads, which is what
+	// the unit tests use with their in-memory fakes.
 	public BranchAuditorReportApplicationService(
-		IApexPostRepository repository)
+		IStaffRepository staff,
+		ICounterTransactionRepository transactions,
+		IReportQueryService? queries = null)
 	{
-		ArgumentNullException.ThrowIfNull(repository);
-		_repository = repository;
+		ArgumentNullException.ThrowIfNull(staff);
+		ArgumentNullException.ThrowIfNull(transactions);
+		_staff = staff;
+		_transactions = transactions;
+		_queries = queries;
 	}
 
 	public async Task<IReadOnlyList<BranchAuditorReportRow>> GetReportAsync(
@@ -24,21 +33,23 @@ public sealed class BranchAuditorReportApplicationService
 		if (string.IsNullOrWhiteSpace(staffId))
 			throw new UnauthorizedAccessException(DeniedMessage);
 
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		var staff = await _staff.FindByIdAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		var matches = snapshot.Staff
-			.Where(staff => string.Equals(
-				staff.Id, staffId, StringComparison.Ordinal))
-			.Take(2)
-			.ToArray();
-		if (matches.Length != 1 ||
-			!matches[0].IsActive ||
-			matches[0].Role is not (StaffRole.Auditor or StaffRole.Administrator))
+		if (staff is not
+			{
+				IsActive: true,
+				Role: StaffRole.Auditor or StaffRole.Administrator
+			})
 		{
 			throw new UnauthorizedAccessException(DeniedMessage);
 		}
 
-		var entries = snapshot.MoneyOrders
+		if (_queries is not null)
+			return await _queries.GetBranchAuditorReportAsync(cancellationToken).ConfigureAwait(false);
+
+		var moneyOrders = await _transactions.GetMoneyOrdersAsync(cancellationToken)
+			.ConfigureAwait(false);
+		var entries = moneyOrders
 			.Where(order => order.ProcessingBranchCode is not null)
 			.Select(order => new BranchAuditorReportEntry(
 				order.ProcessingBranchCode!,

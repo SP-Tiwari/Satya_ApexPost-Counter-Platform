@@ -1,0 +1,33 @@
+﻿Run on 2026-11-01 on disposable databases on E:, dropped afterwards. ApexPostDb was not used.
+The migrations change one procedure and five indexes, not table data, so a marker Branches row and the seeded Roles are the data check.
+Definitions are compared in full with the migration snapshots in sql/procedures/history. current: the latest snapshot of that procedure. original: the AddStoredProcedures snapshot. exact: identical. script indent: differs only in leading spaces, which EF adds when it indents an idempotent script block, including inside the EXEC string.
+
+1. Fresh installation with dotnet ef database update, then full rollback and re-install
+Fresh, all migrations      | usp_DailyBranchSales: current, exact           | other 2 procedures match: 2 | M6 indexes: 5 of 5 | last: AddDailyBranchSalesRecompile | marker row: 0, Roles: 4
+After rollback to 0: 0 application tables, usp_DailyBranchSales absent
+Re-installed               | usp_DailyBranchSales: current, exact           | other 2 procedures match: 2 | M6 indexes: 5 of 5 | last: AddDailyBranchSalesRecompile | marker row: 0, Roles: 4
+
+2. Existing database, created by the committed idempotent script from before M6, with a data row
+Existing, before upgrade   | usp_DailyBranchSales: original, script indent  | other 2 procedures match: 2 | M6 indexes: 0 of 5 | last: AddStoredProcedures | marker row: 1, Roles: 4
+No-op update to same step  | usp_DailyBranchSales: original, script indent  | other 2 procedures match: 2 | M6 indexes: 0 of 5 | last: AddStoredProcedures | marker row: 1, Roles: 4
+After AddPerformanceIndexes | usp_DailyBranchSales: original, script indent  | other 2 procedures match: 2 | M6 indexes: 5 of 5 | last: AddPerformanceIndexes | marker row: 1, Roles: 4
+Upgraded                   | usp_DailyBranchSales: current, exact           | other 2 procedures match: 2 | M6 indexes: 5 of 5 | last: AddDailyBranchSalesRecompile | marker row: 1, Roles: 4
+Rollback one step          | usp_DailyBranchSales: original, exact          | other 2 procedures match: 2 | M6 indexes: 5 of 5 | last: AddPerformanceIndexes | marker row: 1, Roles: 4
+Rollback two steps         | usp_DailyBranchSales: original, exact          | other 2 procedures match: 2 | M6 indexes: 0 of 5 | last: AddStoredProcedures | marker row: 1, Roles: 4
+Re-upgraded                | usp_DailyBranchSales: current, exact           | other 2 procedures match: 2 | M6 indexes: 5 of 5 | last: AddDailyBranchSalesRecompile | marker row: 1, Roles: 4
+
+3. Stepwise on an empty database: AddStoredProcedures itself deploys the original text
+At AddStoredProcedures     | usp_DailyBranchSales: original, exact          | other 2 procedures match: 2 | M6 indexes: 0 of 5 | last: AddStoredProcedures | marker row: 0, Roles: 4
+
+4. Regenerated idempotent script
+Empty db, first run        | usp_DailyBranchSales: current, script indent   | other 2 procedures match: 2 | M6 indexes: 5 of 5 | last: AddDailyBranchSalesRecompile | marker row: 0, Roles: 4
+Second run                 | usp_DailyBranchSales: current, script indent   | other 2 procedures match: 2 | M6 indexes: 5 of 5 | last: AddDailyBranchSalesRecompile | marker row: 0, Roles: 4
+Migrations recorded: 4
+Script over step 3 database | usp_DailyBranchSales: current, script indent   | other 2 procedures match: 2 | M6 indexes: 5 of 5 | last: AddDailyBranchSalesRecompile | marker row: 0, Roles: 4
+
+5. Procedure resources in the built ApexPost.Infrastructure.dll
+  ApexPost.Sql.Procedures.History.AddDailyBranchSalesRecompile.usp_DailyBranchSales.sql
+  ApexPost.Sql.Procedures.History.AddStoredProcedures.usp_AdjustStock.sql
+  ApexPost.Sql.Procedures.History.AddStoredProcedures.usp_DailyBranchSales.sql
+  ApexPost.Sql.Procedures.History.AddStoredProcedures.usp_LowStockReport.sql
+Files in sql/procedures matching the latest snapshot: 3 of 3

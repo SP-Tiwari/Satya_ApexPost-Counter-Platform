@@ -1,7 +1,6 @@
 using ApexPost.Application.Caching;
 using ApexPost.Application.Courier;
 using ApexPost.Domain.Reporting;
-using ApexPost.Domain.Specifications;
 
 namespace ApexPost.Application.Services;
 
@@ -16,8 +15,7 @@ public sealed record DashboardSalesSummary(
 public sealed record BranchDashboard(
 	string StaffName,
 	StaffRole Role,
-	Branch Branch,
-	int ActiveCounterCount,
+	DashboardBranch Branch,
 	int ProductCount,
 	int ShippingZoneCount,
 	DashboardSalesSummary? TodaySales,
@@ -30,29 +28,35 @@ public sealed class BranchDashboardApplicationService
 	// How many of today's shipments the dashboard looks up; a display limit.
 	private const int RecentShipmentLimit = 5;
 
-	private readonly IApexPostRepository _repository;
+	private readonly IStaffRepository _staff;
+	private readonly IReportQueryService _reports;
+	private readonly IScreenQueryService _screens;
 	private readonly ReferenceDataCache _referenceData;
 	private readonly TimeProvider _timeProvider;
 	private readonly int? _lowStockThreshold;
 	private readonly ICourierTrackingService? _courier;
-	private readonly DailySalesReportService _salesReport = new();
-	private readonly LowStockReportService _lowStockReport = new();
 
 	public BranchDashboardApplicationService(
-		IApexPostRepository repository,
+		IStaffRepository staff,
+		IReportQueryService reports,
+		IScreenQueryService screens,
 		ReferenceDataCache referenceData,
 		TimeProvider timeProvider,
 		int? lowStockThreshold = null,
 		ICourierTrackingService? courier = null)
 	{
-		ArgumentNullException.ThrowIfNull(repository);
+		ArgumentNullException.ThrowIfNull(staff);
+		ArgumentNullException.ThrowIfNull(reports);
+		ArgumentNullException.ThrowIfNull(screens);
 		ArgumentNullException.ThrowIfNull(referenceData);
 		ArgumentNullException.ThrowIfNull(timeProvider);
 		if (lowStockThreshold < 0)
 			throw new ArgumentOutOfRangeException(
 				nameof(lowStockThreshold), "Low-stock threshold cannot be negative.");
 
-		_repository = repository;
+		_staff = staff;
+		_reports = reports;
+		_screens = screens;
 		_referenceData = referenceData;
 		_timeProvider = timeProvider;
 		_lowStockThreshold = lowStockThreshold;
@@ -63,30 +67,27 @@ public sealed class BranchDashboardApplicationService
 		string staffId,
 		CancellationToken cancellationToken = default)
 	{
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		var staff = await FindActiveStaffAsync(staffId, cancellationToken)
 			.ConfigureAwait(false);
-		var staff = FindActiveStaff(snapshot, staffId);
-		var branch = snapshot.Branches.SingleOrDefault(
-			candidate => candidate.Code == staff.HomeBranchCode)
+		var branch = await _screens
+			.FindDashboardBranchAsync(staff.HomeBranchCode, cancellationToken)
+			.ConfigureAwait(false)
 			?? throw new KeyNotFoundException(
 				$"Branch '{staff.HomeBranchCode}' was not found.");
 
 		var generatedAtUtc = _timeProvider.GetUtcNow();
 		var today = DateOnly.FromDateTime(generatedAtUtc.UtcDateTime);
 		var isManager = staff.Role == StaffRole.BranchManager;
-		TransactionBasket[] todaysSales = isManager
-			? snapshot.TransactionBaskets
-				.Matching(new PaidTransactionSpecification()
-					.And(new TransactionAtBranchSpecification(branch.Code))
-					.And(new TransactionOnBusinessDateSpecification(today)))
-				.ToArray()
-			: [];
+		var panels = isManager
+			? await LoadPanelsAsync(staff.HomeBranchCode, today, cancellationToken)
+				.ConfigureAwait(false)
+			: ManagerPanels.None;
 
-		// The catalogue (from the cache) and the courier lookups are
-		// independent I/O, so they run in parallel.
+		// The catalogue (from the cache, in its own scope) and the courier
+		// lookups are independent I/O, so they run in parallel.
 		var referenceTask = _referenceData.GetAsync(cancellationToken).AsTask();
 		var shipmentsTask = isManager && _courier is not null
-			? LookUpRecentShipmentsAsync(todaysSales, _courier, cancellationToken)
+			? LookUpRecentShipmentsAsync(panels.ShipmentIds, _courier, cancellationToken)
 			: Task.FromResult<IReadOnlyList<CourierTrackingResult>?>(null);
 		await Task.WhenAll(referenceTask, shipmentsTask).ConfigureAwait(false);
 		var referenceData = await referenceTask.ConfigureAwait(false);
@@ -95,70 +96,73 @@ public sealed class BranchDashboardApplicationService
 			staff.Name,
 			staff.Role,
 			branch,
-			branch.CounterTerminals.Count(terminal => terminal.IsActive),
 			referenceData.Products.Count,
 			referenceData.ShippingRates
 				.Select(rate => rate.DestinationZone)
 				.Distinct(StringComparer.Ordinal)
 				.Count(),
-			isManager ? SummarizeSales(branch.Code, today, todaysSales) : null,
-			isManager && _lowStockThreshold is { } threshold
-				? _lowStockReport.CreateReport(
-					snapshot.BranchStocks.Matching(
-						new StockAtBranchSpecification(branch.Code)),
-					threshold)
-				: null,
+			panels.TodaySales,
+			panels.LowStock,
 			await shipmentsTask.ConfigureAwait(false),
 			generatedAtUtc);
 	}
 
-	private DashboardSalesSummary SummarizeSales(
+	private async Task<ManagerPanels> LoadPanelsAsync(
 		BranchCode branchCode,
 		DateOnly today,
-		IReadOnlyCollection<TransactionBasket> todaysSales)
+		CancellationToken cancellationToken)
 	{
-		var rows = _salesReport.CreateReport(todaysSales.Select(basket =>
-			new DailySalesReportEntry(branchCode, today, basket)));
-		return new DashboardSalesSummary(
-			today, todaysSales.Count, rows.SingleOrDefault());
+		// One after another: these share the request's DbContext.
+		var lines = await _reports
+			.GetPaidSaleLinesAsync(branchCode, today, cancellationToken)
+			.ConfigureAwait(false);
+		var lowStock = _lowStockThreshold is { } threshold
+			? await _reports.GetLowStockAsync(branchCode, threshold, cancellationToken)
+				.ConfigureAwait(false)
+			: null;
+
+		var summary = PaidSalesSummary.From(branchCode, today, lines);
+		return new ManagerPanels(
+			new DashboardSalesSummary(today, summary.TransactionCount, summary.Totals),
+			lowStock,
+			summary.ShipmentIds);
 	}
 
 	private static async Task<IReadOnlyList<CourierTrackingResult>?>
 		LookUpRecentShipmentsAsync(
-			IEnumerable<TransactionBasket> todaysSales,
+			IEnumerable<string> shipmentIds,
 			ICourierTrackingService courier,
 			CancellationToken cancellationToken)
 	{
-		var shipmentIds = todaysSales
-			.OrderByDescending(basket => basket.OccurredAtUtc)
-			.SelectMany(basket => basket.LineItems)
-			.Select(lineItem => lineItem.ShippingItem?.Id)
-			.OfType<string>()
-			.Take(RecentShipmentLimit)
-			.ToArray();
-
 		// The courier service bounds its own concurrency and times out each
 		// lookup, so all lookups can be started together.
-		return await Task.WhenAll(shipmentIds.Select(id =>
-			courier.GetTrackingAsync(id, cancellationToken)))
+		return await Task.WhenAll(shipmentIds
+			.Take(RecentShipmentLimit)
+			.Select(id => courier.GetTrackingAsync(id, cancellationToken)))
 			.ConfigureAwait(false);
 	}
 
-	private static Staff FindActiveStaff(ApexPostSnapshot snapshot, string staffId)
+	private async Task<Staff> FindActiveStaffAsync(
+		string staffId,
+		CancellationToken cancellationToken)
 	{
 		if (string.IsNullOrWhiteSpace(staffId))
 			throw new UnauthorizedAccessException(
 				"Active staff are required to view the dashboard.");
 
-		var matches = snapshot.Staff
-			.Where(staff => string.Equals(
-				staff.Id, staffId, StringComparison.Ordinal))
-			.Take(2)
-			.ToArray();
-		if (matches.Length != 1 || !matches[0].IsActive)
-			throw new UnauthorizedAccessException(
+		var staff = await _staff.FindByIdAsync(staffId, cancellationToken)
+			.ConfigureAwait(false);
+		return staff is { IsActive: true }
+			? staff
+			: throw new UnauthorizedAccessException(
 				"Active staff are required to view the dashboard.");
+	}
 
-		return matches[0];
+	private sealed record ManagerPanels(
+		DashboardSalesSummary? TodaySales,
+		IReadOnlyList<LowStockReportRow>? LowStock,
+		IReadOnlyList<string> ShipmentIds)
+	{
+		public static readonly ManagerPanels None = new(null, null, []);
 	}
 }

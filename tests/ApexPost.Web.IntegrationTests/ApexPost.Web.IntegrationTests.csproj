@@ -22,4 +22,8 @@
     <ProjectReference Include="..\..\src\ApexPost.Web\ApexPost.Web.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Shared\DisposableSqlDatabase.cs" Link="DisposableSqlDatabase.cs" />
+  </ItemGroup>
+
 </Project>

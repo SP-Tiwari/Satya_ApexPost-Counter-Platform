@@ -1,0 +1,61 @@
+﻿## Non-SARGable: YEAR(OccurredAtUtc) = 2026
+Rows 1; logical reads 357; CPU 16 ms; elapsed 8 ms
+Plan: Stream Aggregate; Index Seek IX_CounterTransactions_BranchCode_OccurredAtUtc (Row)
+Estimated rows: 40287.2; actual rows: 24963; operator: Index Seek
+Convert warning: none
+
+## SARGable: date range
+Rows 1; logical reads 151; CPU 0 ms; elapsed 2 ms
+Plan: Stream Aggregate; Nested Loops; Index Seek IX_CounterTransactions_BranchCode_OccurredAtUtc (Row)
+Estimated rows: 40353.3; actual rows: 24963; operator: Index Seek
+Convert warning: none
+
+## Implicit conversion: varchar parameter, as EF Core sends
+Rows 500; logical reads 1537; CPU 0 ms; elapsed 2 ms
+Plan: Nested Loops; Index Seek IX_BranchStock_Sku (Row); Key Lookup PK_BranchStock (Row)
+Estimated rows: 516.916; actual rows: 500; operator: Index Seek
+Convert warning: none
+
+## Implicit conversion: nvarchar parameter
+Rows 500; logical reads 5055; CPU 171 ms; elapsed 45 ms
+Plan: Parallelism; Index Scan IX_BranchStock_Quantity (Row)
+Estimated rows: 516.916; actual rows: 500; operator: Index Scan
+Convert warning: <PlanAffectingConvert ConvertIssue="Seek Plan" Expression="CONVERT_IMPLICIT(nvarchar(30),[b].[Sku],0)=[@sku]">
+
+## CounterTransactions fragmentation after 60,000 rolled-back random-GUID inserts
+IndexName FragmentationPercent Pages
+--------- -------------------- -----
+PK_CounterTransactions 62.2 46394
+IX_CounterTransactions_BranchCode_OccurredAtUtc 8.1 12213
+IX_CounterTransactions_ClerkStaffId 81.4 17237
+
+## Estimate mismatch: dates in local variables
+Rows 1; logical reads 93836; CPU 1281 ms; elapsed 1308 ms
+Plan: Hash Match; Merge Join; Clustered Index Scan PK_TransactionTaxRates (Row); Sort; Index Seek IX_CounterTransactions_BranchCode_OccurredAtUtc (Row); Index Scan IX_TransactionLines_TransactionId (Row)
+Estimated rows: 24611.9; actual rows: 71; operator: Index Seek
+Convert warning: none
+
+## Estimate mismatch: the same query with OPTION (RECOMPILE)
+Rows 1; logical reads 829; CPU 0 ms; elapsed 1 ms
+Plan: Stream Aggregate; Nested Loops; Sort; Index Seek IX_CounterTransactions_BranchCode_OccurredAtUtc (Row); Index Seek IX_TransactionLines_TransactionId (Row); Clustered Index Seek PK_TransactionTaxRates (Row)
+Estimated rows: 503.298; actual rows: 71; operator: Index Seek
+Convert warning: none
+
+## Estimate mismatch: statistics stale after 200,000 new rows
+Rows 200000; logical reads 613688; CPU 672 ms; elapsed 674 ms
+Plan: Nested Loops; Index Seek IX_CounterTransactions_BranchCode_OccurredAtUtc (Row); Key Lookup PK_CounterTransactions (Row)
+Estimated rows: 3156.99; actual rows: 200000; operator: Index Seek
+Convert warning: none
+
+## Estimate mismatch: after UPDATE STATISTICS
+Rows 200000; logical reads 64911; CPU 329 ms; elapsed 123 ms
+Plan: Parallelism; Clustered Index Scan PK_CounterTransactions (Row)
+Estimated rows: 67354; actual rows: 200000; operator: Clustered Index Scan
+Convert warning: none
+
+## CounterTransactions fragmentation after 200,000 random-GUID inserts
+IndexName FragmentationPercent Pages
+--------- -------------------- -----
+PK_CounterTransactions 99.1 63836
+IX_CounterTransactions_BranchCode_OccurredAtUtc 7.4 13371
+IX_CounterTransactions_ClerkStaffId 80.7 18863

@@ -1,0 +1,41 @@
+﻿## 01-daily-branch-sales.sql
+
+BranchCode BranchName Currency PaidTransactions RetailSales ServiceSales
+---------- ---------- -------- ---------------- ----------- ------------
+DM01 DEMO Branch 01 INR 1 25.96 17.70
+
+(1 rows affected)
+
+## 02-branches-with-no-sales-today.sql
+
+BranchCode BranchName Region IsActive
+---------- ---------- ------ --------
+DM02 DEMO Branch 02 DEMO Region 01 1
+DM03 DEMO Branch 03 DEMO Region 02 1
+
+(2 rows affected)
+
+## 03-top-10-products-by-revenue-per-region.sql
+
+Region Currency RevenueRank Sku ProductName UnitsSold Revenue
+------ -------- ----------- --- ----------- --------- -------
+DEMO Region 01 INR 1 DEMO-SKU-001 DEMO Product 001 3 33.00
+
+(1 rows affected)
+
+## 04-shipping-volume-by-zone-and-service-level.sql
+
+ZoneCode ZoneName ServiceLevel ShipmentCount TotalWeightKg
+-------- -------- ------------ ------------- -------------
+DEMO-ZONE-01 DEMO Zone 01 Express 1 1.500
+
+(1 rows affected)
+
+## 05-money-orders-and-identity-verifications-per-branch.sql
+
+BranchCode BranchName MoneyOrderCount CancelledMoneyOrderCount IdentityVerificationCount SuccessfulIdentityVerificationCount FailedIdentityVerificationCount
+---------- ---------- --------------- ------------------------ ------------------------- ----------------------------------- -------------------------------
+DM01 DEMO Branch 01 2 1 2 1 1
+
+(1 rows affected)
+

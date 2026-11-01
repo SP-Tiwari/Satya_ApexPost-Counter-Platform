@@ -10,6 +10,14 @@ public sealed class Product
 	public Money UnitPrice { get; }
 	public TaxCategory TaxCategory { get; }
 
+	// Used by EF Core when it materializes a stored row.
+	private Product()
+	{
+		Sku = null!;
+		Name = null!;
+		UnitPrice = null!;
+	}
+
 	public Product(
 		Sku sku,
 		string name,

@@ -1,4 +1,4 @@
-@model IReadOnlyList<ApexPost.Domain.Reporting.BranchAuditorReportRow>
+@model IReadOnlyList<ApexPost.Web.Models.BranchAuditorRowViewModel>
 
 @{
     ViewData["Title"] = "Branch auditor report";
@@ -28,7 +28,7 @@ else
             @foreach (var row in Model)
             {
                 <tr>
-                    <td>@row.BranchCode.Value</td>
+                    <td>@row.BranchCode</td>
                     <td>@row.MoneyOrderCount</td>
                     <td>@row.IdentityVerificationCount</td>
                     <td>@row.SuccessfulIdentityVerificationCount</td>

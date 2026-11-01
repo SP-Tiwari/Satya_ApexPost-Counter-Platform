@@ -1,0 +1,21 @@
+Report comparison on a disposable database: 210 sales, 60 with shipments and money orders.
+Commands are lines logged by Microsoft.EntityFrameworkCore.Database.Command at Information.
+
+| Report | Old commands | Old tracked | New commands | New tracked | Same output |
+|---|---|---|---|---|---|
+| Daily sales | 5 | 1 | 2 | 1 | yes |
+| Low stock | 2 | 1 | 2 | 1 | yes |
+| Shipping volume | 2 | 1 | 2 | 1 | yes |
+| Branch auditor | 3 | 1 | 2 | 1 | yes |
+Daily sales 2026-10-28: same output = True
+Daily sales 2026-10-30: same output = True
+Daily sales 2026-11-01: same output = True
+
+N+1 demonstration: one branch's sales with their lines and verifications.
+
+| Approach | Commands | Result |
+|---|---|---|
+| Naive loop | 55 | 42 sales, line value 7134.12, 9 verifications |
+| `GetForBranchAsync`: split query plus one batched verification read | 4 | 42 sales, line value 7134.12, 9 verifications |
+
+Same result: True

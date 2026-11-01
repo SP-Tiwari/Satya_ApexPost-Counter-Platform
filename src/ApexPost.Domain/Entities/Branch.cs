@@ -15,6 +15,15 @@ public sealed class Branch
 	public IReadOnlyList<CounterTerminal> CounterTerminals =>
 		_counterTerminals.AsReadOnly();
 
+	// Used by EF Core when it materializes a stored row.
+	private Branch()
+	{
+		Code = null!;
+		Name = null!;
+		Region = null!;
+		OpeningHours = null!;
+	}
+
 	public Branch(
 		BranchCode code,
 		string name,

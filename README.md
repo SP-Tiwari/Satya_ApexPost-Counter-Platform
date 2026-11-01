@@ -1,12 +1,12 @@
 # ApexPost Counter Platform
 
-ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch counter operations. It uses a layered Domain, Application, Infrastructure, and Web architecture with asynchronous JSON snapshot persistence.
+ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch counter operations. It uses a layered Domain, Application, Infrastructure, and Web architecture, with SQL Server through EF Core 10 as its system of record.
 
 ## Projects
 
 - `src/ApexPost.Domain` — entities, value objects, rules, and reporting.
 - `src/ApexPost.Application` — use cases and persistence/security/audit abstractions.
-- `src/ApexPost.Infrastructure` — JSON persistence and audit implementations.
+- `src/ApexPost.Infrastructure` — the EF Core SQL Server persistence layer (`ApexPostDbContext`, mappings, migrations, repositories and stores). The older JSON stores remain in the code, but the application no longer uses them.
 - `src/ApexPost.Web` — MVC controllers and views, authentication, middleware, and composition root.
 - `tests/*` — Domain, Application, Infrastructure, and Web integration tests.
 
@@ -30,7 +30,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
   - Security headers via `OnStarting`; HSTS outside Development.
   - Correlation IDs, Problem Details errors and maintenance mode; `/health` stays reachable.
 - **Filters:** opt-in `[Audited]` business-action audit with real status codes, a validation filter for MVC forms and API endpoints, and a slow-action filter.
-- **Persistence:** versioned JSON snapshot (schema 7) with migration from older files; separate credential and audit files.
+- **Persistence:** SQL Server through EF Core 10, with repositories and a Unit of Work. Credentials and audit entries are tables too. See [DESIGN.md](DESIGN.md#44-sql-server-schema).
 - **Demo:** a one-command demo with documented logins, described in the next section.
 
 ## Run the demo
@@ -46,9 +46,12 @@ From the repository root, run:
 The script:
 
 1. Stores a randomly generated demo password in user-secrets as `DemoData:StaffPassword`, unless one is already set, and prints it.
-2. Starts the app with the `demo` launch profile at <https://localhost:7034>. The profile uses the Development environment, sets `DemoData:Initialize=true`, and keeps all demo data under `src/ApexPost.Web/data/demo/`, which git ignores.
+2. Applies the EF Core migrations to the database named in `ConnectionStrings:ApexPostDb`.
+3. Starts the app with the `demo` launch profile at <https://localhost:7034>. The profile uses the Development environment and sets `DemoData:Initialize=true`.
 
-On first start the app seeds the fictional demo snapshot, then creates sign-in credentials for the 20 demo staff. Only PBKDF2 hashes are written to `data/demo/staff-credentials.json`; the password itself is never written to the repository.
+Create the database first with `./scripts/setup-database.ps1` (see [SQL Server setup](#sql-server-setup)).
+
+On first start the app seeds the fictional demo data into the empty database, then creates sign-in credentials for the 20 demo staff. Only PBKDF2 hashes are written to `StaffCredentials`; the password itself is never written to the repository.
 
 Demo logins (all use the password the script prints):
 
@@ -63,7 +66,7 @@ Demo logins (all use the password the script prints):
 Other options:
 
 - **Use your own password:** run `./scripts/run-demo.ps1 -Password '<your demo password>'`.
-- **Start over:** `-Reset` deletes `data/demo/` so the seed and logins are recreated. You need this for a changed password to take effect, because existing logins are never overwritten.
+- **Start over:** `-Reset` reverts all migrations, which **deletes all data in that database**, so the seed and logins are recreated. You need this for a changed password to take effect, because existing logins are never overwritten.
 - **Without the script:** run `dotnet user-secrets set DemoData:StaffPassword "<your demo password>" --project src/ApexPost.Web`, then `dotnet run --project src/ApexPost.Web --launch-profile demo`.
 
 `DemoData:StaffPassword` is only accepted in the Development environment; startup fails if it is set anywhere else. If demo data is enabled without it, the app starts but logs a warning, and the demo staff cannot sign in.
@@ -102,15 +105,92 @@ Sample request:
 curl.exe -H "X-API-Key: <your partner key>" https://localhost:7034/integration/parcel-status/<shipmentId>
 ```
 
+## SQL Server setup
+
+The application requires SQL Server and stops at startup if `ConnectionStrings:ApexPostDb` is not set. This section sets up the local database.
+
+Requirements: a local SQL Server instance, `sqlcmd`, and the `dotnet-ef` tool.
+
+From the repository root, run:
+
+```powershell
+./scripts/setup-database.ps1
+```
+
+The script:
+
+1. Creates the data folder (`E:\SqlData\ApexPost` by default; change it with `-DataDirectory`) and gives the SQL Server service account access.
+2. Creates an empty `ApexPostDb` from [sql/setup/create-database.sql](sql/setup/create-database.sql). An existing database is left untouched.
+3. Stores the connection string in user-secrets as `ConnectionStrings:ApexPostDb`, unless one is already set. It uses Windows authentication and trusts the local self-signed certificate, so it is for development only.
+
+### Set up the database with SSMS instead
+
+Use these steps if you prefer SQL Server Management Studio to the script. **These instructions have not yet been independently tested**: `ApexPostDb` was created with the script above, not through SSMS.
+
+1. Create the folder `E:\SqlData\ApexPost`. In its **Properties** > **Security** tab, give `NT Service\MSSQLSERVER` **Modify** access.
+2. In SSMS, connect to server `.` with **Windows Authentication**. If the connection fails with a certificate error, tick **Trust server certificate**.
+3. Open [sql/setup/create-database.sql](sql/setup/create-database.sql), and turn on **Query** > **SQLCMD Mode**.
+4. Add these two lines at the top of the query window, without saving them to the file:
+
+   ```sql
+   :setvar DatabaseName ApexPostDb
+   :setvar DataDirectory "E:\SqlData\ApexPost"
+   ```
+
+5. Execute the query. The results list the data and log files, which should both be in `E:\SqlData\ApexPost`.
+6. From the repository root, store the connection string:
+
+   ```powershell
+   dotnet user-secrets set "ConnectionStrings:ApexPostDb" "Server=.;Database=ApexPostDb;Integrated Security=True;Encrypt=True;TrustServerCertificate=True" --project src/ApexPost.Web
+   ```
+
+### Create the tables
+
+The schema comes from the EF Core migration `InitialCreate`. The application does not migrate itself at startup, so this step is required before the first run. `./scripts/run-demo.ps1` does it for you. The tool's design-time factory holds no connection string, so name the target database with `--connection`:
+
+```powershell
+dotnet ef database update --connection "Server=.;Database=ApexPostDb;Integrated Security=True;Encrypt=True;TrustServerCertificate=True" --project src/ApexPost.Infrastructure --startup-project src/ApexPost.Web --context ApexPostDbContext
+```
+
+Or apply the idempotent script, which is safe to run more than once. `sqlcmd` needs `-I` because the schema has filtered indexes:
+
+```powershell
+sqlcmd -S . -E -C -I -b -d ApexPostDb -i sql/schema/ApexPostDb-idempotent.sql
+```
+
+To regenerate the script after a schema change:
+
+```powershell
+dotnet ef migrations script --idempotent --project src/ApexPost.Infrastructure --startup-project src/ApexPost.Web --context ApexPostDbContext --output sql/schema/ApexPostDb-idempotent.sql
+```
+
+The schema, ER diagram and constraints are described in [DESIGN.md](DESIGN.md#44-sql-server-schema).
+
+To check connectivity, start the app with `dotnet run --project src/ApexPost.Web --launch-profile https` and open <https://localhost:7034/health/database>. It answers `Healthy`, or `Unhealthy` with status 503. The endpoint exists only in Development with a connection string configured, because each request opens a database connection. `/health` does not depend on the database.
+
+Tests never use `ApexPostDb`. They create a disposable `ApexPost_Test_*` database and drop it when the run ends.
+
+To repeat the performance evidence on a disposable `ApexPostDb_Perf` database, run `./scripts/run-performance.ps1`. See [PERFORMANCE.md](PERFORMANCE.md).
+
+### T-SQL scripts
+
+The reports, atomic sale, stored procedures and concurrency demos are in [sql/](sql/), and are explained in [DESIGN.md](DESIGN.md#47-t-sql-reports-procedures-and-concurrency). The stored procedures are deployed by the migrations above.
+
+To run them all on a disposable database and save the output to [docs/evidence/m4](docs/evidence/m4/README.md):
+
+```powershell
+./scripts/run-sql-demos.ps1
+```
+
 ## Configuration
 
-`src/ApexPost.Web/appsettings.json` documents non-secret settings. The storage directory is `Storage:Directory`; credentials are stored separately at `Authentication:CredentialFile`. By default the application neither seeds data nor creates credentials. The Web project has a `UserSecretsId`, so `dotnet user-secrets` works for local secrets in Development.
+`src/ApexPost.Web/appsettings.json` documents non-secret settings. The database connection string is `ConnectionStrings:ApexPostDb`, kept in user-secrets. By default the application neither seeds data nor creates credentials. The Web project has a `UserSecretsId`, so `dotnet user-secrets` works for local secrets in Development.
 
 Production operators must explicitly provide business configuration as applicable:
 
 - `Transactions:TaxRates:<TaxCategory>` and `Transactions:PaymentMethods`
 - `Shipping:TaxCategory` and `Shipping:MaximumParcelWeightKilograms:<ShippingServiceLevel>`
-- shipping rates in the JSON snapshot, per destination zone and service level
+- shipping rates in the `ShippingRates` table, per destination zone and service level
 - `MoneyOrders:HighValueThreshold:Amount` and `:Currency`, `MoneyOrders:Fee:Amount` and `:TaxCategory`, `MoneyOrders:Verification:AcceptedDocumentTypes` and `:TimeoutSeconds` (plus optional `:SimulatedLatencyMilliseconds`)
 - `Reports:LowStockThreshold`, which is used by the low-stock report and the low-stock notification
 - partner settings, supplied outside source control:
@@ -134,19 +214,21 @@ The single seed source is `DemoDataInitializer` (`src/ApexPost.Infrastructure/Pe
 - 30 products
 - stock for each product at every branch (150 rows)
 - 10 shipping zones with rates
-- 40 paid historical sales, one every six hours back from seeding time
+- 210 paid historical sales with payments, one every six hours back from seeding time
 
 The sales are processed through the same domain service as real sales, so they deduct stock and the reports have recent dates.
 
-Set `DemoData:Initialize` to `true` to seed an entirely empty JSON snapshot. The setting defaults to `false`. Initialization uses the repository's locked `UpdateAsync` operation, writes only when every snapshot collection is empty, and never merges demo values into an existing store.
+Set `DemoData:Initialize` to `true` to seed an empty database. The setting defaults to `false`. Seeding runs in one commit, happens only when no branches, staff or products exist, and never merges demo values into existing data.
 
-All seeded people and business values are marked or named `DEMO`. The snapshot contains no passwords, hashes, secrets or identity-document numbers; demo credentials are written only to the separate credential file, as described above. Demo prices, shipping rates and zero tax rates are illustrative and must not be used as production values. Parcel limits, money-order thresholds and fees, and low-stock thresholds are not seeded.
+All seeded people and business values are marked or named `DEMO`. The seed contains no passwords, hashes, secrets or identity-document numbers; demo credentials are written only to `StaffCredentials`, as described above. Demo prices, shipping rates and zero tax rates are illustrative and must not be used as production values. Parcel limits, money-order thresholds and fees, and low-stock thresholds are not seeded.
 
 ## Documentation and sample records
 
 - [Design](DESIGN.md): architecture and domain diagrams, pipeline order, middleware versus filters, threats and mitigations, auditing, concurrency, C# 14 features, SOLID mapping
 - [Request flow](docs/architecture.md): a counter sale end to end
 - [Architecture Decision Records](docs/adr/)
+- [Performance evidence](PERFORMANCE.md): execution plans, before and after measurements, index trade-offs and generated SQL
+- [Saved evidence](docs/evidence/): T-SQL runs (`m4`), query counts and SQL (`m5`), and plans and measurements (`m6`)
 - [Audit sample](data/AUDIT-SAMPLE.json) — the 12 lines of `audit-events.jsonl` written during a local diagnostic run against seeded demo data (sign-in, stock adjustment, a manager's and a clerk's sale with their transaction IDs, void and refund, including rejected attempts), exported unchanged as a JSON array; not application state.
 
 ## Build and test
@@ -157,3 +239,7 @@ From the repository root:
 dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
+
+At the Week 3 checkpoint on 2026-11-01, all 731 tests passed with 0 warnings: Domain 224, Application 120, Infrastructure 159, Web 228.
+
+The SQL tests need the local default SQL Server instance (`.`), Windows authentication with permission to create databases, and the `E:\SqlData\ApexPost` folder, because disposable test databases keep their files in `E:\SqlData\ApexPost\Tests`.

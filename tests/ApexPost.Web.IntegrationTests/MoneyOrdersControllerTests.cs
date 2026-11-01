@@ -106,7 +106,7 @@ public sealed class MoneyOrdersControllerTests : IAsyncLifetime
 		var content = await (await client.GetAsync("/MoneyOrders/Index"))
 			.Content.ReadAsStringAsync();
 
-		Assert.Contains("*************7654", content, StringComparison.Ordinal);
+		Assert.Contains("****7654", content, StringComparison.Ordinal);
 		Assert.DoesNotContain(FullDocumentIdentifier, content, StringComparison.Ordinal);
 	}
 
@@ -169,10 +169,10 @@ public sealed class MoneyOrdersControllerTests : IAsyncLifetime
 		var verification = Assert.Single(
 			(await LoadSnapshotAsync()).IdentityVerifications);
 		Assert.True(verification.IsSuccessful);
-		Assert.Equal("*************7654", verification.MaskedDocumentIdentifier);
+		Assert.Equal("****7654", verification.MaskedDocumentIdentifier);
 		Assert.DoesNotContain(
 			FullDocumentIdentifier,
-			await File.ReadAllTextAsync(DataFilePath),
+			await TestSqlServer.ReadMoneyOrderTextAsync(),
 			StringComparison.Ordinal);
 	}
 

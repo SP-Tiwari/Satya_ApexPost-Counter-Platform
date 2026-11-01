@@ -4,9 +4,9 @@ namespace ApexPost.Web.Models;
 
 public sealed class AdministrationViewModel
 {
-	public IReadOnlyList<Branch> Branches { get; init; } = [];
-	public IReadOnlyList<Staff> Staff { get; init; } = [];
-	public IReadOnlyList<Product> Products { get; init; } = [];
+	public IReadOnlyList<ApexPost.Application.Persistence.AdministrationBranchRow> Branches { get; init; } = [];
+	public IReadOnlyList<ApexPost.Application.Persistence.AdministrationStaffRow> Staff { get; init; } = [];
+	public IReadOnlyList<ApexPost.Application.Persistence.AdministrationProductRow> Products { get; init; } = [];
 }
 
 public sealed class CreateStaffViewModel

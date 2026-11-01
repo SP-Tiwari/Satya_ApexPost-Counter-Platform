@@ -167,11 +167,15 @@ public sealed class AuditActionFilter(
 			await auditStore.AppendAsync(record, CancellationToken.None)
 				.ConfigureAwait(false);
 		}
-		catch (Exception auditException) when (actionFailed)
+		catch (Exception auditException)
 		{
+			// The business action has already finished, so a failed audit
+			// write is logged and never changes the response.
 			logger.LogError(
 				auditException,
-				"Failed to append audit record while preserving an MVC action exception.");
+				"Failed to append audit record for {Controller}.{Action}.",
+				controller,
+				action);
 		}
 	}
 

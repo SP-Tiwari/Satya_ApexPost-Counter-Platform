@@ -1,0 +1,13 @@
+Screen comparison on the same disposable database. Old is the repository read; new is the DTO projection.
+
+| Screen | Rows | Old commands | Old tracked | New commands | New tracked | Same output |
+|---|---|---|---|---|---|---|
+| Catalogue | 30 | 5 | 4 | 5 | 1 | yes |
+| Stock | 30 | 3 | 4 | 3 | 1 | yes |
+| Money orders | 12 | 3 | 1 | 2 | 1 | yes |
+| Transaction detail | 1 | 5 | 1 | 2 | 1 | yes |
+| Transaction list | 42 | 5 | 1 | 3 | 1 | yes |
+| Administration | 55 | 4 | 1 | 4 | 1 | yes |
+| Sale form | 42 | 4 | 4 | 4 | 1 | yes |
+| Dashboard branch | 1 | 1 | 3 | 1 | 0 | yes |
+| Parcel status | 1 | 4 | 0 | 1 | 0 | yes |

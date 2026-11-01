@@ -9,6 +9,14 @@ public sealed record ShippingRate
 	public Money BasePrice { get; }
 	public Money PerKilogramCharge { get; }
 
+	// Used by EF Core when it materializes a stored row.
+	private ShippingRate()
+	{
+		DestinationZone = null!;
+		BasePrice = null!;
+		PerKilogramCharge = null!;
+	}
+
 	public ShippingRate(
 		string destinationZone,
 		ShippingServiceLevel serviceLevel,

@@ -150,9 +150,6 @@ public sealed class StaffAuthenticationIntegrationTests : IAsyncLifetime
 	}
 
 	[Theory]
-	[InlineData("malformed-json")]
-	[InlineData("duplicate-staff-id")]
-	[InlineData("unsupported-schema")]
 	[InlineData("unsupported-hash-version")]
 	[InlineData("invalid-salt-base64")]
 	[InlineData("invalid-hash-base64")]
@@ -160,12 +157,11 @@ public sealed class StaffAuthenticationIntegrationTests : IAsyncLifetime
 	[InlineData("invalid-hash-length")]
 	[InlineData("iterations-below-minimum")]
 	[InlineData("iterations-above-maximum")]
-	public async Task SignIn_WithInvalidCredentialDocument_FailsClosed(
-		string invalidDocument)
+	public async Task SignIn_WithInvalidStoredCredential_FailsClosed(
+		string invalidCredential)
 	{
-		await File.WriteAllTextAsync(
-			_credentialFile,
-			CreateInvalidCredentialDocument(invalidDocument));
+		await WriteStaffAsync(StaffRole.BranchManager, isActive: true);
+		await AddCredentialAsync(CreateInvalidCredential(invalidCredential));
 		var client = CreateSecureClient();
 		var token = await GetAntiforgeryTokenAsync(client);
 
@@ -310,8 +306,9 @@ public sealed class StaffAuthenticationIntegrationTests : IAsyncLifetime
 	}
 
 	[Fact]
-	public async Task SignIn_WhenCredentialFileIsMissing_FailsClosedAsUnavailable()
+	public async Task SignIn_WithoutAStoredCredential_IsRefused()
 	{
+		await WriteStaffAsync(StaffRole.BranchManager, isActive: true);
 		var client = CreateSecureClient();
 		var token = await GetAntiforgeryTokenAsync(client);
 
@@ -319,7 +316,7 @@ public sealed class StaffAuthenticationIntegrationTests : IAsyncLifetime
 			client, token, TestStaffId, TestPassword, null);
 
 		Assert.Equal(
-			System.Net.HttpStatusCode.ServiceUnavailable,
+			System.Net.HttpStatusCode.Unauthorized,
 			response.StatusCode);
 		Assert.DoesNotContain(
 			GetSetCookies(response),
@@ -402,23 +399,20 @@ public sealed class StaffAuthenticationIntegrationTests : IAsyncLifetime
 			HashIterations,
 			HashAlgorithmName.SHA256,
 			32);
-		await File.WriteAllTextAsync(
-			_credentialFile,
-			JsonSerializer.Serialize(new
-			{
-				schemaVersion = 1,
-				credentials = new[]
-				{
-					new
-					{
-						staffId,
-						hashVersion = 1,
-						iterations = HashIterations,
-						salt = Convert.ToBase64String(salt),
-						passwordHash = Convert.ToBase64String(hash)
-					}
-				}
-			}));
+		await AddCredentialAsync(new StaffCredential(
+			staffId,
+			1,
+			HashIterations,
+			Convert.ToBase64String(salt),
+			Convert.ToBase64String(hash)));
+	}
+
+	private async Task AddCredentialAsync(StaffCredential credential)
+	{
+		using var scope = _factory.Services.CreateScope();
+		await scope.ServiceProvider
+			.GetRequiredService<IStaffCredentialProvisioning>()
+			.AddMissingAsync([credential]);
 	}
 
 	private static async Task<string> GetAntiforgeryTokenAsync(
@@ -464,80 +458,31 @@ public sealed class StaffAuthenticationIntegrationTests : IAsyncLifetime
 			? values
 			: [];
 
-	private static string CreateInvalidCredentialDocument(string scenario)
+	private static StaffCredential CreateInvalidCredential(string scenario)
 	{
-		if (scenario == "malformed-json")
-			return "{ invalid json";
+		var salt = Convert.ToBase64String(new byte[16]);
+		var hash = Convert.ToBase64String(new byte[32]);
+		var iterations = StaffPasswordHashVerifier.MinimumIterations;
 
-		var validRecord = CreateCredentialRecord(
-			TestStaffId,
-			hashVersion: 1,
-			salt: Convert.ToBase64String(new byte[16]),
-			passwordHash: Convert.ToBase64String(new byte[32]));
-		var schemaVersion = 1;
-		IReadOnlyList<Dictionary<string, object>> records = [validRecord];
-
-		switch (scenario)
+		return scenario switch
 		{
-			case "duplicate-staff-id":
-				records = [validRecord, CreateCredentialRecord(
-					TestStaffId,
-					hashVersion: 1,
-					salt: Convert.ToBase64String(
-						RandomNumberGenerator.GetBytes(16)),
-					passwordHash: Convert.ToBase64String(new byte[32]))];
-				break;
-			case "unsupported-schema":
-				schemaVersion = 2;
-				break;
-			case "unsupported-hash-version":
-				validRecord["hashVersion"] = 2;
-				break;
-			case "invalid-salt-base64":
-				validRecord["salt"] = "not-base64!";
-				break;
-			case "invalid-hash-base64":
-				validRecord["passwordHash"] = "not-base64!";
-				break;
-			case "invalid-salt-length":
-				validRecord["salt"] =
-					Convert.ToBase64String(new byte[15]);
-				break;
-			case "invalid-hash-length":
-				validRecord["passwordHash"] =
-					Convert.ToBase64String(new byte[31]);
-				break;
-			case "iterations-below-minimum":
-				validRecord["iterations"] =
-					StaffPasswordHashVerifier.MinimumIterations - 1;
-				break;
-			case "iterations-above-maximum":
-				validRecord["iterations"] = 2_000_001;
-				break;
-			default:
-				throw new ArgumentOutOfRangeException(nameof(scenario));
-		}
-
-		return JsonSerializer.Serialize(new
-		{
-			schemaVersion,
-			credentials = records
-		});
-	}
-
-	private static Dictionary<string, object> CreateCredentialRecord(
-		string staffId,
-		int hashVersion,
-		string salt,
-		string passwordHash) =>
-		new()
-		{
-			["staffId"] = staffId,
-			["hashVersion"] = hashVersion,
-			["iterations"] = HashIterations,
-			["salt"] = salt,
-			["passwordHash"] = passwordHash
+			"unsupported-hash-version" =>
+				new StaffCredential(TestStaffId, 2, iterations, salt, hash),
+			"invalid-salt-base64" =>
+				new StaffCredential(TestStaffId, 1, iterations, "not-base64!", hash),
+			"invalid-hash-base64" =>
+				new StaffCredential(TestStaffId, 1, iterations, salt, "not-base64!"),
+			"invalid-salt-length" => new StaffCredential(
+				TestStaffId, 1, iterations, Convert.ToBase64String(new byte[15]), hash),
+			"invalid-hash-length" => new StaffCredential(
+				TestStaffId, 1, iterations, salt, Convert.ToBase64String(new byte[31])),
+			"iterations-below-minimum" =>
+				new StaffCredential(TestStaffId, 1, iterations - 1, salt, hash),
+			"iterations-above-maximum" =>
+				new StaffCredential(TestStaffId, 1, 2_000_001, salt, hash),
+			_ => throw new ArgumentOutOfRangeException(nameof(scenario))
 		};
+	}
 
 	private sealed class StaffClaimCapture : IClaimsTransformation
 	{

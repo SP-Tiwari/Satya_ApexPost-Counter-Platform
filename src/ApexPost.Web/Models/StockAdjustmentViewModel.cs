@@ -13,5 +13,5 @@ public sealed class StockAdjustmentViewModel
 
 	public string? BranchName { get; set; }
 	public string? BranchCode { get; set; }
-	public IReadOnlyList<BranchStock> BranchStocks { get; set; } = [];
+	public IReadOnlyList<ApexPost.Application.Persistence.StockRow> BranchStocks { get; set; } = [];
 }

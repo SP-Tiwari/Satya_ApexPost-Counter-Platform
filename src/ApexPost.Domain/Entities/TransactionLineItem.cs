@@ -16,6 +16,13 @@ public sealed class TransactionLineItem
 	// category for them, and no tax rate needs to be configured for it.
 	private const TaxCategory MoneyOrderNominalTaxCategory = TaxCategory.ZeroRated;
 
+	// Used by EF Core when it materializes a stored row.
+	private TransactionLineItem()
+	{
+		Description = null!;
+		UnitPrice = null!;
+	}
+
 	public TransactionLineItem(MoneyOrder moneyOrder)
 		: this(
 			$"Money order to {Required(moneyOrder).Recipient}",

@@ -92,6 +92,29 @@ public sealed class ProblemDetailsExceptionHandlingTests : IAsyncLifetime
 		Assert.DoesNotContain(_rootDirectory, body, StringComparison.OrdinalIgnoreCase);
 		Assert.DoesNotContain(" at ", body, StringComparison.Ordinal);
 	}
+
+	[Theory]
+	[InlineData("concurrency-conflict", 409, "The record was changed by someone else.")]
+	[InlineData("duplicate-record", 409, "The record already exists.")]
+	[InlineData("not-found", 404, "The record was not found.")]
+	[InlineData("invalid-argument", 400, "The request is not valid.")]
+	public async Task KnownException_MapsToItsProblemDetails(
+		string path, int status, string title)
+	{
+		var client = _factory.CreateClient();
+
+		var response = await client.GetAsync($"/__test/{path}");
+
+		Assert.Equal(status, (int)response.StatusCode);
+		Assert.StartsWith(
+			"application/problem+json",
+			response.Content.Headers.ContentType?.ToString());
+		var body = await response.Content.ReadAsStringAsync();
+		using var problem = JsonDocument.Parse(body);
+		Assert.Equal(status, problem.RootElement.GetProperty("status").GetInt32());
+		Assert.Equal(title, problem.RootElement.GetProperty("title").GetString());
+		Assert.DoesNotContain(ExceptionSecret, body, StringComparison.Ordinal);
+	}
 }
 
 [ApiController]
@@ -101,5 +124,27 @@ public sealed class ProblemDetailsExceptionController : ControllerBase
 	[HttpGet("unhandled-error")]
 	public IActionResult ThrowUnexpectedException() =>
 		throw new InvalidOperationException(
+			ProblemDetailsExceptionHandlingTests.ExceptionSecret);
+
+	[HttpGet("concurrency-conflict")]
+	public IActionResult ThrowConcurrencyConflict() =>
+		throw new ApexPost.Application.Persistence.ConcurrencyConflictException(
+			ProblemDetailsExceptionHandlingTests.ExceptionSecret,
+			new InvalidOperationException());
+
+	[HttpGet("duplicate-record")]
+	public IActionResult ThrowDuplicateRecord() =>
+		throw new ApexPost.Application.Persistence.DuplicateRecordException(
+			ProblemDetailsExceptionHandlingTests.ExceptionSecret,
+			new InvalidOperationException());
+
+	[HttpGet("not-found")]
+	public IActionResult ThrowNotFound() =>
+		throw new KeyNotFoundException(
+			ProblemDetailsExceptionHandlingTests.ExceptionSecret);
+
+	[HttpGet("invalid-argument")]
+	public IActionResult ThrowInvalidArgument() =>
+		throw new ArgumentException(
 			ProblemDetailsExceptionHandlingTests.ExceptionSecret);
 }

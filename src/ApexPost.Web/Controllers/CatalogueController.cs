@@ -4,7 +4,7 @@ namespace ApexPost.Web.Controllers;
 // member's home branch. Stock changes go through StockController.
 [Authorize]
 public sealed class CatalogueController(
-	ProductCatalogueApplicationService catalogue) : Controller
+	ScreenQueryApplicationService screens) : Controller
 {
 	[HttpGet]
 	public async Task<IActionResult> Index(CancellationToken cancellationToken)
@@ -15,7 +15,7 @@ public sealed class CatalogueController(
 
 		try
 		{
-			return View(await catalogue.GetCatalogueAsync(
+			return View(await screens.GetCatalogueAsync(
 				staffId, cancellationToken));
 		}
 		catch (UnauthorizedAccessException)

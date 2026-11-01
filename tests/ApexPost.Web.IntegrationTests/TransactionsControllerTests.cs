@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 
 namespace ApexPost.Web.IntegrationTests;
 
-public sealed class TransactionsControllerTests : IAsyncLifetime
+public sealed partial class TransactionsControllerTests : IAsyncLifetime
 {
 	private string _storageDirectory = null!;
 	private WebApplicationFactory<Program> _factory = null!;

@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text.Json;
 using System.Text.Encodings.Web;
 using ApexPost.Application.Auditing;
 using ApexPost.Web.Filters;
@@ -12,14 +11,8 @@ namespace ApexPost.Web.IntegrationTests;
 
 public sealed class AuditActionFilterTests : IAsyncLifetime
 {
-	private static readonly JsonSerializerOptions AuditJsonOptions = new()
-	{
-		PropertyNameCaseInsensitive = true
-	};
 	private string _storageDirectory = null!;
 	private WebApplicationFactory<Program> _factory = null!;
-	private string AuditFilePath =>
-		Path.Combine(_storageDirectory, "audit-events.jsonl");
 
 	public Task InitializeAsync()
 	{
@@ -34,7 +27,6 @@ public sealed class AuditActionFilterTests : IAsyncLifetime
 				builder.UseSetting(
 					"Authentication:CredentialFile",
 					Path.Combine(_storageDirectory, "credentials.json"));
-				builder.UseSetting("Audit:FilePath", AuditFilePath);
 				builder.ConfigureTestServices(services =>
 				{
 					services.AddControllersWithViews()
@@ -140,8 +132,8 @@ public sealed class AuditActionFilterTests : IAsyncLifetime
 		Assert.False(record.RouteValues.ContainsKey("apiKey"));
 		Assert.False(record.RouteValues.ContainsKey("token"));
 		Assert.False(record.RouteValues.ContainsKey("password"));
-		Assert.DoesNotContain("SECRET-KEY", await File.ReadAllTextAsync(AuditFilePath), StringComparison.Ordinal);
-		Assert.DoesNotContain("TOKEN123", await File.ReadAllTextAsync(AuditFilePath), StringComparison.Ordinal);
+		Assert.DoesNotContain("SECRET-KEY", await TestSqlServer.ReadAuditTextAsync(), StringComparison.Ordinal);
+		Assert.DoesNotContain("TOKEN123", await TestSqlServer.ReadAuditTextAsync(), StringComparison.Ordinal);
 	}
 
 	[Fact]
@@ -161,7 +153,7 @@ public sealed class AuditActionFilterTests : IAsyncLifetime
 		Assert.True(record.DurationMilliseconds >= 0);
 		Assert.DoesNotContain(
 			"private action failure",
-			await File.ReadAllTextAsync(AuditFilePath),
+			await TestSqlServer.ReadAuditTextAsync(),
 			StringComparison.Ordinal);
 	}
 
@@ -173,7 +165,7 @@ public sealed class AuditActionFilterTests : IAsyncLifetime
 		var response = await client.GetAsync("/__test/audit/page");
 
 		Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
-		Assert.False(File.Exists(AuditFilePath));
+		Assert.Empty(await TestSqlServer.ReadAuditRecordsAsync());
 	}
 
 	[Fact]
@@ -218,20 +210,12 @@ public sealed class AuditActionFilterTests : IAsyncLifetime
 		Assert.False(record.RouteValues.ContainsKey("documentNumber"));
 		Assert.DoesNotContain(
 			"P1234567",
-			await File.ReadAllTextAsync(AuditFilePath),
+			await TestSqlServer.ReadAuditTextAsync(),
 			StringComparison.Ordinal);
 	}
 
-	private async Task<AuditRecord[]> ReadAuditRecordsAsync()
-	{
-		var lines = await File.ReadAllLinesAsync(AuditFilePath);
-		return lines.Select(line =>
-			JsonSerializer.Deserialize<AuditRecord>(
-				line, AuditJsonOptions)
-				?? throw new InvalidDataException(
-					"Audit record could not be read."))
-			.ToArray();
-	}
+	private static Task<AuditRecord[]> ReadAuditRecordsAsync() =>
+		TestSqlServer.ReadAuditRecordsAsync();
 }
 
 // Audited probes, plus one unaudited action to show the filter is opt-in.

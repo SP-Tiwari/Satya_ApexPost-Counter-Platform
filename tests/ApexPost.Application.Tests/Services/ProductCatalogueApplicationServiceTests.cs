@@ -85,10 +85,10 @@ public sealed class ProductCatalogueApplicationServiceTests
 		out FakeApexPostRepository repository)
 	{
 		repository = new FakeApexPostRepository(snapshot);
-		return new ProductCatalogueApplicationService(
+		return TestServices.ProductCatalogue(
 			repository,
 			new ReferenceDataCache(
-				repository, TimeProvider.System, TimeSpan.FromMinutes(5)));
+				new SnapshotStore(repository), TimeProvider.System, TimeSpan.FromMinutes(5)));
 	}
 
 	private static ApexPostSnapshot CreateSnapshot(

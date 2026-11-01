@@ -26,10 +26,7 @@
       "applicationUrl": "https://localhost:7034",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DemoData__Initialize": "true",
-        "Storage__Directory": "data/demo",
-        "Authentication__CredentialFile": "data/demo/staff-credentials.json",
-        "Audit__FilePath": "data/demo/audit-events.jsonl"
+        "DemoData__Initialize": "true"
       }
     }
   }

@@ -9,7 +9,7 @@ public sealed class MoneyOrder
 	public string Sender { get; }
 	public string Recipient { get; }
 	public Money Fee { get; }
-	public IdentityVerification? IdentityVerification { get; }
+	public IdentityVerification? IdentityVerification { get; private set; }
 	public BranchCode? ProcessingBranchCode { get; }
 
 	// C# 14 field keyword: the locked getter needs no separate backing field.
@@ -22,6 +22,15 @@ public sealed class MoneyOrder
 		}
 		private set;
 	} = MoneyOrderStatus.Issued;
+
+	// Used by EF Core when it materializes a stored row.
+	private MoneyOrder()
+	{
+		Amount = null!;
+		Sender = null!;
+		Recipient = null!;
+		Fee = null!;
+	}
 
 	public MoneyOrder(
 		Money amount,
@@ -63,6 +72,14 @@ public sealed class MoneyOrder
 		Fee = fee;
 		IdentityVerification = identityVerification;
 		ProcessingBranchCode = processingBranchCode;
+	}
+
+	// Used when loading from storage, where the verification is held apart
+	// from the money order. It never replaces a recorded verification.
+	public void RestoreIdentityVerification(IdentityVerification verification)
+	{
+		ArgumentNullException.ThrowIfNull(verification);
+		IdentityVerification ??= verification;
 	}
 
 	public void Cancel()

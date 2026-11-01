@@ -31,8 +31,6 @@ public sealed class CounterScreensIntegrationTests : IAsyncLifetime
 	private string _storageDirectory = null!;
 	private WebApplicationFactory<Program> _factory = null!;
 
-	private string AuditFilePath =>
-		Path.Combine(_storageDirectory, "audit-events.jsonl");
 
 	public Task InitializeAsync()
 	{
@@ -120,6 +118,84 @@ public sealed class CounterScreensIntegrationTests : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task AuditWriteFailure_LeavesTheSaleCommittedAndTheResponseUnchanged()
+	{
+		await SeedAsync();
+		using var failingAudit = _factory.WithWebHostBuilder(builder =>
+			builder.ConfigureTestServices(services =>
+				services.AddSingleton<ApexPost.Application.Auditing.IAuditStore, FailingAuditStore>()));
+		using var client = failingAudit.CreateClient(
+			new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+		client.DefaultRequestHeaders.Add("X-Screens-Role", "CounterClerk");
+		client.DefaultRequestHeaders.Add("X-Screens-StaffId", "clerk-1");
+		var (transactionId, token) = await GetCreateFormAsync(client);
+
+		var response = await client.PostAsync(
+			"/Transactions/Create", CreateSaleForm(transactionId, token));
+
+		Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+		Assert.Contains(
+			(await LoadSnapshotAsync()).TransactionBaskets,
+			basket => basket.Id == transactionId &&
+				basket.PaymentStatus == TransactionPaymentStatus.Paid);
+		Assert.Empty(await ReadAuditRecordsAsync());
+	}
+
+	[Fact]
+	public async Task BusinessFailure_RollsBackButKeepsItsAuditRecord()
+	{
+		await SeedAsync();
+		using var client = CreateClient("CounterClerk", "clerk-1");
+		var (transactionId, token) = await GetCreateFormAsync(client);
+		await client.PostAsync(
+			"/Transactions/Create", CreateSaleForm(transactionId, token));
+		var stockAfterSale = (await LoadSnapshotAsync()).BranchStocks
+			.Select(stock => stock.Quantity)
+			.ToArray();
+
+		var repeated = await client.PostAsync(
+			"/Transactions/Create", CreateSaleForm(transactionId, token));
+
+		Assert.Equal(HttpStatusCode.Conflict, repeated.StatusCode);
+		var snapshot = await LoadSnapshotAsync();
+		Assert.Single(snapshot.TransactionBaskets);
+		Assert.Equal(
+			stockAfterSale,
+			snapshot.BranchStocks.Select(stock => stock.Quantity).ToArray());
+		var records = await ReadAuditRecordsAsync();
+		Assert.Contains(records, record =>
+			record.StatusCode == 409 && record.Outcome == "Rejected");
+		Assert.Contains(records, record => record.StatusCode == 302);
+	}
+
+	[Fact]
+	public async Task Sale_IgnoresPostedStatusAndAuditFields()
+	{
+		await SeedAsync();
+		using var client = CreateClient("CounterClerk", "clerk-1");
+		var (transactionId, token) = await GetCreateFormAsync(client);
+		var form = await CreateSaleForm(transactionId, token).ReadAsStringAsync();
+		var overPosted = new StringContent(
+			form +
+			"&Status=Refunded&PaymentStatus=Voided&Id=" + Guid.NewGuid() +
+			"&BranchCode=BR99&ClerkStaffId=someone-else" +
+			"&CreatedBy=attacker&CreatedAtUtc=2000-01-01&ModifiedAtUtc=2000-01-01" +
+			"&OccurredAtUtc=2000-01-01",
+			System.Text.Encoding.UTF8,
+			"application/x-www-form-urlencoded");
+
+		var response = await client.PostAsync("/Transactions/Create", overPosted);
+
+		Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+		var basket = Assert.Single((await LoadSnapshotAsync()).TransactionBaskets);
+		Assert.Equal(transactionId, basket.Id);
+		Assert.Equal(TransactionPaymentStatus.Paid, basket.PaymentStatus);
+		Assert.Equal(new BranchCode("BR01"), basket.BranchCode);
+		Assert.Equal("clerk-1", basket.SaleDetails?.ClerkStaffId);
+		Assert.NotEqual(2000, basket.OccurredAtUtc?.Year);
+	}
+
+	[Fact]
 	public async Task PageViews_AreNotAudited()
 	{
 		var transactionId = await SeedSaleAsync("clerk-1");
@@ -129,7 +205,7 @@ public sealed class CounterScreensIntegrationTests : IAsyncLifetime
 		await client.GetAsync($"/Transactions/{transactionId}");
 		await client.GetAsync($"/Transactions/{transactionId}/label");
 
-		Assert.False(File.Exists(AuditFilePath));
+		Assert.Empty(await TestSqlServer.ReadAuditRecordsAsync());
 	}
 
 	[Fact]
@@ -310,6 +386,32 @@ public sealed class CounterScreensIntegrationTests : IAsyncLifetime
 			(await client.GetAsync($"/integration/parcel-status/{shipmentId}")).StatusCode);
 	}
 
+	[Theory]
+	[InlineData("0000000000000000000000000000dead", 404, "Not Found")]
+	[InlineData("bad%20id!", 400, "Invalid shipment ID.")]
+	public async Task ParcelStatus_ErrorsAreSafeProblemDetails(
+		string shipmentId,
+		int status,
+		string title)
+	{
+		await SeedSaleAsync("clerk-1");
+		using var client = _factory.CreateClient();
+		client.DefaultRequestHeaders.Add("X-API-Key", PartnerKey);
+
+		var response = await client.GetAsync($"/integration/parcel-status/{shipmentId}");
+
+		Assert.Equal(status, (int)response.StatusCode);
+		Assert.StartsWith(
+			"application/problem+json",
+			response.Content.Headers.ContentType?.ToString());
+		var body = await response.Content.ReadAsStringAsync();
+		using var problem = JsonDocument.Parse(body);
+		Assert.Equal(status, problem.RootElement.GetProperty("status").GetInt32());
+		Assert.Equal(title, problem.RootElement.GetProperty("title").GetString());
+		Assert.DoesNotContain("Exception", body, StringComparison.OrdinalIgnoreCase);
+		Assert.DoesNotContain("clerk-1", body, StringComparison.Ordinal);
+	}
+
 	[Fact]
 	public async Task ParcelStatus_AllowsTheConfiguredWidgetOrigin()
 	{
@@ -334,7 +436,6 @@ public sealed class CounterScreensIntegrationTests : IAsyncLifetime
 				builder.UseSetting(
 					"Authentication:CredentialFile",
 					Path.Combine(_storageDirectory, "credentials.json"));
-				builder.UseSetting("Audit:FilePath", AuditFilePath);
 				builder.UseSetting("Transactions:TaxRates:Standard", "0.1");
 				builder.UseSetting("Transactions:PaymentMethods:0", "Cash");
 				builder.UseSetting("Shipping:TaxCategory", "Standard");
@@ -451,10 +552,8 @@ public sealed class CounterScreensIntegrationTests : IAsyncLifetime
 	private async Task<ApexPostSnapshot> LoadSnapshotAsync() =>
 		await _factory.Services.GetRequiredService<IApexPostRepository>().LoadAsync();
 
-	private async Task<AuditRecord[]> ReadAuditRecordsAsync() =>
-		(await File.ReadAllLinesAsync(AuditFilePath))
-			.Select(line => JsonSerializer.Deserialize<AuditRecord>(line, AuditJsonOptions)!)
-			.ToArray();
+	private static Task<AuditRecord[]> ReadAuditRecordsAsync() =>
+		TestSqlServer.ReadAuditRecordsAsync();
 
 	private static Staff CreateStaff(string id, StaffRole role) =>
 		new(id, id, $"{id}@example.test", role, new BranchCode("BR01"));

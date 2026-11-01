@@ -5,10 +5,10 @@ namespace ApexPost.Infrastructure.Persistence;
 
 // Gives the seeded demo staff a sign-in credential using a password supplied
 // by the operator (user-secrets in Development). The password itself is never
-// stored; only PBKDF2 hashes are written to the separate credential file, and
-// staff who already have a credential keep it.
+// stored; only PBKDF2 hashes are written to the credential store, and staff
+// who already have a credential keep it.
 public sealed class DemoCredentialProvisioner(
-	IApexPostRepository repository,
+	IStaffRepository staff,
 	IStaffCredentialProvisioning credentials)
 {
 	// Returns the number of demo logins added.
@@ -18,15 +18,15 @@ public sealed class DemoCredentialProvisioner(
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
-		var snapshot = await repository.LoadAsync(cancellationToken)
+		var allStaff = await staff.GetStaffAsync(cancellationToken)
 			.ConfigureAwait(false);
 		var provisioned = await credentials.GetStaffIdsAsync(cancellationToken)
 			.ConfigureAwait(false);
-		var demoStaffIds = snapshot.Staff
-			.Where(staff => staff.IsActive &&
-				!provisioned.Contains(staff.Id) &&
-				DemoDataInitializer.DemoStaffIds.Contains(staff.Id, StringComparer.Ordinal))
-			.Select(staff => staff.Id)
+		var demoStaffIds = allStaff
+			.Where(person => person.IsActive &&
+				!provisioned.Contains(person.Id) &&
+				DemoDataInitializer.DemoStaffIds.Contains(person.Id, StringComparer.Ordinal))
+			.Select(person => person.Id)
 			.ToArray();
 		if (demoStaffIds.Length == 0)
 			return 0;

@@ -57,7 +57,7 @@ public sealed class TransactionReadAccessTests
 		var sale = CreateSale(HomeBranch, "clerk-1");
 		var staff = CreateStaff();
 		staff.Single(person => person.Id == "clerk-1").Deactivate();
-		var service = new TransactionApplicationService(
+		var service = TestServices.Transactions(
 			new FakeApexPostRepository(CreateSnapshot([sale], staff)));
 
 		await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
@@ -97,7 +97,7 @@ public sealed class TransactionReadAccessTests
 		var sale = CreateSale(HomeBranch, "clerk-1");
 		var repository = new FakeApexPostRepository(
 			CreateSnapshot([sale], CreateStaff()));
-		var service = new TransactionApplicationService(repository);
+		var service = TestServices.Transactions(repository);
 
 		await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
 			service.GetTransactionBasketsAsync("clerk-1"));
@@ -112,7 +112,7 @@ public sealed class TransactionReadAccessTests
 
 	private static TransactionApplicationService CreateService(
 		params TransactionBasket[] baskets) =>
-		new(new FakeApexPostRepository(CreateSnapshot(baskets, CreateStaff())));
+		TestServices.Transactions(new FakeApexPostRepository(CreateSnapshot(baskets, CreateStaff())));
 
 	private static TransactionBasket CreateSale(
 		BranchCode branchCode,

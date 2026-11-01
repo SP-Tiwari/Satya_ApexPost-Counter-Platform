@@ -16,11 +16,12 @@ public sealed record ParcelStatus(
 	CourierTrackingResult? Courier);
 
 public sealed class ParcelStatusApplicationService(
-	IApexPostRepository repository,
-	ICourierTrackingService? courier = null)
+	ICounterTransactionRepository transactions,
+	ICourierTrackingService? courier = null,
+	IScreenQueryService? queries = null)
 {
-	private readonly IApexPostRepository _repository = repository
-		?? throw new ArgumentNullException(nameof(repository));
+	private readonly ICounterTransactionRepository _transactions = transactions
+		?? throw new ArgumentNullException(nameof(transactions));
 
 	// Returns null when no transaction contains the shipment.
 	public async Task<ParcelStatus?> GetStatusAsync(
@@ -29,19 +30,21 @@ public sealed class ParcelStatusApplicationService(
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(shipmentId);
 
-		var snapshot = await _repository.LoadAsync(cancellationToken)
+		if (queries is not null)
+			return await GetProjectedStatusAsync(queries, shipmentId, cancellationToken)
+				.ConfigureAwait(false);
+
+		var basket = await _transactions
+			.FindByShipmentIdAsync(shipmentId, cancellationToken)
 			.ConfigureAwait(false);
-		var match = snapshot.TransactionBaskets
-			.SelectMany(basket => basket.LineItems
-				.Where(lineItem => string.Equals(
-					lineItem.ShippingItem?.Id, shipmentId, StringComparison.Ordinal))
-				.Select(lineItem => (Basket: basket, Shipment: lineItem.ShippingItem!)))
-			.Take(2)
-			.ToArray();
-		if (match.Length != 1)
+		var shipment = basket?.LineItems
+			.Select(lineItem => lineItem.ShippingItem)
+			.OfType<ShippingItem>()
+			.FirstOrDefault(item => string.Equals(
+				item.Id, shipmentId, StringComparison.Ordinal));
+		if (basket is null || shipment is null)
 			return null;
 
-		var (basket, shipment) = match[0];
 		var courierResult = courier is null
 			? null
 			: await courier.GetTrackingAsync(shipment.Id, cancellationToken)
@@ -54,6 +57,36 @@ public sealed class ParcelStatusApplicationService(
 			shipment.DestinationZone,
 			basket.OccurredAtUtc,
 			basket.PaymentStatus,
+			courierResult);
+	}
+
+	// The ID column ignores case and shipment IDs do not, so it is compared
+	// again after the query.
+	private async Task<ParcelStatus?> GetProjectedStatusAsync(
+		IScreenQueryService queries,
+		string shipmentId,
+		CancellationToken cancellationToken)
+	{
+		var parcel = await queries.FindParcelAsync(shipmentId, cancellationToken)
+			.ConfigureAwait(false);
+		if (parcel is null ||
+			!string.Equals(parcel.ShipmentId, shipmentId, StringComparison.Ordinal))
+		{
+			return null;
+		}
+
+		var courierResult = courier is null
+			? null
+			: await courier.GetTrackingAsync(parcel.ShipmentId, cancellationToken)
+				.ConfigureAwait(false);
+
+		return new ParcelStatus(
+			parcel.ShipmentId,
+			parcel.Type,
+			parcel.ServiceLevel,
+			parcel.DestinationZone,
+			parcel.AcceptedAtUtc,
+			parcel.TransactionStatus,
 			courierResult);
 	}
 }
