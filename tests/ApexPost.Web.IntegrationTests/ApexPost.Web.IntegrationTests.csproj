@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\DisposableSqlDatabase.cs" Link="DisposableSqlDatabase.cs" />
+    <Compile Include="..\Shared\SqlTestSettings.cs" Link="SqlTestSettings.cs" />
   </ItemGroup>
 
 </Project>

@@ -259,6 +259,14 @@ dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
 
-At the Week 3 checkpoint on 2026-11-01, all 787 tests passed with 0 warnings: Domain 224, Application 120, Infrastructure 159, Web 284.
+On 2026-11-01, all 892 tests passed with 0 warnings: Domain 224, Application 120, Infrastructure 261, Web 287. The [test results](docs/evidence/week3-test-results.md) record the run.
 
-The SQL tests need the local default SQL Server instance (`.`), Windows authentication with permission to create databases, and the `E:\SqlData\ApexPost` folder, because disposable test databases keep their files in `E:\SqlData\ApexPost\Tests`.
+The SQL tests need a local SQL Server instance and Windows authentication with permission to create databases. By default they use the instance `.` and keep disposable database files in `E:\SqlData\ApexPost\Tests`. On another machine, set these environment variables:
+
+| Variable | Default | Accepts |
+|---|---|---|
+| `APEXPOST_TEST_SQL_SERVER` | `.` | A local instance only: `.`, `(local)` or `localhost`, each with an optional `\INSTANCE`, or `(localdb)\NAME`. Remote hosts, IP addresses, ports and protocol prefixes are refused |
+| `APEXPOST_TEST_DATA_DIRECTORY` | `E:\SqlData\ApexPost\Tests` | An absolute local folder of at most 73 characters that the SQL Server service account can write to. No part may end in a dot or space |
+| `APEXPOST_TEST_OTHER_MACHINE` | Not set | `true`, required with any other data folder, to confirm this is not the development machine |
+
+An invalid value stops the tests, and they never fall back to another location. If `E:\SqlData\ApexPost` exists, the data folder cannot be changed. Before migrating, the fixture confirms the database exists with both files in the configured folder, and stops otherwise. It connects only to `master` and its own `ApexPost_Test_*` databases, so it can't reach `ApexPostDb`. These overrides have only been tested without a database, not in a full run on another machine.

@@ -17,7 +17,8 @@ The existing exception types stay, and each maps by meaning:
 |---|---|---|
 | `ArgumentException` | The value is invalid | 400 |
 | `KeyNotFoundException` | The record does not exist | 404 |
-| `InvalidOperationException` | The current state refuses a valid request | 409 |
+| `InvalidOperationException` caught by a form route | The current state refuses a valid request | 409 |
+| `InvalidOperationException` reaching the handler | A configuration or data fault, such as a missing tax rate | 500, logged |
 | `DuplicateRecordException`, `ConcurrencyConflictException` | A unique violation or a concurrency conflict | 409 |
 
 So **this is a deviation from the brief's wording for state conflicts only.** Invalid values are 400, as the brief says.
@@ -32,4 +33,5 @@ Browser forms answer with their view and the same status. `ApplicationExceptionH
 ## Consequences
 
 - `CreateTransaction_InvalidParcelOrInsufficientStockIsNotPersisted` pins the 409 for a sale.
+- The sale, void, refund, stock and administration routes catch their state conflicts. `InvalidOperationException` is also used for configuration and data faults, so `ApplicationExceptionHandler` deliberately has no general mapping for it: a 409 would present a fault as a conflict and stop it being logged. `ApplicationExceptionHandlerTests` pins this. `ConcurrencyConflictException` and `DuplicateRecordException` derive from it and stay 409.
 - The trainer needs to confirm this reading of Part G. Changing it would affect the status codes and tests, not any business rule.
