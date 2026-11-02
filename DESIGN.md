@@ -261,6 +261,14 @@ Week 3 M1 added the schema and mapping, and M3 moved the application onto them. 
 
 Every table also has `CreatedAtUtc`, `CreatedBy` and `ModifiedAtUtc`, left out here for space.
 
+Cardinalities follow the nullability of each foreign key:
+- **Optional sale details.** `CounterTransactions.CounterId` and `ClerkStaffId` are nullable together (`CK_CounterTransactions_SaleDetails`), so a transaction has zero or one counter and clerk.
+- **Optional line links.** `TransactionLines.Sku`, `ShipmentId` and `MoneyOrderId` are nullable, and the last two have filtered unique indexes, so a shipment or money order is billed on at most one line.
+- **Empty baskets.** A transaction can have zero lines: `TransactionApplicationService.CreateBasketAsync` saves an empty `Open` basket, and only payment requires a line.
+- **Composite counter key.** The counter link is the composite key `(BranchCode, CounterId)`, added by hand in `InitialCreate`.
+- **Delete behaviours.** All 22 foreign keys are `NO ACTION` except `TransactionTaxRates` → `CounterTransactions` (`CASCADE`), as in [ADR 0018](docs/adr/0018-schema-design-and-delete-behaviours.md).
+- **No audit links.** `AuditEntries` has no foreign keys.
+
 ```mermaid
 erDiagram
     Branches ||--o{ Counters : has
@@ -270,20 +278,20 @@ erDiagram
     Branches ||--o{ MoneyOrders : processes
     Roles ||--o{ Staff : assigns
     Staff ||--o| StaffCredentials : "signs in with"
-    Staff ||--o{ CounterTransactions : "clerk of"
+    Staff |o--o{ CounterTransactions : "clerk of"
     Staff ||--o{ StockAdjustments : makes
     ProductCategories ||--o{ Products : groups
     Products ||--o{ BranchStock : "stocked as"
-    Products ||--o{ TransactionLines : "sold as"
+    Products |o--o{ TransactionLines : "sold as"
     BranchStock ||--o{ StockAdjustments : "changed by"
     ShippingZones ||--o{ ShippingRates : prices
     ShippingZones ||--o{ Shipments : "destination of"
-    Counters ||--o{ CounterTransactions : takes
-    CounterTransactions ||--|{ TransactionLines : contains
+    Counters |o--o{ CounterTransactions : takes
+    CounterTransactions ||--o{ TransactionLines : contains
     CounterTransactions ||--o{ TransactionTaxRates : captures
     CounterTransactions ||--o{ Payments : "paid by"
-    Shipments ||--o| TransactionLines : "billed on"
-    MoneyOrders ||--o| TransactionLines : "billed on"
+    Shipments |o--o| TransactionLines : "billed on"
+    MoneyOrders |o--o| TransactionLines : "billed on"
     MoneyOrders ||--o| IdentityVerifications : "verified by"
 
     Branches {
