@@ -3,9 +3,15 @@
     ViewData["Title"] = "Create transaction";
 }
 
-<h1>Create transaction</h1>
+<div class="page-header">
+    <div>
+        <p class="page-eyebrow">Counter</p>
+        <h1>Create transaction</h1>
+        <p class="page-subtitle">Sell goods, shipping and money orders in a single counter transaction.</p>
+    </div>
+</div>
 
-<div asp-validation-summary="All" class="text-danger" role="alert"></div>
+<partial name="_ValidationSummary" />
 
 @if (Model.Branch is null)
 {
@@ -33,222 +39,286 @@
 <form asp-controller="Transactions" asp-action="Create" method="post">
     <input asp-for="TransactionId" type="hidden" />
 
-    @if (Model.Branch is not null)
-    {
-        <p>Processing branch: @Model.Branch.Name (@Model.Branch.Code)</p>
-    }
-
-    <fieldset class="mb-4">
-        <legend>Counter and payment</legend>
-        @if (Model.CounterTerminals.Count == 0)
-        {
-            <p class="alert alert-warning" role="status">
-                Your branch has no active counter terminal.
-            </p>
-        }
-        @if (Model.PaymentMethods.Count == 0)
-        {
-            <p class="alert alert-warning" role="status">
-                Configure payment methods before processing transactions.
-            </p>
-        }
-        <div class="mb-3">
-            <label asp-for="CounterTerminalId" class="form-label">Counter terminal</label>
-            <select asp-for="CounterTerminalId" class="form-select">
-                <option value="">Select a counter</option>
-                @foreach (var terminal in Model.CounterTerminals)
-                {
-                    <option value="@terminal.Id">@terminal.Name (@terminal.Id)</option>
-                }
-            </select>
-            <span asp-validation-for="CounterTerminalId" class="text-danger"></span>
-        </div>
-        <div class="mb-3">
-            <label asp-for="PaymentMethod" class="form-label">Payment method</label>
-            <select asp-for="PaymentMethod" class="form-select">
-                <option value="">Select a payment method</option>
-                @foreach (var method in Model.PaymentMethods)
-                {
-                    <option value="@method">@method</option>
-                }
-            </select>
-            <span asp-validation-for="PaymentMethod" class="text-danger"></span>
-        </div>
-    </fieldset>
-
-    <fieldset class="mb-4">
-        <legend>Goods (optional)</legend>
-        <div id="goods-lines">
-            @for (var row = 0; row < Model.GoodsSku.Count; row++)
-            {
-                var selectedSku = Model.GoodsSku[row];
-                var quantity = row < Model.GoodsQuantity.Count ? Model.GoodsQuantity[row] : null;
-                <div class="row goods-line">
-                    <div class="col-md-8 mb-3">
-                        <label class="form-label" for="goods-sku-@row">Product</label>
-                        <select id="goods-sku-@row" name="GoodsSku" class="form-select">
-                            <option value="">No product</option>
-                            @foreach (var product in Model.Products)
-                            {
-                                <option value="@product.Sku" selected="@(product.Sku == selectedSku)">
-                                    @product.Name (@product.UnitPrice @product.Currency)
-                                </option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label" for="goods-quantity-@row">Quantity</label>
-                        <input id="goods-quantity-@row" name="GoodsQuantity" type="number" min="1"
-                               class="form-control" value="@quantity" />
+    <div class="row g-3">
+        <div class="col-xl-8">
+            <section class="card form-section">
+                <div class="card-header">
+                    <div>
+                        <h2 class="form-section-title">@Html.Icon("terminal", "icon-sm") Counter and payment</h2>
+                        <p class="form-section-hint">Where the sale is recorded and how the customer pays.</p>
                     </div>
                 </div>
+                <div class="card-body">
+                    @if (Model.CounterTerminals.Count == 0)
+                    {
+                        <p class="alert alert-warning" role="status">
+                            Your branch has no active counter terminal.
+                        </p>
+                    }
+                    @if (Model.PaymentMethods.Count == 0)
+                    {
+                        <p class="alert alert-warning" role="status">
+                            Configure payment methods before processing transactions.
+                        </p>
+                    }
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="CounterTerminalId" class="form-label required">Counter terminal</label>
+                            <select asp-for="CounterTerminalId" class="form-select">
+                                <option value="">Select a counter</option>
+                                @foreach (var terminal in Model.CounterTerminals)
+                                {
+                                    <option value="@terminal.Id">@terminal.Name (@terminal.Id)</option>
+                                }
+                            </select>
+                            <span asp-validation-for="CounterTerminalId" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="PaymentMethod" class="form-label required">Payment method</label>
+                            <select asp-for="PaymentMethod" class="form-select">
+                                <option value="">Select a payment method</option>
+                                @foreach (var method in Model.PaymentMethods)
+                                {
+                                    <option value="@method">@method</option>
+                                }
+                            </select>
+                            <span asp-validation-for="PaymentMethod" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card form-section">
+                <div class="card-header">
+                    <div>
+                        <h2 class="form-section-title">@Html.Icon("package", "icon-sm") Goods (optional)</h2>
+                        <p class="form-section-hint">Products in stock at your branch.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="goods-lines">
+                        @for (var row = 0; row < Model.GoodsSku.Count; row++)
+                        {
+                            var selectedSku = Model.GoodsSku[row];
+                            var quantity = row < Model.GoodsQuantity.Count ? Model.GoodsQuantity[row] : null;
+                            <div class="row goods-line">
+                                <div class="col-md-8 mb-3">
+                                    <label class="form-label" for="goods-sku-@row">Product</label>
+                                    <select id="goods-sku-@row" name="GoodsSku" class="form-select">
+                                        <option value="">No product</option>
+                                        @foreach (var product in Model.Products)
+                                        {
+                                            <option value="@product.Sku" selected="@(product.Sku == selectedSku)">
+                                                @product.Name (@product.UnitPrice @product.Currency)
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label" for="goods-quantity-@row">Quantity</label>
+                                    <input id="goods-quantity-@row" name="GoodsQuantity" type="number" min="1"
+                                           class="form-control" placeholder="1" value="@quantity" />
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <span asp-validation-for="GoodsSku" class="text-danger"></span>
+                    <span asp-validation-for="GoodsQuantity" class="text-danger"></span>
+                    <div>
+                        <button type="button" id="add-goods-line" class="btn btn-sm btn-outline-secondary" hidden>
+                            @Html.Icon("plus", "icon-sm") Add another product line
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card form-section">
+                <div class="card-header">
+                    <div>
+                        <h2 class="form-section-title">@Html.Icon("truck", "icon-sm") Shipping service (optional)</h2>
+                        <p class="form-section-hint">Rates come from the configured destination zones and service levels.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="form-check check-card mb-3">
+                        <input asp-for="IncludeShipping" class="form-check-input" />
+                        <label asp-for="IncludeShipping" class="form-check-label">
+                            Include a shipping item
+                        </label>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label asp-for="ShippingType" class="form-label">Item type</label>
+                            <select asp-for="ShippingType" class="form-select">
+                                <option value="">Select a type</option>
+                                @foreach (var itemType in Enum.GetValues<ApexPost.Domain.Enums.ShippingItemType>())
+                                {
+                                    <option value="@itemType">@itemType</option>
+                                }
+                            </select>
+                            <span asp-validation-for="ShippingType" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label asp-for="DestinationZone" class="form-label">Destination zone</label>
+                            <select asp-for="DestinationZone" class="form-select">
+                                <option value="">Select a configured destination</option>
+                                @foreach (var zone in Model.ShippingRates
+                                    .Select(rate => rate.DestinationZone)
+                                    .Distinct(StringComparer.Ordinal))
+                                {
+                                    <option value="@zone">@zone</option>
+                                }
+                            </select>
+                            <span asp-validation-for="DestinationZone" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label asp-for="ServiceLevel" class="form-label">Service level</label>
+                            <select asp-for="ServiceLevel" class="form-select">
+                                <option value="">Select a configured service level</option>
+                                @foreach (var level in Model.ShippingRates
+                                    .Select(rate => rate.ServiceLevel)
+                                    .Distinct())
+                                {
+                                    <option value="@level">@level</option>
+                                }
+                            </select>
+                            <span asp-validation-for="ServiceLevel" class="text-danger"></span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6 col-md-3 mb-3">
+                            <label asp-for="WeightKilograms" class="form-label">Weight (kg)</label>
+                            <input asp-for="WeightKilograms" type="number" min="0.001" step="any" class="form-control" placeholder="0.000" />
+                            <span asp-validation-for="WeightKilograms" class="text-danger"></span>
+                        </div>
+                        <div class="col-sm-6 col-md-3 mb-3">
+                            <label asp-for="LengthCm" class="form-label">Length (cm)</label>
+                            <input asp-for="LengthCm" type="number" min="0.001" step="any" class="form-control" />
+                            <span asp-validation-for="LengthCm" class="text-danger"></span>
+                        </div>
+                        <div class="col-sm-6 col-md-3 mb-3">
+                            <label asp-for="WidthCm" class="form-label">Width (cm)</label>
+                            <input asp-for="WidthCm" type="number" min="0.001" step="any" class="form-control" />
+                            <span asp-validation-for="WidthCm" class="text-danger"></span>
+                        </div>
+                        <div class="col-sm-6 col-md-3 mb-3">
+                            <label asp-for="HeightCm" class="form-label">Height (cm)</label>
+                            <input asp-for="HeightCm" type="number" min="0.001" step="any" class="form-control" />
+                            <span asp-validation-for="HeightCm" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            @if (Model.MoneyOrders is { } moneyOrderTerms)
+            {
+                <section class="card form-section">
+                    <div class="card-header">
+                        <div>
+                            <h2 class="form-section-title">@Html.Icon("money", "icon-sm") Money order (optional)</h2>
+                            <p class="form-section-hint">
+                                Fee: @moneyOrderTerms.Fee @moneyOrderTerms.Currency.
+                                Amounts above @moneyOrderTerms.HighValueThreshold
+                                @moneyOrderTerms.Currency require a successful
+                                identity verification, which the system performs.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check check-card mb-3">
+                            <input asp-for="IncludeMoneyOrder" class="form-check-input" />
+                            <label asp-for="IncludeMoneyOrder" class="form-check-label">
+                                Include a money order
+                            </label>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label asp-for="MoneyOrderAmount" class="form-label">
+                                    Amount (@moneyOrderTerms.Currency)
+                                </label>
+                                <input asp-for="MoneyOrderAmount" type="number" min="0.01" step="0.01" class="form-control" placeholder="0.00" />
+                                <span asp-validation-for="MoneyOrderAmount" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label asp-for="MoneyOrderSender" class="form-label">Sender</label>
+                                <input asp-for="MoneyOrderSender" class="form-control" placeholder="Sender name" />
+                                <span asp-validation-for="MoneyOrderSender" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label asp-for="MoneyOrderRecipient" class="form-label">Recipient</label>
+                                <input asp-for="MoneyOrderRecipient" class="form-control" placeholder="Recipient name" />
+                                <span asp-validation-for="MoneyOrderRecipient" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="MoneyOrderDocumentType" class="form-label">
+                                    Identity document type
+                                </label>
+                                <input asp-for="MoneyOrderDocumentType" class="form-control" />
+                                <span asp-validation-for="MoneyOrderDocumentType" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="MoneyOrderDocumentIdentifier" class="form-label">
+                                    Identity document number
+                                </label>
+                                <input asp-for="MoneyOrderDocumentIdentifier" class="form-control" autocomplete="off" value="" />
+                                <div class="form-text">Only the last four characters are stored.</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
             }
         </div>
-        <span asp-validation-for="GoodsSku" class="text-danger"></span>
-        <span asp-validation-for="GoodsQuantity" class="text-danger"></span>
-        <div>
-            <button type="button" id="add-goods-line" class="btn btn-outline-secondary" hidden>
-                Add another product line
-            </button>
-        </div>
-    </fieldset>
 
-    <fieldset class="mb-4">
-        <legend>Shipping service (optional)</legend>
-        <div class="form-check mb-3">
-            <input asp-for="IncludeShipping" class="form-check-input" />
-            <label asp-for="IncludeShipping" class="form-check-label">
-                Include a shipping item
-            </label>
-        </div>
-        <div class="mb-3">
-            <label asp-for="ShippingType" class="form-label">Item type</label>
-            <select asp-for="ShippingType" class="form-select">
-                <option value="">Select a type</option>
-                @foreach (var itemType in Enum.GetValues<ApexPost.Domain.Enums.ShippingItemType>())
-                {
-                    <option value="@itemType">@itemType</option>
-                }
-            </select>
-            <span asp-validation-for="ShippingType" class="text-danger"></span>
-        </div>
-        <div class="mb-3">
-            <label asp-for="DestinationZone" class="form-label">Destination zone</label>
-            <select asp-for="DestinationZone" class="form-select">
-                <option value="">Select a configured destination</option>
-                @foreach (var zone in Model.ShippingRates
-                    .Select(rate => rate.DestinationZone)
-                    .Distinct(StringComparer.Ordinal))
-                {
-                    <option value="@zone">@zone</option>
-                }
-            </select>
-            <span asp-validation-for="DestinationZone" class="text-danger"></span>
-        </div>
-        <div class="mb-3">
-            <label asp-for="ServiceLevel" class="form-label">Service level</label>
-            <select asp-for="ServiceLevel" class="form-select">
-                <option value="">Select a configured service level</option>
-                @foreach (var level in Model.ShippingRates
-                    .Select(rate => rate.ServiceLevel)
-                    .Distinct())
-                {
-                    <option value="@level">@level</option>
-                }
-            </select>
-            <span asp-validation-for="ServiceLevel" class="text-danger"></span>
-        </div>
-        <div class="mb-3">
-            <label asp-for="WeightKilograms" class="form-label">Weight (kg)</label>
-            <input asp-for="WeightKilograms" type="number" min="0.001" step="any" class="form-control" />
-            <span asp-validation-for="WeightKilograms" class="text-danger"></span>
-        </div>
-        <div class="row">
-            <div class="col-md-4 mb-3">
-                <label asp-for="LengthCm" class="form-label">Length (cm)</label>
-                <input asp-for="LengthCm" type="number" min="0.001" step="any" class="form-control" />
-                <span asp-validation-for="LengthCm" class="text-danger"></span>
-            </div>
-            <div class="col-md-4 mb-3">
-                <label asp-for="WidthCm" class="form-label">Width (cm)</label>
-                <input asp-for="WidthCm" type="number" min="0.001" step="any" class="form-control" />
-                <span asp-validation-for="WidthCm" class="text-danger"></span>
-            </div>
-            <div class="col-md-4 mb-3">
-                <label asp-for="HeightCm" class="form-label">Height (cm)</label>
-                <input asp-for="HeightCm" type="number" min="0.001" step="any" class="form-control" />
-                <span asp-validation-for="HeightCm" class="text-danger"></span>
-            </div>
-        </div>
-        @if (Model.ShippingRates.Count > 0)
-        {
-            <h3>Configured shipping rates</h3>
-            <ul>
-                @foreach (var rate in Model.ShippingRates)
-                {
-                    <li>
-                        @rate.DestinationZone / @rate.ServiceLevel:
-                        @rate.BasePrice @rate.BasePriceCurrency base +
-                        @rate.PerKilogramCharge @rate.PerKilogramChargeCurrency per kg
-                    </li>
-                }
-            </ul>
-        }
-    </fieldset>
+        <div class="col-xl-4">
+            <aside class="card form-section">
+                <div class="card-header">
+                    <h2 class="form-section-title">@Html.Icon("building", "icon-sm") Processing branch</h2>
+                </div>
+                <div class="card-body">
+                    @if (Model.Branch is not null)
+                    {
+                        <p class="mb-0">Processing branch: @Model.Branch.Name (@Model.Branch.Code)</p>
+                    }
+                    else
+                    {
+                        <p class="mb-0 text-secondary">No branch is available.</p>
+                    }
+                </div>
+            </aside>
 
-    @if (Model.MoneyOrders is { } moneyOrderTerms)
-    {
-        <fieldset class="mb-4">
-            <legend>Money order (optional)</legend>
-            <div class="form-check mb-3">
-                <input asp-for="IncludeMoneyOrder" class="form-check-input" />
-                <label asp-for="IncludeMoneyOrder" class="form-check-label">
-                    Include a money order
-                </label>
-            </div>
-            <p>
-                Fee: @moneyOrderTerms.Fee @moneyOrderTerms.Currency.
-                Amounts above @moneyOrderTerms.HighValueThreshold
-                @moneyOrderTerms.Currency require a successful
-                identity verification, which the system performs.
-            </p>
-            <div class="mb-3">
-                <label asp-for="MoneyOrderAmount" class="form-label">
-                    Amount (@moneyOrderTerms.Currency)
-                </label>
-                <input asp-for="MoneyOrderAmount" type="number" min="0.01" step="0.01" class="form-control" />
-                <span asp-validation-for="MoneyOrderAmount" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="MoneyOrderSender" class="form-label">Sender</label>
-                <input asp-for="MoneyOrderSender" class="form-control" />
-                <span asp-validation-for="MoneyOrderSender" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="MoneyOrderRecipient" class="form-label">Recipient</label>
-                <input asp-for="MoneyOrderRecipient" class="form-control" />
-                <span asp-validation-for="MoneyOrderRecipient" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="MoneyOrderDocumentType" class="form-label">
-                    Identity document type
-                </label>
-                <input asp-for="MoneyOrderDocumentType" class="form-control" />
-                <span asp-validation-for="MoneyOrderDocumentType" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="MoneyOrderDocumentIdentifier" class="form-label">
-                    Identity document number
-                </label>
-                <input asp-for="MoneyOrderDocumentIdentifier" class="form-control" autocomplete="off" value="" />
-                <div class="form-text">Only the last four characters are stored.</div>
-            </div>
-        </fieldset>
-    }
+            @if (Model.ShippingRates.Count > 0)
+            {
+                <aside class="card form-section">
+                    <div class="card-header">
+                        <h3 class="form-section-title">@Html.Icon("tag", "icon-sm") Configured shipping rates</h3>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0 d-grid gap-2 small">
+                            @foreach (var rate in Model.ShippingRates)
+                            {
+                                <li>
+                                    @rate.DestinationZone / @rate.ServiceLevel:
+                                    @rate.BasePrice @rate.BasePriceCurrency base +
+                                    @rate.PerKilogramCharge @rate.PerKilogramChargeCurrency per kg
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </aside>
+            }
 
-    <button type="submit" class="btn btn-primary" disabled="@(!Model.CanSubmit)">
-        Process transaction
-    </button>
+            <div class="card form-section">
+                <div class="card-body">
+                    <p class="small text-secondary">Totals, tax and any identity check are calculated when the transaction is processed.</p>
+                    <button type="submit" class="btn btn-primary w-100" disabled="@(!Model.CanSubmit)">
+                        Process transaction
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </form>
 
 @section Scripts {

@@ -1,61 +1,122 @@
 @model IReadOnlyList<ApexPost.Web.Models.MoneyOrderListItemViewModel>
 @{
     ViewData["Title"] = "Money orders";
+    var issued = Model.Count(order => order.Status.ToString() == "Issued");
+    var passed = Model.Count(order => order.IdentityCheckPassed == true);
+    var failed = Model.Count(order => order.IdentityCheckPassed == false);
+    var notRequired = Model.Count(order => order.IdentityCheckPassed is null);
 }
 
-<h1>Money orders</h1>
-
-@if (TempData["MoneyOrderStatus"] is string statusMessage)
-{
-    <div class="alert alert-success" role="status">@statusMessage</div>
+@section Toasts {
+    @if (TempData["MoneyOrderStatus"] is string statusMessage)
+    {
+        <partial name="_StatusToast" model="@(new StatusToastViewModel(statusMessage))" />
+    }
 }
 
-<p>
-    Money orders are issued as part of a counter transaction.
-    <a class="btn btn-primary" asp-controller="Transactions" asp-action="Create">
-        New counter transaction
-    </a>
-</p>
+<div class="page-header">
+    <div>
+        <p class="page-eyebrow">Counter</p>
+        <h1>Money orders</h1>
+        <p class="page-subtitle">Money orders are issued as part of a counter transaction.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-primary" asp-controller="Transactions" asp-action="Create">
+            @Html.Icon("plus", "icon-sm") New counter transaction
+        </a>
+    </div>
+</div>
 
 @if (Model.Count == 0)
 {
-    <p>No money orders have been processed.</p>
+    <div class="card">
+        <partial name="_EmptyState" model="@(new EmptyStateViewModel("money", "No money orders have been processed."))" />
+    </div>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th scope="col">Amount</th>
-                <th scope="col">Sender</th>
-                <th scope="col">Recipient</th>
-                <th scope="col">Fee</th>
-                <th scope="col">Identity check</th>
-                <th scope="col">Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var order in Model)
-            {
-                <tr>
-                    <td>@order.Amount @order.Currency</td>
-                    <td>@order.Sender</td>
-                    <td>@order.Recipient</td>
-                    <td>@order.Fee @order.Currency</td>
-                    <td>
-                        @if (order.IdentityCheckPassed is bool passed)
-                        {
-                            <span>@(passed ? "Passed" : "Failed")</span>
-                            <span>@order.DocumentType @order.MaskedDocumentIdentifier</span>
-                        }
-                        else
-                        {
-                            <span>Not required</span>
-                        }
-                    </td>
-                    <td>@order.Status</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="row g-3 mb-3">
+        <div class="col-lg-8">
+            <div class="row g-3">
+                <div class="col-sm-6">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <span class="kpi-icon">@Html.Icon("money")</span>
+                            <div>
+                                <p class="kpi-label">Money orders</p>
+                                <p class="kpi-value">@Model.Count</p>
+                                <p class="kpi-meta">@issued issued, @(Model.Count - issued) cancelled</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <span class="kpi-icon tone-success">@Html.Icon("shield")</span>
+                            <div>
+                                <p class="kpi-label">Identity checks</p>
+                                <p class="kpi-value">@(passed + failed)</p>
+                                <p class="kpi-meta">@passed passed, @failed failed</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h2 class="card-title-sm">@Html.Icon("shield", "icon-sm") Identity check outcomes</h2>
+                </div>
+                <div class="card-body">
+                    <partial name="_DonutChart" model="@(new DonutChartViewModel(
+                        [new ChartPoint("Passed", passed), new ChartPoint("Failed", failed), new ChartPoint("Not required", notRequired)],
+                        Model.Count.ToString(),
+                        "money orders"))" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        <div class="table-responsive">
+            <table class="table table-hover" data-table data-filter-column="5" data-filter-label="statuses"
+                   data-search-placeholder="Search by sender or recipient" aria-label="Money orders">
+                <thead>
+                    <tr>
+                        <th scope="col">Amount</th>
+                        <th scope="col">Sender</th>
+                        <th scope="col">Recipient</th>
+                        <th scope="col">Fee</th>
+                        <th scope="col">Identity check</th>
+                        <th scope="col">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model)
+                    {
+                        <tr>
+                            <td class="table-numeric fw-semibold">@order.Amount @order.Currency</td>
+                            <td>@order.Sender</td>
+                            <td>@order.Recipient</td>
+                            <td class="table-numeric">@order.Fee @order.Currency</td>
+                            <td>
+                                @if (order.IdentityCheckPassed is bool checkPassed)
+                                {
+                                    @Html.StatusBadge(checkPassed ? "Passed" : "Failed")
+                                    <span class="d-block small text-secondary mt-1">@order.DocumentType @order.MaskedDocumentIdentifier</span>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary">Not required</span>
+                                }
+                            </td>
+                            <td>@Html.StatusBadge(order.Status)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }

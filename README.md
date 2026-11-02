@@ -32,6 +32,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 - **Filters:** opt-in `[Audited]` business-action audit with real status codes, a validation filter for MVC forms and API endpoints, and a slow-action filter.
 - **Persistence:** SQL Server through EF Core 10, with repositories and a Unit of Work. Credentials and audit entries are tables too. See [DESIGN.md](DESIGN.md#44-sql-server-schema).
 - **Demo:** a one-command demo with documented logins, described in the next section.
+- **User interface:** a responsive dashboard layout with a role-based sidebar, KPI cards and SVG charts built from each page's own data, searchable and sortable tables, confirmation dialogs and toasts. It adds no libraries and keeps the strict CSP. See [DESIGN.md](DESIGN.md#user-interface) and the screenshots in [docs/evidence/ui](docs/evidence/ui/README.md).
 
 ## Run the demo
 

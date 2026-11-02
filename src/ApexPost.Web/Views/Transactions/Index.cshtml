@@ -1,47 +1,131 @@
-@model IReadOnlyList<ApexPost.Web.Models.TransactionListViewModel>
+﻿@model IReadOnlyList<ApexPost.Web.Models.TransactionListViewModel>
+@using ApexPost.Domain.Enums
 @{
     ViewData["Title"] = "Transactions";
+    int CountOf(TransactionPaymentStatus status) => Model.Count(transaction => transaction.PaymentStatus == status);
+    var statuses = Enum.GetValues<TransactionPaymentStatus>();
 }
 
-<h1>Transactions</h1>
-
-<p>
-    <a asp-controller="Transactions"
-       asp-action="Create"
-       class="btn btn-primary">Create transaction</a>
-</p>
+<div class="page-header">
+    <div>
+        <p class="page-eyebrow">Counter</p>
+        <h1>Transactions</h1>
+        <p class="page-subtitle">Counter transactions for your branch, with their payment status.</p>
+    </div>
+    <div class="page-actions">
+        <a asp-controller="Transactions"
+           asp-action="Create"
+           class="btn btn-primary">@Html.Icon("plus", "icon-sm") Create transaction</a>
+    </div>
+</div>
 
 @if (Model.Count == 0)
 {
-    <p>No transactions have been created.</p>
+    <div class="card">
+        <partial name="_EmptyState" model="@(new EmptyStateViewModel("receipt", "No transactions have been created.", "Transactions appear here once a counter sale has been processed."))" />
+    </div>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th scope="col">Transaction ID</th>
-                <th scope="col">Status</th>
-                <th scope="col">Total</th>
-                <th scope="col">Branch</th>
-                <th scope="col"></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var transaction in Model)
-            {
-                <tr>
-                    <td>@transaction.Id</td>
-                    <td>@transaction.PaymentStatus</td>
-                    <td>@transaction.Total @transaction.Currency</td>
-                    <td>@(transaction.BranchCode ?? "Not recorded")</td>
-                    <td>
-                        <a asp-controller="Transactions"
-                           asp-action="Details"
-                           asp-route-transactionId="@transaction.Id">Details</a>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="row g-3 mb-3">
+        <div class="col-lg-8">
+            <div class="row g-3">
+                <div class="col-6">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <span class="kpi-icon">@Html.Icon("receipt")</span>
+                            <div>
+                                <p class="kpi-label">All transactions</p>
+                                <p class="kpi-value">@Model.Count</p>
+                                <p class="kpi-meta">Listed for your branch</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <span class="kpi-icon tone-success">@Html.Icon("check")</span>
+                            <div>
+                                <p class="kpi-label">Paid</p>
+                                <p class="kpi-value">@CountOf(TransactionPaymentStatus.Paid)</p>
+                                <p class="kpi-meta">Completed sales</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <span class="kpi-icon tone-danger">@Html.Icon("ban")</span>
+                            <div>
+                                <p class="kpi-label">Voided</p>
+                                <p class="kpi-value">@CountOf(TransactionPaymentStatus.Voided)</p>
+                                <p class="kpi-meta">Cancelled by a branch manager</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <span class="kpi-icon tone-warning">@Html.Icon("undo")</span>
+                            <div>
+                                <p class="kpi-label">Refunded</p>
+                                <p class="kpi-value">@CountOf(TransactionPaymentStatus.Refunded)</p>
+                                <p class="kpi-meta">Refunded after payment</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h2 class="card-title-sm">@Html.Icon("chart", "icon-sm") Status distribution</h2>
+                </div>
+                <div class="card-body">
+                    <partial name="_DonutChart" model="@(new DonutChartViewModel(
+                        statuses.Select(status => new ChartPoint(status.ToString(), CountOf(status))).ToArray(),
+                        Model.Count.ToString(),
+                        "transactions"))" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        <div class="table-responsive">
+            <table class="table table-hover" data-table data-filter-column="1" data-filter-label="statuses"
+                   data-search-placeholder="Search by ID, status or branch" aria-label="Transactions">
+                <thead>
+                    <tr>
+                        <th scope="col">Transaction ID</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Total</th>
+                        <th scope="col">Branch</th>
+                        <th scope="col" data-no-sort><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var transaction in Model)
+                    {
+                        <tr>
+                            <td><span class="code-chip">@transaction.Id</span></td>
+                            <td>@Html.StatusBadge(transaction.PaymentStatus)</td>
+                            <td class="table-numeric">@transaction.Total @transaction.Currency</td>
+                            <td>@(transaction.BranchCode ?? "Not recorded")</td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-secondary"
+                                   asp-controller="Transactions"
+                                   asp-action="Details"
+                                   asp-route-transactionId="@transaction.Id">Details</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }

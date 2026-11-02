@@ -1,0 +1,89 @@
+@*
+    Links follow the same role checks as the controllers they lead to, so the
+    sidebar never offers a page the user cannot open.
+*@
+@{
+    var controller = ViewContext.RouteData.Values["controller"] as string;
+    var action = ViewContext.RouteData.Values["action"] as string;
+    var isManager = User.IsInRole("BranchManager");
+    var isClerk = User.IsInRole("CounterClerk");
+    var isAuditorOrAdmin = User.IsInRole("Auditor") || User.IsInRole("Administrator");
+    var isAdmin = User.IsInRole("Administrator");
+
+    string Active(string targetController, string? targetAction = null) =>
+        string.Equals(controller, targetController, StringComparison.OrdinalIgnoreCase) &&
+        (targetAction is null || string.Equals(action, targetAction, StringComparison.OrdinalIgnoreCase))
+            ? "sidebar-link active"
+            : "sidebar-link";
+
+    string? Current(string targetController, string? targetAction = null) =>
+        Active(targetController, targetAction).EndsWith("active", StringComparison.Ordinal) ? "page" : null;
+}
+<nav class="sidebar-nav">
+    <div class="sidebar-section">Overview</div>
+    <a class="@Active("Home", "Index")" aria-current="@Current("Home", "Index")" asp-controller="Home" asp-action="Index" title="Dashboard">
+        @Html.Icon("dashboard")<span class="sidebar-label">Dashboard</span>
+    </a>
+
+    @if (isClerk || isManager)
+    {
+        <div class="sidebar-section">Counter</div>
+        @if (isClerk)
+        {
+            <a class="@Active("Transactions", "Create")" aria-current="@Current("Transactions", "Create")" asp-controller="Transactions" asp-action="Create" title="Create transaction">
+                @Html.Icon("plus")<span class="sidebar-label">Create transaction</span>
+            </a>
+        }
+        @if (isManager)
+        {
+            <a class="@Active("Transactions", "Index")" aria-current="@Current("Transactions", "Index")" asp-controller="Transactions" asp-action="Index" title="Transactions">
+                @Html.Icon("receipt")<span class="sidebar-label">Transactions</span>
+            </a>
+            <a class="@Active("MoneyOrders")" aria-current="@Current("MoneyOrders")" asp-controller="MoneyOrders" asp-action="Index" title="Money orders">
+                @Html.Icon("money")<span class="sidebar-label">Money orders</span>
+            </a>
+        }
+    }
+
+    <div class="sidebar-section">Inventory</div>
+    <a class="@Active("Catalogue")" aria-current="@Current("Catalogue")" asp-controller="Catalogue" asp-action="Index" title="Catalogue">
+        @Html.Icon("package")<span class="sidebar-label">Catalogue</span>
+    </a>
+    @if (isManager)
+    {
+        <a class="@Active("Stock")" aria-current="@Current("Stock")" asp-controller="Stock" asp-action="Adjust" title="Adjust stock">
+            @Html.Icon("layers")<span class="sidebar-label">Adjust stock</span>
+        </a>
+    }
+
+    @if (isManager || isAuditorOrAdmin)
+    {
+        <div class="sidebar-section">Reports</div>
+        @if (isManager)
+        {
+            <a class="@Active("Reports", "DailySales")" aria-current="@Current("Reports", "DailySales")" asp-controller="Reports" asp-action="DailySales" title="Daily sales report">
+                @Html.Icon("chart")<span class="sidebar-label">Daily sales</span>
+            </a>
+            <a class="@Active("Reports", "LowStock")" aria-current="@Current("Reports", "LowStock")" asp-controller="Reports" asp-action="LowStock" title="Low-stock report">
+                @Html.Icon("alert")<span class="sidebar-label">Low stock</span>
+            </a>
+        }
+        @if (isAuditorOrAdmin)
+        {
+            <a class="@Active("Reports", "BranchAuditor")" aria-current="@Current("Reports", "BranchAuditor")" asp-controller="Reports" asp-action="BranchAuditor" title="Branch auditor report">
+                @Html.Icon("shield")<span class="sidebar-label">Branch auditor</span>
+            </a>
+            <a class="@Active("Reports", "ShippingVolume")" aria-current="@Current("Reports", "ShippingVolume")" asp-controller="Reports" asp-action="ShippingVolume" title="Shipping volume report">
+                @Html.Icon("truck")<span class="sidebar-label">Shipping volume</span>
+            </a>
+        }
+    }
+
+    @if (isAdmin)
+    {
+        <div class="sidebar-section">Administration</div>
+        <a class="@Active("Administration")" aria-current="@Current("Administration")" asp-controller="Administration" asp-action="Index" title="Administration">
+            @Html.Icon("settings")<span class="sidebar-label">Administration</span>
+        </a>
+    }
+</nav>

@@ -3,145 +3,230 @@
     ViewData["Title"] = "Transaction details";
     // Void and refund are manager-only (BranchManagerOnly); a clerk sees their sale read-only.
     var isManager = User.IsInRole(nameof(ApexPost.Domain.Enums.StaffRole.BranchManager));
+    var canVoid = isManager && Model.PaymentStatus is ApexPost.Domain.Enums.TransactionPaymentStatus.Open
+        or ApexPost.Domain.Enums.TransactionPaymentStatus.Paid;
+    var canRefund = isManager && Model.PaymentStatus == ApexPost.Domain.Enums.TransactionPaymentStatus.Paid;
+    var hasShipping = Model.LineItems.Any(item => item.ShippingDetails is not null);
 }
 
-<h1>Transaction details</h1>
-
-@if (TempData["TransactionActionStatus"] is string statusMessage)
-{
-    <div class="alert alert-success" role="status">@statusMessage</div>
+@section Toasts {
+    @if (TempData["TransactionActionStatus"] is string statusMessage)
+    {
+        <partial name="_StatusToast" model="@(new StatusToastViewModel(statusMessage))" />
+    }
 }
+
+<div class="page-header">
+    <div>
+        <p class="page-eyebrow">Counter</p>
+        <h1>Transaction details</h1>
+        <ul class="meta-list">
+            <li>@Html.StatusBadge(Model.PaymentStatus)</li>
+            <li><span class="code-chip">@Model.Id</span></li>
+        </ul>
+    </div>
+    <div class="page-actions">
+        @if (isManager)
+        {
+            <a class="btn btn-outline-secondary" asp-controller="Transactions" asp-action="Index">
+                @Html.Icon("back", "icon-sm") Back to transactions
+            </a>
+        }
+        else
+        {
+            <a class="btn btn-outline-secondary" asp-controller="Transactions" asp-action="Create">
+                @Html.Icon("plus", "icon-sm") New transaction
+            </a>
+        }
+        @if (hasShipping)
+        {
+            <a class="btn btn-primary" asp-action="Label" asp-route-transactionId="@Model.Id">
+                @Html.Icon("printer", "icon-sm") Preview shipping label
+            </a>
+        }
+    </div>
+</div>
 
 @if (ViewData["TransactionActionError"] is string errorMessage)
 {
-    <div class="alert alert-danger" role="alert">@errorMessage</div>
+    <div class="alert alert-danger d-flex gap-2" role="alert">@Html.Icon("cross") <span>@errorMessage</span></div>
 }
 
-<dl class="row">
-    <dt class="col-sm-3">Transaction ID</dt>
-    <dd class="col-sm-9">@Model.Id</dd>
-    <dt class="col-sm-3">Status</dt>
-    <dd class="col-sm-9">@Model.PaymentStatus</dd>
-    <dt class="col-sm-3">Subtotal</dt>
-    <dd class="col-sm-9">@Model.Subtotal @Model.Currency</dd>
-    <dt class="col-sm-3">Tax</dt>
-    <dd class="col-sm-9">@Model.Tax @Model.Currency</dd>
-    <dt class="col-sm-3">Total</dt>
-    <dd class="col-sm-9">@Model.Total @Model.Currency</dd>
-    @if (Model.BranchCode is not null)
-    {
-        <dt class="col-sm-3">Processed at branch</dt>
-        <dd class="col-sm-9">@Model.BranchCode</dd>
-    }
-    @if (Model.OccurredAtUtc is { } occurredAtUtc)
-    {
-        <dt class="col-sm-3">Recorded (UTC)</dt>
-        <dd class="col-sm-9">@occurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</dd>
-    }
-    @if (Model.CounterTerminalId is not null)
-    {
-        <dt class="col-sm-3">Counter terminal</dt>
-        <dd class="col-sm-9">@Model.CounterTerminalId</dd>
-        <dt class="col-sm-3">Clerk</dt>
-        <dd class="col-sm-9">@Model.ClerkStaffId</dd>
-        <dt class="col-sm-3">Payment method</dt>
-        <dd class="col-sm-9">@Model.PaymentMethod</dd>
-    }
-</dl>
+<div class="row g-3 mb-3">
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header">
+                <h2 class="card-title-sm">@Html.Icon("receipt", "icon-sm") Transaction</h2>
+            </div>
+            <div class="card-body">
+                <dl class="detail-list">
+                    <dt>Transaction ID</dt>
+                    <dd>@Model.Id</dd>
+                    <dt>Status</dt>
+                    <dd>@Model.PaymentStatus</dd>
+                    @if (Model.BranchCode is not null)
+                    {
+                        <dt>Processed at branch</dt>
+                        <dd>@Model.BranchCode</dd>
+                    }
+                    @if (Model.OccurredAtUtc is { } occurredAtUtc)
+                    {
+                        <dt>Recorded (UTC)</dt>
+                        <dd>@occurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</dd>
+                    }
+                    @if (Model.CounterTerminalId is not null)
+                    {
+                        <dt>Counter terminal</dt>
+                        <dd>@Model.CounterTerminalId</dd>
+                        <dt>Clerk</dt>
+                        <dd>@Model.ClerkStaffId</dd>
+                        <dt>Payment method</dt>
+                        <dd>@Model.PaymentMethod</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h2 class="card-title-sm">@Html.Icon("money", "icon-sm") Amounts</h2>
+            </div>
+            <div class="card-body">
+                <dl class="amount-summary">
+                    <div><dt>Subtotal</dt><dd>@Model.Subtotal @Model.Currency</dd></div>
+                    <div><dt>Tax</dt><dd>@Model.Tax @Model.Currency</dd></div>
+                    <div class="amount-total"><dt>Total</dt><dd>@Model.Total @Model.Currency</dd></div>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
 
-<h2>Line items</h2>
-@if (Model.LineItems.Any(item => item.ShippingDetails is not null))
-{
-    <p><a asp-action="Label" asp-route-transactionId="@Model.Id">Preview shipping label</a></p>
-}
-@if (Model.LineItems.Count == 0)
-{
-    <p>This transaction has no line items.</p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th scope="col">Description</th>
-                <th scope="col">Type</th>
-                <th scope="col">Unit price</th>
-                <th scope="col">Quantity</th>
-                <th scope="col">Subtotal</th>
-                <th scope="col">Shipping details</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var item in Model.LineItems)
-            {
-                <tr>
-                    <td>@item.Description</td>
-                    <td>@item.Type</td>
-                    <td>@item.UnitPrice @item.Currency</td>
-                    <td>@item.Quantity</td>
-                    <td>@item.Subtotal @item.Currency</td>
-                    <td>@item.ShippingDetails</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
+<div class="card table-card mb-3">
+    <div class="card-header">
+        <h2 class="card-title-sm">@Html.Icon("package", "icon-sm") Line items</h2>
+    </div>
+    @if (Model.LineItems.Count == 0)
+    {
+        <partial name="_EmptyState" model="@(new EmptyStateViewModel("inbox", "This transaction has no line items."))" />
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Description</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Unit price</th>
+                        <th scope="col">Quantity</th>
+                        <th scope="col">Subtotal</th>
+                        <th scope="col">Shipping details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.LineItems)
+                    {
+                        <tr>
+                            <td>@item.Description</td>
+                            <td>@item.Type</td>
+                            <td>@item.UnitPrice @item.Currency</td>
+                            <td>@item.Quantity</td>
+                            <td>@item.Subtotal @item.Currency</td>
+                            <td>@item.ShippingDetails</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
 
 @if (Model.Notifications.Count > 0)
 {
-    <h2>Transaction notifications</h2>
-    <ul>
-        @foreach (var notification in Model.Notifications)
+    <div class="card mb-3">
+        <div class="card-header">
+            <h2 class="card-title-sm">@Html.Icon("info", "icon-sm") Transaction notifications</h2>
+        </div>
+        <div class="card-body">
+            <ul class="mb-0">
+                @foreach (var notification in Model.Notifications)
+                {
+                    <li>@notification.Type: @notification.Reason</li>
+                }
+            </ul>
+        </div>
+    </div>
+}
+
+@if (canVoid || canRefund)
+{
+    <div class="row g-3">
+        @if (canVoid)
         {
-            <li>@notification.Type: @notification.Reason</li>
+            <div class="col-lg-6">
+                <div class="card danger-zone h-100">
+                    <div class="card-header">
+                        <h2 class="card-title-sm">@Html.Icon("ban", "icon-sm") Void transaction</h2>
+                    </div>
+                    <div class="card-body">
+                        <form asp-controller="Transactions"
+                              asp-action="Void"
+                              asp-route-transactionId="@Model.Id"
+                              method="post"
+                              class="needs-validation" novalidate
+                              data-confirm="Void this transaction? This cannot be undone."
+                              data-confirm-title="Void transaction"
+                              data-confirm-action="Void transaction">
+                            <div class="mb-3">
+                                <label for="void-reason" class="form-label required">Reason</label>
+                                <input id="void-reason"
+                                       name="Reason"
+                                       class="form-control"
+                                       placeholder="Why is this transaction being voided?"
+                                       required
+                                       maxlength="500" />
+                                <div class="invalid-feedback">Enter a reason of up to 500 characters.</div>
+                            </div>
+                            <button type="submit" class="btn btn-danger">Void transaction</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
         }
-    </ul>
-}
-
-@if (isManager && Model.PaymentStatus is ApexPost.Domain.Enums.TransactionPaymentStatus.Open
-    or ApexPost.Domain.Enums.TransactionPaymentStatus.Paid)
-{
-    <h2>Void transaction</h2>
-    <form asp-controller="Transactions"
-          asp-action="Void"
-          asp-route-transactionId="@Model.Id"
-          method="post">
-        <div class="mb-3">
-            <label for="void-reason" class="form-label">Reason</label>
-            <input id="void-reason"
-                   name="Reason"
-                   class="form-control"
-                   required
-                   maxlength="500" />
-        </div>
-        <button type="submit" class="btn btn-danger">Void transaction</button>
-    </form>
-}
-
-@if (isManager && Model.PaymentStatus == ApexPost.Domain.Enums.TransactionPaymentStatus.Paid)
-{
-    <h2>Refund transaction</h2>
-    <form asp-controller="Transactions"
-          asp-action="Refund"
-          asp-route-transactionId="@Model.Id"
-          method="post">
-        <div class="mb-3">
-            <label for="refund-reason" class="form-label">Reason</label>
-            <input id="refund-reason"
-                   name="Reason"
-                   class="form-control"
-                   required
-                   maxlength="500" />
-        </div>
-        <button type="submit" class="btn btn-warning">Refund transaction</button>
-    </form>
-}
-
-@if (isManager)
-{
-    <a asp-controller="Transactions" asp-action="Index">Back to transactions</a>
-}
-else
-{
-    <a asp-controller="Transactions" asp-action="Create">New transaction</a>
+        @if (canRefund)
+        {
+            <div class="col-lg-6">
+                <div class="card danger-zone h-100">
+                    <div class="card-header">
+                        <h2 class="card-title-sm">@Html.Icon("undo", "icon-sm") Refund transaction</h2>
+                    </div>
+                    <div class="card-body">
+                        <form asp-controller="Transactions"
+                              asp-action="Refund"
+                              asp-route-transactionId="@Model.Id"
+                              method="post"
+                              class="needs-validation" novalidate
+                              data-confirm="Refund this transaction? The refund equals the amount originally paid. This cannot be undone."
+                              data-confirm-title="Refund transaction"
+                              data-confirm-action="Refund transaction"
+                              data-confirm-tone="warning">
+                            <div class="mb-3">
+                                <label for="refund-reason" class="form-label required">Reason</label>
+                                <input id="refund-reason"
+                                       name="Reason"
+                                       class="form-control"
+                                       placeholder="Why is this transaction being refunded?"
+                                       required
+                                       maxlength="500" />
+                                <div class="invalid-feedback">Enter a reason of up to 500 characters.</div>
+                            </div>
+                            <button type="submit" class="btn btn-warning">Refund transaction</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
 }

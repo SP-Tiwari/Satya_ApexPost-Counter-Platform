@@ -1,44 +1,116 @@
 @model ApexPost.Application.Services.CatalogueScreen
 @{
     ViewData["Title"] = "Product catalogue";
+    var stocked = Model.Rows.Count(row => row.QuantityOnHand is not null);
+    var unitsOnHand = Model.Rows.Sum(row => row.QuantityOnHand ?? 0);
+    var byCategory = Model.Rows
+        .GroupBy(row => row.Category)
+        .OrderBy(group => group.Key.ToString(), StringComparer.Ordinal)
+        .Select(group => new ChartPoint(group.Key.ToString(), group.Count()))
+        .ToArray();
 }
 
-<h1>Product catalogue</h1>
-<p>Stock on hand at @Model.Branch.Name (@Model.Branch.Code).</p>
+<div class="page-header">
+    <div>
+        <p class="page-eyebrow">Inventory</p>
+        <h1>Product catalogue</h1>
+        <p class="page-subtitle">Stock on hand at @Model.Branch.Name (@Model.Branch.Code).</p>
+    </div>
+</div>
 
 @if (Model.Rows.Count == 0)
 {
-    <p>No products are in the catalogue.</p>
+    <div class="card">
+        <partial name="_EmptyState" model="@(new EmptyStateViewModel("package", "No products are in the catalogue."))" />
+    </div>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th scope="col">SKU</th>
-                <th scope="col">Name</th>
-                <th scope="col">Category</th>
-                <th scope="col">Unit price</th>
-                <th scope="col">Tax category</th>
-                <th scope="col">In stock</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var row in Model.Rows)
-            {
-                <tr>
-                    <td>@row.Sku</td>
-                    <td>@row.Name</td>
-                    <td>@row.Category</td>
-                    <td>@row.UnitPrice @row.Currency</td>
-                    <td>@row.TaxCategory</td>
-                    <td>@(row.QuantityOnHand?.ToString() ?? "Not stocked")</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="row g-3 mb-3">
+        <div class="col-lg-8">
+            <div class="row g-3">
+                <div class="col-sm-4">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <span class="kpi-icon">@Html.Icon("package")</span>
+                            <div>
+                                <p class="kpi-label">Products</p>
+                                <p class="kpi-value">@Model.Rows.Count</p>
+                                <p class="kpi-meta">In the catalogue</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <span class="kpi-icon tone-success">@Html.Icon("check")</span>
+                            <div>
+                                <p class="kpi-label">Stocked here</p>
+                                <p class="kpi-value">@stocked</p>
+                                <p class="kpi-meta">@(Model.Rows.Count - stocked) not stocked</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <span class="kpi-icon tone-accent">@Html.Icon("layers")</span>
+                            <div>
+                                <p class="kpi-label">Units on hand</p>
+                                <p class="kpi-value">@unitsOnHand</p>
+                                <p class="kpi-meta">Across stocked products</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h2 class="card-title-sm">@Html.Icon("tag", "icon-sm") Products by category</h2>
+                </div>
+                <div class="card-body">
+                    <partial name="_BarChart" model="@(new BarChartViewModel(byCategory))" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        <div class="table-responsive">
+            <table class="table table-hover" data-table data-filter-column="2" data-filter-label="categories"
+                   data-search-placeholder="Search by SKU or name" aria-label="Product catalogue">
+                <thead>
+                    <tr>
+                        <th scope="col">SKU</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Category</th>
+                        <th scope="col">Unit price</th>
+                        <th scope="col">Tax category</th>
+                        <th scope="col">In stock</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Rows)
+                    {
+                        <tr class="@(row.QuantityOnHand is null ? "row-muted" : null)">
+                            <td class="fw-semibold">@row.Sku</td>
+                            <td>@row.Name</td>
+                            <td>@row.Category</td>
+                            <td>@row.UnitPrice @row.Currency</td>
+                            <td>@row.TaxCategory</td>
+                            <td>@(row.QuantityOnHand?.ToString() ?? "Not stocked")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }
 
-<p class="text-muted small">
+<p class="text-muted small mt-3">
     Product details as of @Model.CatalogueLoadedAtUtc.ToString("yyyy-MM-dd HH:mm:ss") UTC (cached); stock levels are current.
 </p>

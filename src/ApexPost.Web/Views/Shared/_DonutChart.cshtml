@@ -1,0 +1,49 @@
+@model DonutChartViewModel
+@using System.Globalization
+@*
+    A donut drawn with SVG stroke dashes. The circle's circumference is 100, so
+    each segment's dash length is its percentage of the total.
+*@
+@{
+    var total = Model.Segments.Sum(segment => segment.Value);
+    var offset = 0m;
+    string Number(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+    var summary = string.Join(", ", Model.Segments.Select(segment => $"{segment.Label} {Number(segment.Value)}"));
+}
+<figure class="donut-chart">
+    <div class="donut-figure">
+        <svg viewBox="0 0 42 42" role="img" aria-label="@Model.CenterLabel: @summary">
+            <circle class="donut-ring" cx="21" cy="21" r="15.9155" />
+            @if (total > 0m)
+            {
+                @for (var index = 0; index < Model.Segments.Count; index++)
+                {
+                    var share = Model.Segments[index].Value / total * 100m;
+                    if (share <= 0m)
+                    {
+                        continue;
+                    }
+                    <circle class="donut-segment series-@(index % 6 + 1)" cx="21" cy="21" r="15.9155"
+                            stroke-dasharray="@Number(share) @Number(100m - share)"
+                            stroke-dashoffset="@Number(-offset)" />
+                    offset += share;
+                }
+            }
+        </svg>
+        <div class="donut-center" aria-hidden="true">
+            <span class="donut-center-value">@Model.CenterValue</span>
+            <span class="donut-center-label">@Model.CenterLabel</span>
+        </div>
+    </div>
+    <ul class="chart-legend">
+        @for (var index = 0; index < Model.Segments.Count; index++)
+        {
+            var segment = Model.Segments[index];
+            <li>
+                <span class="legend-swatch series-@(index % 6 + 1)" aria-hidden="true"></span>
+                <span>@segment.Label</span>
+                <span class="chart-legend-value">@Number(segment.Value)</span>
+            </li>
+        }
+    </ul>
+</figure>

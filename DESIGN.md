@@ -194,6 +194,33 @@ Report filters are composable specifications (`PaidTransactionSpecification`, `T
 
 `/` shows a branch dashboard for signed-in staff. `BranchDashboardApplicationService` starts the reference-data load and the courier lookups for recent shipments at the same time and awaits them with `Task.WhenAll`. Sales and stock panels are shown to Branch Managers only.
 
+The page shows KPI cards (branch status, counters, products, shipping zones and, for managers, today's transactions and sales), a sales-mix chart, a counter-availability chart and a low-stock chart against the threshold. Every figure comes from `DashboardViewModel`; see [User interface](#user-interface).
+
+### User interface
+
+The Week 3 UI modernization kept the controllers, view models, routes, form field names and role checks. Only views, static assets and two presentation-only files changed. Evidence, with screenshots at three widths, is in [docs/evidence/ui](docs/evidence/ui/README.md).
+
+| Part | Where |
+|---|---|
+| Shell: sidebar by role, top bar, user menu, footer | `Views/Shared/_Layout.cshtml`, `_SidebarNav.cshtml`, `_BrandMark.cshtml` |
+| Design system: colour tokens, cards, KPI cards, tables, badges, forms, tabs, charts, print styles | `wwwroot/css/site.css` |
+| Behaviour: sidebar collapse and phone overlay, table search, filter, sort and paging, confirmation dialogs, validation feedback, busy buttons, toasts, remembered tabs | `wwwroot/js/site.js` |
+| Icons, drawn for the project | `wwwroot/img/icons.svg`, used through `Html.Icon` in `Ui/UiHtmlHelperExtensions.cs` |
+| Status badges (text always shown, colour as a cue) | `Html.StatusBadge` in `Ui/UiHtmlHelperExtensions.cs` |
+| Charts, toasts, empty states, server validation summary | `_BarChart`, `_DonutChart`, `_StatusToast`, `_EmptyState`, `_ValidationSummary` partials, with the records in `Models/UiViewModels.cs` |
+
+- **No new libraries.** The UI uses the Bootstrap 5.3.3, jQuery and validation files already in `wwwroot/lib`. Charts are server-rendered SVG, so no chart library is needed.
+- **CSP stays `default-src 'self'`.** There are no inline scripts, handlers or style attributes, and no external fonts or CDNs. Bar widths and donut segments are SVG attributes, which the policy allows. Bootstrap's embedded `data:` icons for selects, checkboxes and close buttons are blocked by the policy, so they are served from `wwwroot/img/ui`. `asp-validation-summary` emits an inline style, so the forms without client validation use `_ValidationSummary` instead.
+- **Data is never invented.** Charts and KPI cards count rows each page already receives. Administration totals stay on the Administration page, behind its admin-network filter, rather than appearing on the dashboard.
+- **Roles.** The sidebar repeats each controller's role check, so it never offers a page the user cannot open. Void and refund forms still appear only to Branch Managers.
+- **No branch from the cookie.** The top bar does not show a branch, because the sign-in claim can be stale. Pages show the persisted home branch. A web test that tampers with the claim caught an early version that did.
+- **Destructive actions** (void, refund, closing a branch) ask for confirmation in a dialog. Without JavaScript, the forms still post and the server still validates.
+- **Responsive.** Below 992 px the sidebar becomes an overlay. On phones, KPI cards sit two to a row, and tables scroll inside their card, so the page never scrolls sideways.
+- **Branch Close and Reopen buttons fixed.** The hidden `IsActive` field was written as `value="@(!branch.IsActive)"`, and Razor drops a `false` attribute value and writes `value` for `true`. In a browser, Close posted an empty value and Reopen posted `value`, and both were rejected with 400. The view now writes `"false"` or `"true"`. The tests post the form fields directly, so they did not catch this; a browser check of the real button did.
+- **Kept for tests and evidence.** The cells the web tests and the Postman collection read, such as the Daily sales amounts and the catalogue rows, stay plain `<td>` text. So do the headings, field names and the print button's text.
+
+Not built, because no backend supports them: a multi-day sales trend (reports cover one business date), branch switching (staff work at their home branch), a notification feed (notifications are log entries), and an audit-log viewer.
+
 ### Domain events and simulated notifications
 
 | Event | Raised when |
@@ -975,14 +1002,14 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 ## 14. Known gaps
 
 - **Shipping label content:** the label preview prints only what a sale records (shipment ID, zone, service level, weight, dimensions, origin branch, date). The domain holds no sender or recipient address and no barcode format is specified, so neither is printed.
-- **Browser-only behaviour:** the label's print button is wired in `site.js` (the CSP blocks inline handlers). Tests check that wiring (the button's hook, the script served from the site's origin, the `window.print()` binding), but no browser engine is allowed, so the click itself is not exercised. A forbidden browser request redirects to `/Account/AccessDenied`, which answers 403.
+- **Browser-only behaviour:** the label's print button is wired in `site.js` (the CSP blocks inline handlers). Tests check that wiring (the button's hook, the script served from the site's origin, the `window.print()` binding), but no browser engine is allowed in the suites, so the click itself is not exercised there. A separate one-off headless Edge check of the whole UI is recorded in [docs/evidence/ui](docs/evidence/ui/README.md). A forbidden browser request redirects to `/Account/AccessDenied`, which answers 403.
 - **Single-process limits:** partner and sign-in rate limiting are per process, and there is one shared partner key.
 - **Audit gaps:** the audit omits pre-MVC rejections (authorization, antiforgery, rate limit, IP checks); the framework logs them instead.
 - **No measurements:** none are recorded for the cache or dashboard.
 - **Two stored procedures are not on a screen:** `usp_LowStockReport` backs the low-stock report and dashboard, but `usp_DailyBranchSales` and `usp_AdjustStock` are only callable through `IStoredProcedures` ([ADR 0023](docs/adr/0023-stored-procedures.md)). `usp_AdjustStock` repeats the domain's adjustment rules and raises no low-stock event.
 - **Domain read methods are kept for tests:** see [section 4.8](#48-query-services-and-read-projections). Web tests cover the DTO paths, and the unit tests still cover the kept methods.
 - **Two read paths in the report services:** without `IReportQueryService`, a report service still calculates from repository reads. Only the unit tests use that path, so production query code is covered by the Web tests.
-- **Unrounded totals on two screens:** Daily Sales and the dashboard can show more than two decimals, such as `26.455 INR`. Stored values are correct, and [ADR 0017](docs/adr/0017-money-precision-and-rounding.md) leaves the screen format open.
+- **Unrounded totals in tables:** the Daily Sales table and chart legends can show more than two decimals, such as `26.455 INR`. The KPI cards and chart centres on the dashboard and Daily Sales show two decimals, for display only. Stored values are correct, and [ADR 0017](docs/adr/0017-money-precision-and-rounding.md) leaves the screen format open.
 - **Browser error pages:** an unknown transaction on a browser route is an empty 404, and a 500 on a browser route is Problem Details JSON, not an HTML page.
 - **Demo configuration:** the `demo` profile supplies what a goods sale needs, and the seed fills the shipping and money-order reports. New shipping or money-order sales, the low-stock report and the partner API need further settings, which the README lists.
 - **`run-demo.ps1` verification:** the full script ran on disposable databases only. Its default path was verified with stand-ins, not against the development database, and rejection of a file outside the approved folder was tested with fixed paths only.

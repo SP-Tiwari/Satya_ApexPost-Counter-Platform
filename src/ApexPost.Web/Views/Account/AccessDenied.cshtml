@@ -2,5 +2,11 @@
     ViewData["Title"] = "Access denied";
 }
 
-<h1>Access denied</h1>
-<p>Your authenticated staff account is not authorized to access this page.</p>
+<div class="card mx-auto auth-card">
+    <div class="empty-state">
+        <span class="empty-state-icon">@Html.Icon("lock", "icon-lg")</span>
+        <h1 class="h4">Access denied</h1>
+        <p class="empty-state-text">Your authenticated staff account is not authorized to access this page.</p>
+        <a class="btn btn-primary mt-3" asp-controller="Home" asp-action="Index">@Html.Icon("dashboard", "icon-sm") Back to dashboard</a>
+    </div>
+</div>
