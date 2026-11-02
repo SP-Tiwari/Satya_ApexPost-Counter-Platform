@@ -1,0 +1,194 @@
+# Session 1: src/ApexPost.Courier.Harness/bin/Debug/net10.0/ApexPost.Courier.Harness.exe --data-dir out/courier-evidence (the built harness, run directly)
+# Run 2026-11-02T18:00:08Z, Couchbase Lite 4.1.2, fictional data, input piped from a script.
+
+[info] CourierDatabase: Opened apexpost_courier at E:\DotNetTraining\Day01\ApexPost-Counter-Platform\out\courier-evidence\apexpost_courier.cblite2\.
+[info] CourierDatabase: Change listener registered.
+
+=== ApexPost courier (offline) | pending scans (live): 0 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 1
+Tracking number: APX-DEMO-1001
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): 1
+Courier ID: COURIER-DEMO-07
+Location: Demo Depot North
+Notes (optional): Collected at front desk
+Saved scan::6049c21f-7d89-482b-98fa-5aa0bc46e7c8 locally as Pending.
+[info] CourierDatabase: Changed documents: scan::6049c21f-7d89-482b-98fa-5aa0bc46e7c8. Pending scans: 1.
+Scans per type for courier COURIER-DEMO-07: Pickup 1
+
+=== ApexPost courier (offline) | pending scans (live): 1 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 1
+Tracking number: APX-DEMO-1001
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): 2
+Courier ID: COURIER-DEMO-07
+Location: Demo Sorting Hub
+Notes (optional): 
+Saved scan::27f0764a-2dae-4e5d-91da-e6126965f58a locally as Pending.
+Scans per type for courier COURIER-DEMO-07: InTransit 1, Pickup 1
+
+=== ApexPost courier (offline) | pending scans (live): 1 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 1
+Tracking number: APX-DEMO-2002
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): Pickup
+[info] CourierDatabase: Changed documents: scan::27f0764a-2dae-4e5d-91da-e6126965f58a. Pending scans: 2.
+Courier ID: COURIER-DEMO-07
+Location: Demo Street 12
+Notes (optional): 
+Saved scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122 locally as Pending.
+Scans per type for courier COURIER-DEMO-07: InTransit 1, Pickup 2
+
+=== ApexPost courier (offline) | pending scans (live): 2 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 1
+Tracking number: APX-DEMO-1001
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): 3
+Courier ID: COURIER-DEMO-07
+Location: Demo Street 4
+Notes (optional): Signed by recipient
+Saved scan::5e46b69c-24cd-43e1-b72e-63e5136efd2c locally as Pending.
+[info] CourierDatabase: Changed documents: scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122. Pending scans: 3.
+Scans per type for courier COURIER-DEMO-07: Delivered 1, InTransit 1, Pickup 2
+
+=== ApexPost courier (offline) | pending scans (live): 3 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 1
+Tracking number: [info] CourierDatabase: Changed documents: scan::5e46b69c-24cd-43e1-b72e-63e5136efd2c. Pending scans: 4.
+APX-DEMO-3003
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): 1
+Courier ID: COURIER-DEMO-09
+Location: Demo Depot South
+Notes (optional): 
+Saved scan::787235a2-1f79-498a-b8b6-320b87641b07 locally as Pending.
+[info] CourierDatabase: Changed documents: scan::787235a2-1f79-498a-b8b6-320b87641b07. Pending scans: 5.
+Scans per type for courier COURIER-DEMO-09: Pickup 1
+
+=== ApexPost courier (offline) | pending scans (live): 5 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 2
+Tracking number: APX-DEMO-1001
+Scans for APX-DEMO-1001, oldest first: 3
+  scan::6049c21f-7d89-482b-98fa-5aa0bc46e7c8 | APX-DEMO-1001 | Pickup | COURIER-DEMO-07 | Demo Depot North | 2026-11-02 18:00:08.677Z | Pending | Collected at front desk
+  scan::27f0764a-2dae-4e5d-91da-e6126965f58a | APX-DEMO-1001 | InTransit | COURIER-DEMO-07 | Demo Sorting Hub | 2026-11-02 18:00:08.701Z | Pending | -
+  scan::5e46b69c-24cd-43e1-b72e-63e5136efd2c | APX-DEMO-1001 | Delivered | COURIER-DEMO-07 | Demo Street 4 | 2026-11-02 18:00:08.705Z | Pending | Signed by recipient
+
+=== ApexPost courier (offline) | pending scans (live): 5 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 2
+Tracking number: ' OR 1=1 --
+Scans for ' OR 1=1 --, oldest first: 0
+
+=== ApexPost courier (offline) | pending scans (live): 5 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 3
+Pending scans, oldest first: 5
+  scan::6049c21f-7d89-482b-98fa-5aa0bc46e7c8 | APX-DEMO-1001 | Pickup | COURIER-DEMO-07 | Demo Depot North | 2026-11-02 18:00:08.677Z | Pending | Collected at front desk
+  scan::27f0764a-2dae-4e5d-91da-e6126965f58a | APX-DEMO-1001 | InTransit | COURIER-DEMO-07 | Demo Sorting Hub | 2026-11-02 18:00:08.701Z | Pending | -
+  scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122 | APX-DEMO-2002 | Pickup | COURIER-DEMO-07 | Demo Street 12 | 2026-11-02 18:00:08.703Z | Pending | -
+  scan::5e46b69c-24cd-43e1-b72e-63e5136efd2c | APX-DEMO-1001 | Delivered | COURIER-DEMO-07 | Demo Street 4 | 2026-11-02 18:00:08.705Z | Pending | Signed by recipient
+  scan::787235a2-1f79-498a-b8b6-320b87641b07 | APX-DEMO-3003 | Pickup | COURIER-DEMO-09 | Demo Depot South | 2026-11-02 18:00:08.707Z | Pending | -
+
+=== ApexPost courier (offline) | pending scans (live): 5 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 4
+Tracking number the fake uploader should reject (blank to accept all): APX-DEMO-2002
+[info] OutboxService: Scan scan::6049c21f-7d89-482b-98fa-5aa0bc46e7c8 synced.
+[info] CourierDatabase: Changed documents: scan::6049c21f-7d89-482b-98fa-5aa0bc46e7c8. Pending scans: 4.
+[info] OutboxService: Scan scan::27f0764a-2dae-4e5d-91da-e6126965f58a synced.
+[info] CourierDatabase: Changed documents: scan::27f0764a-2dae-4e5d-91da-e6126965f58a. Pending scans: 3.
+[warn] OutboxService: Scan scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122 failed to sync: Rejected by the fake uploader.
+[info] CourierDatabase: Changed documents: scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122. Pending scans: 2.
+[info] OutboxService: Scan scan::5e46b69c-24cd-43e1-b72e-63e5136efd2c synced.
+[info] CourierDatabase: Changed documents: scan::5e46b69c-24cd-43e1-b72e-63e5136efd2c. Pending scans: 1.
+[info] OutboxService: Scan scan::787235a2-1f79-498a-b8b6-320b87641b07 synced.
+Sync finished: 5 attempted, 4 synced, 1 failed.
+
+=== ApexPost courier (offline) | pending scans (live): 1 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 3
+[info] CourierDatabase: Changed documents: scan::787235a2-1f79-498a-b8b6-320b87641b07. Pending scans: 0.
+Pending scans, oldest first: 0
+
+=== ApexPost courier (offline) | pending scans (live): 0 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 5
+Scan ID (scan::{Guid}): not-an-id
+Error: A scan ID must have the format scan::{Guid}. (Parameter 'id')
+
+=== ApexPost courier (offline) | pending scans (live): 0 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 9
+Please choose 1 to 6.
+
+=== ApexPost courier (offline) | pending scans (live): 0 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 6
+Goodbye.
+[info] CourierDatabase: Change listener removed.
+[info] CourierDatabase: Closed apexpost_courier.

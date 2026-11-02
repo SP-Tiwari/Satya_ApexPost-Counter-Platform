@@ -8,7 +8,9 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 - `src/ApexPost.Application` — use cases and persistence/security/audit abstractions.
 - `src/ApexPost.Infrastructure` — the EF Core SQL Server persistence layer (`ApexPostDbContext`, mappings, migrations, repositories and stores). SQL Server is the only persistence implementation.
 - `src/ApexPost.Web` — MVC controllers and views, authentication, middleware, and composition root.
-- `tests/*` — Domain, Application, Infrastructure, and Web integration tests.
+- `src/ApexPost.Courier.Offline` — Week 4: the courier device's local Couchbase Lite store, repository, SQL++ queries, outbox and change listener. See [Courier offline storage](#courier-offline-storage-week-4-part-a).
+- `src/ApexPost.Courier.Harness` — Week 4: the console harness for the courier store.
+- `tests/*` — Domain, Application, Infrastructure, Web integration and courier offline tests.
 
 ## Implemented workflows and protections
 
@@ -265,6 +267,43 @@ The sales are processed through the same domain service as real sales, so they d
 Set `DemoData:Initialize` to `true` to seed an empty database. The setting defaults to `false`. Seeding runs in one commit, happens only when no branches, staff or products exist, and never merges demo values into existing data.
 
 All seeded people and business values are marked or named `DEMO`. The seed contains no passwords, hashes or secrets, and its identity documents are fictional and stored only masked, such as `****0001`; demo credentials are written only to `StaffCredentials`, as described above. Demo prices, shipping rates and zero tax rates are illustrative and must not be used as production values. Parcel limits, money-order thresholds and fees, and low-stock thresholds are not seeded.
+
+## Courier offline storage (Week 4 Part A)
+
+The courier device keeps shipment scans in an embedded Couchbase Lite database (`Couchbase.Lite` 4.1.2), so scans are recorded with no network. It needs no Couchbase Server, no Sync Gateway and no SQL Server, and it does not use or change the Week 3 projects. The design is in [OFFLINE-DESIGN.md](OFFLINE-DESIGN.md), the decisions in [ADR 0027](docs/adr/0027-couchbase-lite-courier-offline-store.md), and the saved runs in [docs/evidence/week4-part-a](docs/evidence/week4-part-a/README.md).
+
+Run the harness from the repository root:
+
+```powershell
+dotnet run --project src/ApexPost.Courier.Harness
+dotnet run --project src/ApexPost.Courier.Harness -- --data-dir out/courier-demo
+```
+
+By default the database is created in `%LOCALAPPDATA%\ApexPost\CourierOffline`, whichever folder the harness starts from. `--data-dir` chooses another folder; `out/` is ignored by Git. Only one process can open a database folder at a time. The menu:
+
+| Option | What it does |
+|---|---|
+| 1. Add Scan | Saves a new scan locally as `Pending` with a `scan::{Guid}` ID, then shows that courier's scans per scan type (SQL++ query 3) |
+| 2. Find by Tracking Number | SQL++ query 1: that shipment's scans, ordered by `scannedAtUtc` |
+| 3. List Pending | SQL++ query 2: scans with `syncStatus = 'Pending'` |
+| 4. Simulate Sync | Runs `OutboxService` with `FakeShipmentUploader`. It asks for a tracking number to reject, so both `Synced` and `Failed` can be shown; no network call is made |
+| 5. Delete Scan | Deletes a scan by its ID |
+| 6. Exit | Removes the change listener and closes the database |
+
+The collection change listener logs the IDs of every changed document, along with the pending count at the moment it is notified. The menu header shows the count from the most recent notification. Notifications arrive asynchronously, so the header can lag a moment behind a fast series of changes. Use fictional data only.
+
+| Requirement | Implementation | Verification |
+|---|---|---|
+| Couchbase Lite, `apexpost_courier`, default collection, `CourierDatabase : IDisposable` | `Persistence/CourierDatabase.cs` | `CourierDatabaseTests` |
+| `ShipmentScan` document, `scan::{Guid}` IDs | `Domain/ShipmentScan.cs`, `Domain/ShipmentScanId.cs`, `Persistence/ShipmentScanDocument.cs` | `ShipmentScanTests`, `Create_StoresTheSevenFieldsAsAJsonDocument` |
+| `IScanRepository`, `CouchbaseScanRepository`, key-value CRUD and list all | `Application/IScanRepository.cs`, `Persistence/CouchbaseScanRepository.cs` | `CouchbaseScanRepositoryTests` |
+| Three SQL++ queries, parameters only, value indexes | `Persistence/ScanQueries.cs`; indexes created in `CourierDatabase` | `ScanQueryTests`, [query plans](docs/evidence/week4-part-a/query-plans-and-tests.txt) |
+| Save locally first as `Pending`; `OutboxService` with a fake `IShipmentUploader` | `Domain/ShipmentScan.Record`, `Application/OutboxService.cs`, `Uploading/FakeShipmentUploader.cs` | `OutboxServiceTests`, [harness session](docs/evidence/week4-part-a/harness-session-1.txt) |
+| Change listener logging IDs and a live pending count; token removed on dispose | `CourierDatabase.StartChangeListener`, `StopChangeListener`, `Dispose` | `ChangeListenerTests` |
+| Domain classes reference no Couchbase types | `Domain/` namespace | `ArchitectureTests` |
+| Console harness menu | `src/ApexPost.Courier.Harness` | `CourierHarnessTests`, [harness sessions](docs/evidence/week4-part-a/README.md) |
+
+Implementation paths are under `src/ApexPost.Courier.Offline` unless they start with `src/`. All the tests are in `tests/ApexPost.Courier.Offline.Tests`.
 
 ## Documentation and sample records
 
