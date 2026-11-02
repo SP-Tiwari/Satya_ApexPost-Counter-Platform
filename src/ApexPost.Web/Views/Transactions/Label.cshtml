@@ -3,46 +3,58 @@
     ViewData["Title"] = "Shipping label preview";
 }
 
-<h1 class="d-print-none">Shipping label preview</h1>
+<div class="page-header d-print-none">
+    <div>
+        <p class="page-eyebrow">Shipping</p>
+        <h1>Shipping label preview</h1>
+        <p class="page-subtitle">@Model.Items.Count label(s) for this transaction.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-outline-secondary" asp-action="Details" asp-route-transactionId="@Model.TransactionId">@Html.Icon("back", "icon-sm") Back to transaction</a>
+        <button type="button" class="btn btn-primary" data-print-page>Print labels</button>
+    </div>
+</div>
 
 @if (Model.PaymentStatus != ApexPost.Domain.Enums.TransactionPaymentStatus.Paid)
 {
-    <div class="alert alert-warning" role="alert">
-        This transaction is @Model.PaymentStatus. Do not use these labels.
+    <div class="alert alert-warning d-flex gap-2" role="alert">
+        @Html.Icon("alert")
+        <span>This transaction is @Model.PaymentStatus. Do not use these labels.</span>
     </div>
 }
 
-<p class="d-print-none">
-    <button type="button" class="btn btn-primary" data-print-page>Print labels</button>
-    <a class="btn btn-link" asp-action="Details" asp-route-transactionId="@Model.TransactionId">Back to transaction</a>
-</p>
-
-@foreach (var item in Model.Items)
-{
-    <section class="shipping-label border border-dark border-2 p-3 mb-4" aria-label="Label @item.ShipmentId">
-        <div class="d-flex justify-content-between align-items-start">
-            <strong class="fs-4">ApexPost</strong>
-            <span class="badge bg-dark fs-6">@item.ServiceLevel</span>
+<div class="row g-4">
+    @foreach (var item in Model.Items)
+    {
+        <div class="col-xl-6">
+            <section class="shipping-label card border-dark border-2 p-3" aria-label="Label @item.ShipmentId">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="d-inline-flex align-items-center gap-2 fs-4 fw-bold">
+                        <partial name="_BrandMark" /> ApexPost
+                    </span>
+                    <span class="label-service">@item.ServiceLevel</span>
+                </div>
+                <p class="font-monospace fs-3 text-center my-3">@item.ShipmentId</p>
+                <dl class="detail-list mb-0">
+                    <dt>Destination zone</dt>
+                    <dd>@item.DestinationZone</dd>
+                    <dt>Item type</dt>
+                    <dd>@item.Type</dd>
+                    <dt>Weight</dt>
+                    <dd>@item.WeightKilograms kg</dd>
+                    <dt>Dimensions</dt>
+                    <dd>@item.LengthCm x @item.WidthCm x @item.HeightCm cm</dd>
+                    <dt>Origin branch</dt>
+                    <dd>@Model.OriginBranchCode</dd>
+                    @if (Model.OccurredAtUtc is { } occurredAtUtc)
+                    {
+                        <dt>Accepted (UTC)</dt>
+                        <dd>@occurredAtUtc.ToString("yyyy-MM-dd HH:mm")</dd>
+                    }
+                    <dt>Transaction</dt>
+                    <dd class="small">@Model.TransactionId</dd>
+                </dl>
+            </section>
         </div>
-        <p class="font-monospace fs-3 text-center my-3">@item.ShipmentId</p>
-        <dl class="row mb-0">
-            <dt class="col-5">Destination zone</dt>
-            <dd class="col-7">@item.DestinationZone</dd>
-            <dt class="col-5">Item type</dt>
-            <dd class="col-7">@item.Type</dd>
-            <dt class="col-5">Weight</dt>
-            <dd class="col-7">@item.WeightKilograms kg</dd>
-            <dt class="col-5">Dimensions</dt>
-            <dd class="col-7">@item.LengthCm x @item.WidthCm x @item.HeightCm cm</dd>
-            <dt class="col-5">Origin branch</dt>
-            <dd class="col-7">@Model.OriginBranchCode</dd>
-            @if (Model.OccurredAtUtc is { } occurredAtUtc)
-            {
-                <dt class="col-5">Accepted (UTC)</dt>
-                <dd class="col-7">@occurredAtUtc.ToString("yyyy-MM-dd HH:mm")</dd>
-            }
-            <dt class="col-5">Transaction</dt>
-            <dd class="col-7 small">@Model.TransactionId</dd>
-        </dl>
-    </section>
-}
+    }
+</div>

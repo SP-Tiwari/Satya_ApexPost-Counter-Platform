@@ -2,34 +2,119 @@
 
 @{
     ViewData["Title"] = "Shipping volume report";
+    var total = Model.Sum(row => row.ShipmentCount);
+    var byZone = Model
+        .GroupBy(row => row.DestinationZone, StringComparer.Ordinal)
+        .Select(group => new ChartPoint(group.Key, group.Sum(row => row.ShipmentCount)))
+        .OrderByDescending(point => point.Value)
+        .ToArray();
+    var byLevel = Model
+        .GroupBy(row => row.ServiceLevel)
+        .OrderBy(group => group.Key)
+        .Select(group => new ChartPoint(group.Key.ToString(), group.Sum(row => row.ShipmentCount)))
+        .ToArray();
 }
 
-<h1>Shipping volume report</h1>
-<p>Shipment counts by destination zone and service level across all recorded shipping items.</p>
+<div class="page-header">
+    <div>
+        <p class="page-eyebrow">Reports</p>
+        <h1>Shipping volume report</h1>
+        <p class="page-subtitle">Shipment counts by destination zone and service level across all recorded shipping items.</p>
+    </div>
+</div>
 
 @if (Model.Count == 0)
 {
-    <p>No shipping items were found.</p>
+    <div class="card">
+        <partial name="_EmptyState" model="@(new EmptyStateViewModel("truck", "No shipping items were found."))" />
+    </div>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Destination zone</th>
-                <th>Service level</th>
-                <th>Shipments</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var row in Model)
-            {
-                <tr>
-                    <td>@row.DestinationZone</td>
-                    <td>@row.ServiceLevel</td>
-                    <td>@row.ShipmentCount</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="row g-3 mb-3">
+        <div class="col-sm-6 col-xl-4">
+            <div class="card kpi-card">
+                <div class="card-body">
+                    <span class="kpi-icon">@Html.Icon("truck")</span>
+                    <div>
+                        <p class="kpi-label">Shipments</p>
+                        <p class="kpi-value">@total</p>
+                        <p class="kpi-meta">All recorded shipping items</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-4">
+            <div class="card kpi-card">
+                <div class="card-body">
+                    <span class="kpi-icon tone-accent">@Html.Icon("globe")</span>
+                    <div>
+                        <p class="kpi-label">Destination zones</p>
+                        <p class="kpi-value">@byZone.Length</p>
+                        <p class="kpi-meta">With at least one shipment</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-4">
+            <div class="card kpi-card">
+                <div class="card-body">
+                    <span class="kpi-icon tone-success">@Html.Icon("tag")</span>
+                    <div>
+                        <p class="kpi-label">Service levels used</p>
+                        <p class="kpi-value">@byLevel.Length</p>
+                        <p class="kpi-meta">Of the configured levels</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h2 class="card-title-sm">@Html.Icon("globe", "icon-sm") Shipments by destination zone</h2>
+                </div>
+                <div class="card-body">
+                    <partial name="_BarChart" model="@(new BarChartViewModel(byZone))" />
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h2 class="card-title-sm">@Html.Icon("tag", "icon-sm") Shipments by service level</h2>
+                </div>
+                <div class="card-body">
+                    <partial name="_DonutChart" model="@(new DonutChartViewModel(byLevel, total.ToString(), "shipments"))" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        <div class="table-responsive">
+            <table class="table table-hover" data-table data-filter-column="1" data-filter-label="service levels"
+                   data-search-placeholder="Search by zone" aria-label="Shipping volume">
+                <thead>
+                    <tr>
+                        <th>Destination zone</th>
+                        <th>Service level</th>
+                        <th>Shipments</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model)
+                    {
+                        <tr>
+                            <td>@row.DestinationZone</td>
+                            <td>@row.ServiceLevel</td>
+                            <td>@row.ShipmentCount</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }

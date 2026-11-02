@@ -1,10 +1,402 @@
 @model ApexPost.Web.Models.AdministrationViewModel
-@{ ViewData["Title"] = "Administration"; }
-<h1>Administration</h1>
-<div asp-validation-summary="All" class="text-danger"></div>
-<div class="row"><div class="col-md-4"><h2>Add branch</h2><form asp-action="CreateBranch" method="post"><input name="Code" class="form-control mb-2" placeholder="Branch code" required /><input name="Name" class="form-control mb-2" placeholder="Name" required /><input name="Region" class="form-control mb-2" placeholder="Region" required /><input name="OpeningHours" class="form-control mb-2" placeholder="Opening hours" required /><input name="TerminalId" class="form-control mb-2" placeholder="First terminal ID" required /><input name="TerminalName" class="form-control mb-2" placeholder="First terminal name" required /><button class="btn btn-primary">Add branch</button></form></div>
-<div class="col-md-4"><h2>Add staff</h2><form asp-action="CreateStaff" method="post"><input name="Id" class="form-control mb-2" placeholder="Staff ID" required /><input name="Name" class="form-control mb-2" placeholder="Name" required /><input name="Email" type="email" class="form-control mb-2" placeholder="Email" required /><select name="Role" class="form-select mb-2" asp-items="Html.GetEnumSelectList<StaffRole>()"></select><select name="HomeBranchCode" class="form-select mb-2">@foreach (var branch in Model.Branches) { <option value="@branch.Code">@branch.Code</option> }</select><button class="btn btn-primary">Add staff</button></form></div>
-<div class="col-md-4"><h2>Add product</h2><form asp-action="CreateProduct" method="post"><input name="Sku" class="form-control mb-2" placeholder="SKU" required /><input name="Name" class="form-control mb-2" placeholder="Name" required /><select name="Category" class="form-select mb-2" asp-items="Html.GetEnumSelectList<ProductCategory>()"></select><input name="UnitPrice" type="number" min="0" step="0.01" class="form-control mb-2" placeholder="Unit price" required /><input name="Currency" value="INR" maxlength="3" class="form-control mb-2" required /><select name="TaxCategory" class="form-select mb-2" asp-items="Html.GetEnumSelectList<TaxCategory>()"></select><button class="btn btn-primary">Add product</button></form></div></div>
-<h2 class="mt-4">Branches</h2><table class="table"><thead><tr><th>Code</th><th>Name</th><th>Region</th><th>Status</th><th></th></tr></thead><tbody>@foreach (var branch in Model.Branches) { <tr><td>@branch.Code</td><td>@branch.Name</td><td>@branch.Region</td><td>@(branch.IsActive ? "Active" : "Closed")</td><td><form asp-action="SetBranchStatus" method="post"><input type="hidden" name="Code" value="@branch.Code" /><input type="hidden" name="IsActive" value="@(!branch.IsActive)" /><button class="btn btn-outline-secondary btn-sm">@(branch.IsActive ? "Close" : "Reopen")</button></form></td></tr> }</tbody></table>
-<h2>Staff</h2><table class="table"><thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Home branch</th><th>Active</th><th></th></tr></thead><tbody>@foreach (var staff in Model.Staff) { <tr><form asp-action="UpdateStaff" method="post"><td>@staff.Id<input type="hidden" name="StaffId" value="@staff.Id" /></td><td>@staff.Name</td><td><select name="Role" class="form-select form-select-sm">@foreach (var role in Enum.GetValues<StaffRole>()) { <option value="@role" selected="@(role == staff.Role)">@role</option> }</select></td><td><select name="HomeBranchCode" class="form-select form-select-sm">@foreach (var branch in Model.Branches) { <option value="@branch.Code" selected="@(branch.Code == staff.HomeBranchCode)">@branch.Code</option> }</select></td><td><input type="checkbox" name="IsActive" value="true" checked="@staff.IsActive" /></td><td><button class="btn btn-outline-primary btn-sm">Save</button></td></form></tr> }</tbody></table>
-<h2>Catalogue</h2><table class="table"><thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Price</th></tr></thead><tbody>@foreach (var product in Model.Products) { <tr><td>@product.Sku</td><td>@product.Name</td><td>@product.Category</td><td>@product.UnitPrice @product.Currency</td></tr> }</tbody></table>
+@{
+    ViewData["Title"] = "Administration";
+    var activeBranches = Model.Branches.Count(branch => branch.IsActive);
+    var activeStaff = Model.Staff.Count(staff => staff.IsActive);
+    var staffByRole = Enum.GetValues<StaffRole>()
+        .Select(role => new ChartPoint(role.ToString(), Model.Staff.Count(staff => staff.Role == role)))
+        .ToArray();
+}
+
+<div class="page-header">
+    <div>
+        <p class="page-eyebrow">Administration</p>
+        <h1>Administration</h1>
+        <p class="page-subtitle">Branches, staff accounts and the product catalogue.</p>
+    </div>
+</div>
+
+<partial name="_ValidationSummary" />
+
+<div class="row g-3 mb-3">
+    <div class="col-lg-8">
+        <div class="row g-3">
+            <div class="col-sm-4">
+                <div class="card kpi-card">
+                    <div class="card-body">
+                        <span class="kpi-icon">@Html.Icon("building")</span>
+                        <div>
+                            <p class="kpi-label">Branches</p>
+                            <p class="kpi-value">@Model.Branches.Count</p>
+                            <p class="kpi-meta">@activeBranches active, @(Model.Branches.Count - activeBranches) closed</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-4">
+                <div class="card kpi-card">
+                    <div class="card-body">
+                        <span class="kpi-icon tone-accent">@Html.Icon("users")</span>
+                        <div>
+                            <p class="kpi-label">Staff</p>
+                            <p class="kpi-value">@Model.Staff.Count</p>
+                            <p class="kpi-meta">@activeStaff active, @(Model.Staff.Count - activeStaff) inactive</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-4">
+                <div class="card kpi-card">
+                    <div class="card-body">
+                        <span class="kpi-icon tone-success">@Html.Icon("package")</span>
+                        <div>
+                            <p class="kpi-label">Products</p>
+                            <p class="kpi-value">@Model.Products.Count</p>
+                            <p class="kpi-meta">In the catalogue</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h2 class="card-title-sm">@Html.Icon("users", "icon-sm") Staff by role</h2>
+            </div>
+            <div class="card-body">
+                <partial name="_BarChart" model="@(new BarChartViewModel(staffByRole))" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs-modern mb-3" role="tablist" data-tabs-key="apexpost.administration.tab">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="branches-tab" data-bs-toggle="tab" data-bs-target="#branches-pane" type="button" role="tab" aria-controls="branches-pane" aria-selected="true">
+            @Html.Icon("building", "icon-sm") Branches <span class="tab-count">@Model.Branches.Count</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="staff-tab" data-bs-toggle="tab" data-bs-target="#staff-pane" type="button" role="tab" aria-controls="staff-pane" aria-selected="false">
+            @Html.Icon("users", "icon-sm") Staff <span class="tab-count">@Model.Staff.Count</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="products-tab" data-bs-toggle="tab" data-bs-target="#products-pane" type="button" role="tab" aria-controls="products-pane" aria-selected="false">
+            @Html.Icon("package", "icon-sm") Products <span class="tab-count">@Model.Products.Count</span>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    @* Branches *@
+    <div class="tab-pane fade show active" id="branches-pane" role="tabpanel" aria-labelledby="branches-tab" tabindex="0">
+        <div class="row g-3">
+            <div class="col-xl-4">
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <h2 class="form-section-title">@Html.Icon("plus", "icon-sm") Add branch</h2>
+                            <p class="form-section-hint">A branch opens with its first counter terminal.</p>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="CreateBranch" method="post" class="needs-validation" novalidate>
+                            <div class="row">
+                                <div class="col-sm-5 mb-3">
+                                    <label for="branch-code" class="form-label required">Branch code</label>
+                                    <input id="branch-code" name="Code" class="form-control" placeholder="BR06" maxlength="10" required />
+                                    <div class="invalid-feedback">Enter a code of up to 10 characters.</div>
+                                </div>
+                                <div class="col-sm-7 mb-3">
+                                    <label for="branch-name" class="form-label required">Name</label>
+                                    <input id="branch-name" name="Name" class="form-control" placeholder="Branch name" maxlength="100" required />
+                                    <div class="invalid-feedback">Enter the branch name.</div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-6 mb-3">
+                                    <label for="branch-region" class="form-label required">Region</label>
+                                    <input id="branch-region" name="Region" class="form-control" placeholder="Region" maxlength="100" required />
+                                    <div class="invalid-feedback">Enter the region.</div>
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <label for="branch-hours" class="form-label required">Opening hours</label>
+                                    <input id="branch-hours" name="OpeningHours" class="form-control" placeholder="09:00-17:00" maxlength="100" required />
+                                    <div class="invalid-feedback">Enter the opening hours.</div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-5 mb-3">
+                                    <label for="branch-terminal-id" class="form-label required">First terminal ID</label>
+                                    <input id="branch-terminal-id" name="TerminalId" class="form-control" placeholder="C1" maxlength="50" required />
+                                    <div class="invalid-feedback">Enter the terminal ID.</div>
+                                </div>
+                                <div class="col-sm-7 mb-3">
+                                    <label for="branch-terminal-name" class="form-label required">First terminal name</label>
+                                    <input id="branch-terminal-name" name="TerminalName" class="form-control" placeholder="Counter 1" maxlength="100" required />
+                                    <div class="invalid-feedback">Enter the terminal name.</div>
+                                </div>
+                            </div>
+                            <div class="form-actions mt-0">
+                                <button type="submit" class="btn btn-primary">Add branch</button>
+                                <button type="reset" class="btn btn-outline-secondary">Clear</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-8">
+                <div class="card table-card">
+                    @if (Model.Branches.Count == 0)
+                    {
+                        <partial name="_EmptyState" model="@(new EmptyStateViewModel("building", "No branches yet", "Add the first branch with the form."))" />
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover" data-table data-filter-column="3" data-filter-label="statuses"
+                                   data-search-placeholder="Search branches" aria-label="Branches">
+                                <thead><tr><th>Code</th><th>Name</th><th>Region</th><th>Status</th><th data-no-sort><span class="visually-hidden">Actions</span></th></tr></thead>
+                                <tbody>
+                                    @foreach (var branch in Model.Branches)
+                                    {
+                                        <tr>
+                                            <td class="fw-semibold">@branch.Code</td>
+                                            <td>@branch.Name</td>
+                                            <td>@branch.Region</td>
+                                            <td>@Html.StatusBadge(branch.IsActive ? "Active" : "Closed")</td>
+                                            <td class="text-end">
+                                                <form asp-action="SetBranchStatus" method="post"
+                                                      data-confirm="@(branch.IsActive ? $"Close branch {branch.Code}? You can reopen it later from this page." : null)"
+                                                      data-confirm-title="Close branch"
+                                                      data-confirm-action="Close branch">
+                                                    <input type="hidden" name="Code" value="@branch.Code" />
+                                                    @* A string, not a bool: Razor drops a false attribute value and writes "value" for true. *@
+                                                    <input type="hidden" name="IsActive" value="@(branch.IsActive ? "false" : "true")" />
+                                                    <button type="submit" class="btn btn-sm @(branch.IsActive ? "btn-outline-secondary" : "btn-outline-primary")">@(branch.IsActive ? "Close" : "Reopen")</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Staff *@
+    <div class="tab-pane fade" id="staff-pane" role="tabpanel" aria-labelledby="staff-tab" tabindex="0">
+        <div class="row g-3">
+            <div class="col-xl-4">
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <h2 class="form-section-title">@Html.Icon("plus", "icon-sm") Add staff</h2>
+                            <p class="form-section-hint">New staff accounts start active.</p>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="CreateStaff" method="post" class="needs-validation" novalidate>
+                            <div class="mb-3">
+                                <label for="staff-id" class="form-label required">Staff ID</label>
+                                <input id="staff-id" name="Id" class="form-control" placeholder="staff-021" maxlength="50" required />
+                                <div class="invalid-feedback">Enter a staff ID of up to 50 characters.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="staff-name" class="form-label required">Name</label>
+                                <input id="staff-name" name="Name" class="form-control" placeholder="Full name" maxlength="100" required />
+                                <div class="invalid-feedback">Enter the staff member's name.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="staff-email" class="form-label required">Email</label>
+                                <input id="staff-email" name="Email" type="email" class="form-control" placeholder="name@example.com" required />
+                                <div class="invalid-feedback">Enter a valid email address.</div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-6 mb-3">
+                                    <label for="staff-role" class="form-label required">Role</label>
+                                    <select id="staff-role" name="Role" class="form-select" asp-items="Html.GetEnumSelectList<StaffRole>()"></select>
+                                </div>
+                                <div class="col-sm-6 mb-3">
+                                    <label for="staff-branch" class="form-label required">Home branch</label>
+                                    <select id="staff-branch" name="HomeBranchCode" class="form-select">
+                                        @foreach (var branch in Model.Branches)
+                                        {
+                                            <option value="@branch.Code">@branch.Code</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-actions mt-0">
+                                <button type="submit" class="btn btn-primary">Add staff</button>
+                                <button type="reset" class="btn btn-outline-secondary">Clear</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-8">
+                <div class="card table-card">
+                    @if (Model.Staff.Count == 0)
+                    {
+                        <partial name="_EmptyState" model="@(new EmptyStateViewModel("users", "No staff yet", "Add the first staff account with the form."))" />
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover" data-table data-filter-column="2" data-filter-label="roles"
+                                   data-search-placeholder="Search staff" aria-label="Staff">
+                                <thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Home branch</th><th>Status</th><th data-no-sort><span class="visually-hidden">Actions</span></th></tr></thead>
+                                <tbody>
+                                    @for (var index = 0; index < Model.Staff.Count; index++)
+                                    {
+                                        var staff = Model.Staff[index];
+                                        var dialogId = $"edit-staff-{index}";
+                                        <tr>
+                                            <td class="fw-semibold">@staff.Id</td>
+                                            <td>@staff.Name</td>
+                                            <td>@staff.Role</td>
+                                            <td>@staff.HomeBranchCode</td>
+                                            <td>@Html.StatusBadge(staff.IsActive ? "Active" : "Inactive")</td>
+                                            <td class="text-end">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#@dialogId">
+                                                    @Html.Icon("edit", "icon-sm") Edit
+                                                </button>
+                                                <div class="modal fade text-start" id="@dialogId" tabindex="-1" aria-labelledby="@dialogId-title" aria-hidden="true">
+                                                    <div class="modal-dialog modal-dialog-centered">
+                                                        <div class="modal-content">
+                                                            <form asp-action="UpdateStaff" method="post">
+                                                                <div class="modal-header">
+                                                                    <h2 class="modal-title fs-5" id="@dialogId-title">Edit @staff.Name</h2>
+                                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                                </div>
+                                                                <div class="modal-body">
+                                                                    <input type="hidden" name="StaffId" value="@staff.Id" />
+                                                                    <p class="text-secondary small">Staff ID <span class="code-chip">@staff.Id</span></p>
+                                                                    <div class="mb-3">
+                                                                        <label for="@dialogId-role" class="form-label required">Role</label>
+                                                                        <select id="@dialogId-role" name="Role" class="form-select">
+                                                                            @foreach (var role in Enum.GetValues<StaffRole>())
+                                                                            {
+                                                                                <option value="@role" selected="@(role == staff.Role)">@role</option>
+                                                                            }
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="mb-3">
+                                                                        <label for="@dialogId-branch" class="form-label required">Home branch</label>
+                                                                        <select id="@dialogId-branch" name="HomeBranchCode" class="form-select">
+                                                                            @foreach (var branch in Model.Branches)
+                                                                            {
+                                                                                <option value="@branch.Code" selected="@(branch.Code == staff.HomeBranchCode)">@branch.Code</option>
+                                                                            }
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="form-check check-card">
+                                                                        <input id="@dialogId-active" class="form-check-input" type="checkbox" name="IsActive" value="true" checked="@staff.IsActive" />
+                                                                        <label for="@dialogId-active" class="form-check-label">Active account</label>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="modal-footer">
+                                                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                                    <button type="submit" class="btn btn-primary">Save</button>
+                                                                </div>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Products *@
+    <div class="tab-pane fade" id="products-pane" role="tabpanel" aria-labelledby="products-tab" tabindex="0">
+        <div class="row g-3">
+            <div class="col-xl-4">
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <h2 class="form-section-title">@Html.Icon("plus", "icon-sm") Add product</h2>
+                            <p class="form-section-hint">Prices are per unit, in the given currency.</p>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="CreateProduct" method="post" class="needs-validation" novalidate>
+                            <div class="row">
+                                <div class="col-sm-5 mb-3">
+                                    <label for="product-sku" class="form-label required">SKU</label>
+                                    <input id="product-sku" name="Sku" class="form-control" placeholder="BOX-02" maxlength="30" required />
+                                    <div class="invalid-feedback">Enter a SKU of up to 30 characters.</div>
+                                </div>
+                                <div class="col-sm-7 mb-3">
+                                    <label for="product-name" class="form-label required">Name</label>
+                                    <input id="product-name" name="Name" class="form-control" placeholder="Product name" maxlength="150" required />
+                                    <div class="invalid-feedback">Enter the product name.</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="product-category" class="form-label required">Category</label>
+                                <select id="product-category" name="Category" class="form-select" asp-items="Html.GetEnumSelectList<ProductCategory>()"></select>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-7 mb-3">
+                                    <label for="product-price" class="form-label required">Unit price</label>
+                                    <input id="product-price" name="UnitPrice" type="number" min="0" step="0.01" class="form-control" placeholder="0.00" required />
+                                    <div class="invalid-feedback">Enter a price of zero or more.</div>
+                                </div>
+                                <div class="col-sm-5 mb-3">
+                                    <label for="product-currency" class="form-label required">Currency</label>
+                                    <input id="product-currency" name="Currency" value="INR" minlength="3" maxlength="3" class="form-control" required />
+                                    <div class="invalid-feedback">Enter a three-letter code.</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="product-tax" class="form-label required">Tax category</label>
+                                <select id="product-tax" name="TaxCategory" class="form-select" asp-items="Html.GetEnumSelectList<TaxCategory>()"></select>
+                            </div>
+                            <div class="form-actions mt-0">
+                                <button type="submit" class="btn btn-primary">Add product</button>
+                                <button type="reset" class="btn btn-outline-secondary">Clear</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-8">
+                <div class="card table-card">
+                    @if (Model.Products.Count == 0)
+                    {
+                        <partial name="_EmptyState" model="@(new EmptyStateViewModel("package", "No products yet", "Add the first product with the form."))" />
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover" data-table data-filter-column="2" data-filter-label="categories"
+                                   data-search-placeholder="Search products" aria-label="Catalogue">
+                                <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Price</th></tr></thead>
+                                <tbody>
+                                    @foreach (var product in Model.Products)
+                                    {
+                                        <tr><td class="fw-semibold">@product.Sku</td><td>@product.Name</td><td>@product.Category</td><td class="table-numeric">@product.UnitPrice @product.Currency</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

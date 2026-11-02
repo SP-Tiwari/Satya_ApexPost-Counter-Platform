@@ -1,0 +1,9 @@
+@model EmptyStateViewModel
+<div class="empty-state">
+    <span class="empty-state-icon">@Html.Icon(Model.Icon, "icon-lg")</span>
+    <p class="empty-state-title">@Model.Title</p>
+    @if (Model.Text is not null)
+    {
+        <p class="empty-state-text">@Model.Text</p>
+    }
+</div>

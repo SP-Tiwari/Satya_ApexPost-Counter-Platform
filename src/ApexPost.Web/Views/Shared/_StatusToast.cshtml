@@ -1,0 +1,21 @@
+@model StatusToastViewModel
+@{
+    var isError = Model.Tone is "danger" or "warning";
+    var icon = Model.Tone switch
+    {
+        "success" => "check",
+        "danger" => "cross",
+        "warning" => "alert",
+        _ => "info"
+    };
+}
+@* Rendered visible, so the message still shows without JavaScript; site.js
+   hides success messages after a few seconds. *@
+<div class="toast show tone-@Model.Tone" role="@(isError ? "alert" : "status")"
+     data-toast="@(isError ? "persistent" : "auto")">
+    <div class="toast-body">
+        <span class="toast-icon">@Html.Icon(icon)</span>
+        <span class="flex-grow-1">@Model.Message</span>
+        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+</div>

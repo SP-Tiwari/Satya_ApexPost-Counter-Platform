@@ -4,63 +4,95 @@
     ViewData["Title"] = "Adjust stock";
 }
 
-<h1>Adjust stock</h1>
-
-@if (TempData["StockAdjustmentStatus"] is string statusMessage)
-{
-    <div class="alert alert-success" role="status">@statusMessage</div>
+@section Toasts {
+    @if (TempData["StockAdjustmentStatus"] is string statusMessage)
+    {
+        <partial name="_StatusToast" model="@(new StatusToastViewModel(statusMessage))" />
+    }
 }
 
-<p>Authorized branch: @Model.BranchName (@Model.BranchCode)</p>
-<div asp-validation-summary="All" class="text-danger" role="alert"></div>
-
-<form asp-controller="Stock" asp-action="Adjust" method="post">
-    <div class="mb-3">
-        <label asp-for="ProductSku" class="form-label">Product</label>
-        <select asp-for="ProductSku" class="form-select">
-            <option value="">Select a product</option>
-            @foreach (var stock in Model.BranchStocks)
-            {
-                <option value="@stock.Sku">
-                    @stock.Sku (current quantity: @stock.Quantity)
-                </option>
-            }
-        </select>
-        <span asp-validation-for="ProductSku" class="text-danger"></span>
+<div class="page-header">
+    <div>
+        <p class="page-eyebrow">Inventory</p>
+        <h1>Adjust stock</h1>
+        <p class="page-subtitle">Authorized branch: @Model.BranchName (@Model.BranchCode)</p>
     </div>
-    <div class="mb-3">
-        <label asp-for="QuantityChange" class="form-label">
-            Quantity change
-        </label>
-        <input asp-for="QuantityChange" type="number" step="1" class="form-control" />
-        <span class="form-text">Use a positive value to add stock or a negative value to remove stock.</span>
-        <span asp-validation-for="QuantityChange" class="text-danger"></span>
-    </div>
-    <button type="submit" class="btn btn-primary">Apply adjustment</button>
-</form>
+</div>
 
-<h2 class="mt-4">Current branch stock</h2>
-@if (Model.BranchStocks.Count == 0)
-{
-    <p>No stock records exist for this branch.</p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Product SKU</th>
-                <th>Quantity</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var stock in Model.BranchStocks)
+<partial name="_ValidationSummary" />
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="form-section-title">@Html.Icon("layers", "icon-sm") New adjustment</h2>
+                    <p class="form-section-hint">Every adjustment is recorded in the stock history.</p>
+                </div>
+            </div>
+            <div class="card-body">
+                <form asp-controller="Stock" asp-action="Adjust" method="post">
+                    <div class="mb-3">
+                        <label asp-for="ProductSku" class="form-label required">Product</label>
+                        <select asp-for="ProductSku" class="form-select">
+                            <option value="">Select a product</option>
+                            @foreach (var stock in Model.BranchStocks)
+                            {
+                                <option value="@stock.Sku">
+                                    @stock.Sku (current quantity: @stock.Quantity)
+                                </option>
+                            }
+                        </select>
+                        <span asp-validation-for="ProductSku" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="QuantityChange" class="form-label required">
+                            Quantity change
+                        </label>
+                        <input asp-for="QuantityChange" type="number" step="1" class="form-control" placeholder="For example 10 or -2" />
+                        <span class="form-text d-block">Use a positive value to add stock or a negative value to remove stock.</span>
+                        <span asp-validation-for="QuantityChange" class="text-danger"></span>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Apply adjustment</button>
+                        <a class="btn btn-outline-secondary" asp-controller="Home" asp-action="Index">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card table-card">
+            <div class="card-header">
+                <h2 class="card-title-sm">@Html.Icon("package", "icon-sm") Current branch stock</h2>
+            </div>
+            @if (Model.BranchStocks.Count == 0)
             {
-                <tr>
-                    <td>@stock.Sku</td>
-                    <td>@stock.Quantity</td>
-                </tr>
+                <partial name="_EmptyState" model="@(new EmptyStateViewModel("inbox", "No stock records exist for this branch."))" />
             }
-        </tbody>
-    </table>
-}
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover" data-table data-search-placeholder="Search by SKU" aria-label="Current branch stock">
+                        <thead>
+                            <tr>
+                                <th>Product SKU</th>
+                                <th>Quantity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var stock in Model.BranchStocks)
+                            {
+                                <tr>
+                                    <td>@stock.Sku</td>
+                                    <td>@stock.Quantity</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>

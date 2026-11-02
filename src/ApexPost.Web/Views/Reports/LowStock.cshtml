@@ -4,34 +4,69 @@
     ViewData["Title"] = "Low-stock report";
 }
 
-<h1>Low-stock report</h1>
-<p>Stock at or below the configured threshold for your home branch.</p>
+<div class="page-header">
+    <div>
+        <p class="page-eyebrow">Reports</p>
+        <h1>Low-stock report</h1>
+        <p class="page-subtitle">Stock at or below the configured threshold for your home branch.</p>
+    </div>
+    @if (User.IsInRole("BranchManager"))
+    {
+        <div class="page-actions">
+            <a class="btn btn-primary" asp-controller="Stock" asp-action="Adjust">@Html.Icon("layers", "icon-sm") Adjust stock</a>
+        </div>
+    }
+</div>
 
 @if (Model.Count == 0)
 {
-    <p>No low-stock items were found for your home branch.</p>
+    <div class="card">
+        <partial name="_EmptyState" model="@(new EmptyStateViewModel("check", "No low-stock items were found for your home branch."))" />
+    </div>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Branch</th>
-                <th>Product SKU</th>
-                <th>Quantity</th>
-                <th>Threshold</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var row in Model)
-            {
-                <tr>
-                    <td>@row.BranchCode</td>
-                    <td>@row.Sku</td>
-                    <td>@row.Quantity</td>
-                    <td>@row.Threshold</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h2 class="card-title-sm">@Html.Icon("alert", "icon-sm") Quantity against threshold</h2>
+                    <p class="card-note">@Model.Count product(s) need attention</p>
+                </div>
+                <div class="card-body">
+                    <partial name="_BarChart" model="@(new BarChartViewModel(
+                        Model.Select(row => new ChartPoint(row.Sku, row.Quantity, row.Threshold)).ToArray(),
+                        " units",
+                        "Threshold"))" />
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card table-card">
+                <div class="table-responsive">
+                    <table class="table table-hover" data-table data-search-placeholder="Search by SKU" aria-label="Low-stock items">
+                        <thead>
+                            <tr>
+                                <th>Branch</th>
+                                <th>Product SKU</th>
+                                <th>Quantity</th>
+                                <th>Threshold</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model)
+                            {
+                                <tr>
+                                    <td>@row.BranchCode</td>
+                                    <td>@row.Sku</td>
+                                    <td>@row.Quantity</td>
+                                    <td>@row.Threshold</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 }

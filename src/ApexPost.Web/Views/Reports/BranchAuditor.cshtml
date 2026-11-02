@@ -2,40 +2,131 @@
 
 @{
     ViewData["Title"] = "Branch auditor report";
+    var moneyOrders = Model.Sum(row => row.MoneyOrderCount);
+    var verifications = Model.Sum(row => row.IdentityVerificationCount);
+    var successful = Model.Sum(row => row.SuccessfulIdentityVerificationCount);
+    var failedChecks = Model.Sum(row => row.FailedIdentityVerificationCount);
+    var cancelled = Model.Sum(row => row.CancelledMoneyOrderCount);
 }
 
-<h1>Branch auditor report</h1>
-<p>Money orders and identity-verification outcomes grouped by branch.</p>
+<div class="page-header">
+    <div>
+        <p class="page-eyebrow">Reports</p>
+        <h1>Branch auditor report</h1>
+        <p class="page-subtitle">Money orders and identity-verification outcomes grouped by branch.</p>
+    </div>
+</div>
 
 @if (Model.Count == 0)
 {
-    <p>No money-order activity with branch attribution was found.</p>
+    <div class="card">
+        <partial name="_EmptyState" model="@(new EmptyStateViewModel("shield", "No money-order activity with branch attribution was found."))" />
+    </div>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Branch</th>
-                <th>Money orders</th>
-                <th>Identity verifications</th>
-                <th>Successful checks</th>
-                <th>Failed checks</th>
-                <th>Cancelled money orders</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var row in Model)
-            {
-                <tr>
-                    <td>@row.BranchCode</td>
-                    <td>@row.MoneyOrderCount</td>
-                    <td>@row.IdentityVerificationCount</td>
-                    <td>@row.SuccessfulIdentityVerificationCount</td>
-                    <td>@row.FailedIdentityVerificationCount</td>
-                    <td>@row.CancelledMoneyOrderCount</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="row g-3 mb-3">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card kpi-card">
+                <div class="card-body">
+                    <span class="kpi-icon">@Html.Icon("money")</span>
+                    <div>
+                        <p class="kpi-label">Money orders</p>
+                        <p class="kpi-value">@moneyOrders</p>
+                        <p class="kpi-meta">Across @Model.Count branch(es)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card kpi-card">
+                <div class="card-body">
+                    <span class="kpi-icon tone-accent">@Html.Icon("shield")</span>
+                    <div>
+                        <p class="kpi-label">Identity verifications</p>
+                        <p class="kpi-value">@verifications</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card kpi-card">
+                <div class="card-body">
+                    <span class="kpi-icon tone-danger">@Html.Icon("cross")</span>
+                    <div>
+                        <p class="kpi-label">Failed checks</p>
+                        <p class="kpi-value">@failedChecks</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card kpi-card">
+                <div class="card-body">
+                    <span class="kpi-icon tone-warning">@Html.Icon("ban")</span>
+                    <div>
+                        <p class="kpi-label">Cancelled money orders</p>
+                        <p class="kpi-value">@cancelled</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h2 class="card-title-sm">@Html.Icon("building", "icon-sm") Money orders by branch</h2>
+                </div>
+                <div class="card-body">
+                    <partial name="_BarChart" model="@(new BarChartViewModel(
+                        Model.Select(row => new ChartPoint(row.BranchCode, row.MoneyOrderCount)).ToArray()))" />
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h2 class="card-title-sm">@Html.Icon("shield", "icon-sm") Verification outcomes</h2>
+                </div>
+                <div class="card-body">
+                    <partial name="_DonutChart" model="@(new DonutChartViewModel(
+                        [new ChartPoint("Successful", successful), new ChartPoint("Failed", failedChecks)],
+                        verifications.ToString(),
+                        "verifications"))" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        <div class="table-responsive">
+            <table class="table table-hover" data-table data-search-placeholder="Search by branch" aria-label="Branch auditor report">
+                <thead>
+                    <tr>
+                        <th>Branch</th>
+                        <th>Money orders</th>
+                        <th>Identity verifications</th>
+                        <th>Successful checks</th>
+                        <th>Failed checks</th>
+                        <th>Cancelled money orders</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model)
+                    {
+                        <tr>
+                            <td>@row.BranchCode</td>
+                            <td>@row.MoneyOrderCount</td>
+                            <td>@row.IdentityVerificationCount</td>
+                            <td>@row.SuccessfulIdentityVerificationCount</td>
+                            <td>@row.FailedIdentityVerificationCount</td>
+                            <td>@row.CancelledMoneyOrderCount</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }

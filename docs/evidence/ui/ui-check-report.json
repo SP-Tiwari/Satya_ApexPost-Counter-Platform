@@ -1,0 +1,449 @@
+[
+ {
+  "name": "anonymous-home-desktop",
+  "url": "/",
+  "status": "Branch dashboard - ApexPost Logistics",
+  "h1": "ApexPost Counter Platform",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "anonymous-home-mobile",
+  "url": "/",
+  "status": "Branch dashboard - ApexPost Logistics",
+  "h1": "ApexPost Counter Platform",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "anonymous-signin-desktop",
+  "url": "/Account/SignIn",
+  "status": "Staff sign-in - ApexPost Logistics",
+  "h1": "Staff sign-in",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "anonymous-signin-mobile",
+  "url": "/Account/SignIn",
+  "status": "Staff sign-in - ApexPost Logistics",
+  "h1": "Staff sign-in",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "signin clerk",
+  "landed": "/"
+ },
+ {
+  "name": "clerk-dashboard-desktop",
+  "url": "/",
+  "status": "Branch dashboard - ApexPost Logistics",
+  "h1": "Welcome back, DEMO",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "clerk-dashboard-tablet",
+  "url": "/",
+  "status": "Branch dashboard - ApexPost Logistics",
+  "h1": "Welcome back, DEMO",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "clerk-dashboard-mobile",
+  "url": "/",
+  "status": "Branch dashboard - ApexPost Logistics",
+  "h1": "Welcome back, DEMO",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "clerk-create-desktop",
+  "url": "/Transactions/Create",
+  "status": "Create transaction - ApexPost Logistics",
+  "h1": "Create transaction",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "clerk-create-tablet",
+  "url": "/Transactions/Create",
+  "status": "Create transaction - ApexPost Logistics",
+  "h1": "Create transaction",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "clerk-create-mobile",
+  "url": "/Transactions/Create",
+  "status": "Create transaction - ApexPost Logistics",
+  "h1": "Create transaction",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "clerk-create-validation",
+  "summary": {
+   "path": "/Transactions/Create",
+   "h1": "Create transaction",
+   "errors": "Add at least one goods item, shipping service, or money order.\nSelect a payment method.\nSelect a counter terminal.",
+   "canSubmit": true
+  },
+  "problems": [
+   "log error: Failed to load resource: the server responded with a status of 400 () https://localhost:7034/Transactions/Create"
+  ]
+ },
+ {
+  "name": "clerk-catalogue-desktop",
+  "url": "/Catalogue",
+  "status": "Product catalogue - ApexPost Logistics",
+  "h1": "Product catalogue",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "clerk-catalogue-mobile",
+  "url": "/Catalogue",
+  "status": "Product catalogue - ApexPost Logistics",
+  "h1": "Product catalogue",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "signin manager",
+  "landed": "/"
+ },
+ {
+  "name": "manager-dashboard-desktop",
+  "url": "/",
+  "status": "Branch dashboard - ApexPost Logistics",
+  "h1": "Welcome back, DEMO",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "manager-dashboard-tablet",
+  "url": "/",
+  "status": "Branch dashboard - ApexPost Logistics",
+  "h1": "Welcome back, DEMO",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "manager-dashboard-mobile",
+  "url": "/",
+  "status": "Branch dashboard - ApexPost Logistics",
+  "h1": "Welcome back, DEMO",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "manager-transactions-desktop",
+  "url": "/Transactions",
+  "status": "Transactions - ApexPost Logistics",
+  "h1": "Transactions",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "manager-transactions-tablet",
+  "url": "/Transactions",
+  "status": "Transactions - ApexPost Logistics",
+  "h1": "Transactions",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "manager-transactions-mobile",
+  "url": "/Transactions",
+  "status": "Transactions - ApexPost Logistics",
+  "h1": "Transactions",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "manager-table-interactions",
+  "tableBefore": "1–10 of 54",
+  "pagerButtons": 7,
+  "tableSearched": "1–10 of 54",
+  "sortState": "ascending"
+ },
+ {
+  "name": "manager-details-desktop",
+  "url": "/Transactions/00000000-0000-0000-0000-000000000001",
+  "status": "Transaction details - ApexPost Logistics",
+  "h1": "Transaction details",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "manager-details-mobile",
+  "url": "/Transactions/00000000-0000-0000-0000-000000000001",
+  "status": "Transaction details - ApexPost Logistics",
+  "h1": "Transaction details",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "manager-void-dialog",
+  "emptyReasonBlocked": true,
+  "dialog": {
+   "shown": true,
+   "title": "Void transaction",
+   "message": "Void this transaction? This cannot be undone.",
+   "action": "Void transaction"
+  },
+  "afterCancel": "/Transactions/00000000-0000-0000-0000-000000000001"
+ },
+ {
+  "name": "manager-label-desktop",
+  "url": "/Transactions/00000000-0000-0000-0001-000000000001/label",
+  "status": "Shipping label preview - ApexPost Logistics",
+  "h1": "Shipping label preview",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "manager-money-orders-desktop",
+  "url": "/MoneyOrders/Index",
+  "status": "Money orders - ApexPost Logistics",
+  "h1": "Money orders",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "manager-money-orders-mobile",
+  "url": "/MoneyOrders/Index",
+  "status": "Money orders - ApexPost Logistics",
+  "h1": "Money orders",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "manager-stock-desktop",
+  "url": "/Stock/Adjust",
+  "status": "Adjust stock - ApexPost Logistics",
+  "h1": "Adjust stock",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "manager-stock-mobile",
+  "url": "/Stock/Adjust",
+  "status": "Adjust stock - ApexPost Logistics",
+  "h1": "Adjust stock",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "manager-daily-sales-desktop",
+  "url": "/Reports/DailySales",
+  "status": "Daily sales report - ApexPost Logistics",
+  "h1": "Daily sales report",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "manager-daily-sales-mobile",
+  "url": "/Reports/DailySales",
+  "status": "Daily sales report - ApexPost Logistics",
+  "h1": "Daily sales report",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "manager-low-stock-desktop",
+  "url": "/Reports/LowStock",
+  "status": "Low-stock report - ApexPost Logistics",
+  "h1": "Low-stock report",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "sidebar",
+  "collapsed": true,
+  "mobileOpen": true
+ },
+ {
+  "name": "signin auditor",
+  "landed": "/"
+ },
+ {
+  "name": "auditor-dashboard-desktop",
+  "url": "/",
+  "status": "Branch dashboard - ApexPost Logistics",
+  "h1": "Welcome back, DEMO",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "auditor-dashboard-mobile",
+  "url": "/",
+  "status": "Branch dashboard - ApexPost Logistics",
+  "h1": "Welcome back, DEMO",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": []
+ },
+ {
+  "name": "auditor-branch-auditor-desktop",
+  "url": "/Reports/BranchAuditor",
+  "status": "Branch auditor report - ApexPost Logistics",
+  "h1": "Branch auditor report",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "auditor-branch-auditor-tablet",
+  "url": "/Reports/BranchAuditor",
+  "status": "Branch auditor report - ApexPost Logistics",
+  "h1": "Branch auditor report",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "auditor-branch-auditor-mobile",
+  "url": "/Reports/BranchAuditor",
+  "status": "Branch auditor report - ApexPost Logistics",
+  "h1": "Branch auditor report",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "auditor-shipping-volume-desktop",
+  "url": "/Reports/ShippingVolume",
+  "status": "Shipping volume report - ApexPost Logistics",
+  "h1": "Shipping volume report",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "auditor-shipping-volume-mobile",
+  "url": "/Reports/ShippingVolume",
+  "status": "Shipping volume report - ApexPost Logistics",
+  "h1": "Shipping volume report",
+  "overflow": 0,
+  "tables": 1,
+  "toolbars": 1,
+  "problems": []
+ },
+ {
+  "name": "auditor-forbidden-admin-desktop",
+  "url": "/Administration/Index",
+  "status": "Access denied - ApexPost Logistics",
+  "h1": "Access denied",
+  "overflow": 0,
+  "tables": 0,
+  "toolbars": 0,
+  "problems": [
+   "log error: Failed to load resource: the server responded with a status of 403 () https://localhost:7034/Account/AccessDenied?ReturnUrl=%2FAdministration%2FIndex"
+  ]
+ },
+ {
+  "name": "signin admin",
+  "landed": "/"
+ },
+ {
+  "name": "admin-administration-desktop",
+  "url": "/Administration/Index",
+  "status": "Administration - ApexPost Logistics",
+  "h1": "Administration",
+  "overflow": 0,
+  "tables": 3,
+  "toolbars": 3,
+  "problems": []
+ },
+ {
+  "name": "admin-administration-tablet",
+  "url": "/Administration/Index",
+  "status": "Administration - ApexPost Logistics",
+  "h1": "Administration",
+  "overflow": 0,
+  "tables": 3,
+  "toolbars": 3,
+  "problems": []
+ },
+ {
+  "name": "admin-administration-mobile",
+  "url": "/Administration/Index",
+  "status": "Administration - ApexPost Logistics",
+  "h1": "Administration",
+  "overflow": 0,
+  "tables": 3,
+  "toolbars": 3,
+  "problems": []
+ },
+ {
+  "name": "admin-staff-dialog",
+  "staffDialog": "Edit DEMO Staff 01"
+ }
+]

@@ -3,22 +3,33 @@
     ViewData["Title"] = "Staff sign-in";
 }
 
-<h1>Staff sign-in</h1>
-<form asp-controller="Account" asp-action="SignIn" method="post">
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-    <input asp-for="ReturnUrl" type="hidden" />
-    <div class="mb-3">
-        <label asp-for="StaffId" class="form-label">Staff ID</label>
-        <input asp-for="StaffId" class="form-control" autocomplete="username" />
-        <span asp-validation-for="StaffId" class="text-danger"></span>
+<div class="auth-card">
+    <div class="card">
+        <div class="card-body p-4">
+            <div class="text-center mb-4">
+                <span class="kpi-icon mb-3">@Html.Icon("lock")</span>
+                <h1 class="h3 mb-1">Staff sign-in</h1>
+                <p class="text-secondary mb-0">Use your ApexPost staff ID and password.</p>
+            </div>
+            <form asp-controller="Account" asp-action="SignIn" method="post">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <input asp-for="ReturnUrl" type="hidden" />
+                <div class="mb-3">
+                    <label asp-for="StaffId" class="form-label required">Staff ID</label>
+                    <input asp-for="StaffId" class="form-control" autocomplete="username" placeholder="Your staff ID" />
+                    <span asp-validation-for="StaffId" class="text-danger"></span>
+                </div>
+                <div class="mb-4">
+                    <label asp-for="Password" class="form-label required">Password</label>
+                    <input asp-for="Password" class="form-control" autocomplete="current-password" />
+                    <span asp-validation-for="Password" class="text-danger"></span>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Sign in</button>
+            </form>
+        </div>
     </div>
-    <div class="mb-3">
-        <label asp-for="Password" class="form-label">Password</label>
-        <input asp-for="Password" class="form-control" autocomplete="current-password" />
-        <span asp-validation-for="Password" class="text-danger"></span>
-    </div>
-    <button type="submit" class="btn btn-primary">Sign in</button>
-</form>
+    <p class="text-center small text-secondary mt-3">Access is limited to authorised ApexPost staff.</p>
+</div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

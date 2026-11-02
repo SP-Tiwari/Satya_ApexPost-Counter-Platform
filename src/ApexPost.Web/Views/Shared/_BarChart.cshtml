@@ -1,0 +1,46 @@
+@model BarChartViewModel
+@using System.Globalization
+@*
+    Horizontal bars drawn as SVG. Widths are percentages set as SVG attributes,
+    which the CSP allows (inline styles are blocked). Labels and values are HTML
+    text, so they stay readable and accessible at any width.
+*@
+@{
+    var max = Model.Points
+        .Select(point => Math.Max(point.Value, point.Marker ?? 0m))
+        .DefaultIfEmpty(0m)
+        .Max();
+    string Percent(decimal value) => max <= 0m
+        ? "0%"
+        : (Math.Clamp(value / max * 100m, 0m, 100m)).ToString("0.##", CultureInfo.InvariantCulture) + "%";
+}
+<ul class="bar-chart">
+    @foreach (var point in Model.Points)
+    {
+        <li class="bar-row">
+            <span class="bar-label" title="@point.Label">@point.Label</span>
+            <svg class="bar-track" aria-hidden="true" focusable="false">
+                <rect class="bar-track-bg" width="100%" height="100%" rx="6" />
+                @if (point.Value > 0m)
+                {
+                    <rect class="bar-fill" width="@Percent(point.Value)" height="100%" rx="6" />
+                }
+                @if (point.Marker is { } marker)
+                {
+                    <line class="bar-marker" x1="@Percent(marker)" x2="@Percent(marker)" y1="-3" y2="15" />
+                }
+            </svg>
+            <span class="bar-value">
+                @point.Value.ToString("0.##", CultureInfo.InvariantCulture)@Model.ValueSuffix
+                @if (point.Marker is { } threshold)
+                {
+                    <span class="visually-hidden">(@Model.MarkerLabel @threshold)</span>
+                }
+            </span>
+        </li>
+    }
+</ul>
+@if (Model.MarkerLabel is not null)
+{
+    <p class="chart-legend-note">@Model.MarkerLabel</p>
+}
