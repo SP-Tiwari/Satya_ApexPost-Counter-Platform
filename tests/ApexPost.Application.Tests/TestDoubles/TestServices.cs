@@ -51,28 +51,32 @@ internal static class TestServices
 		int? threshold)
 	{
 		var store = new SnapshotStore(repository);
-		return new LowStockReportApplicationService(store, store, threshold);
+		return new LowStockReportApplicationService(
+			store, new SnapshotReportQueries(store), threshold);
 	}
 
 	public static DailyBranchSalesReportApplicationService DailySalesReport(
 		IApexPostRepository repository)
 	{
 		var store = new SnapshotStore(repository);
-		return new DailyBranchSalesReportApplicationService(store, store);
+		return new DailyBranchSalesReportApplicationService(
+			store, new SnapshotReportQueries(store));
 	}
 
 	public static ShippingVolumeReportApplicationService ShippingVolumeReport(
 		IApexPostRepository repository)
 	{
 		var store = new SnapshotStore(repository);
-		return new ShippingVolumeReportApplicationService(store, store);
+		return new ShippingVolumeReportApplicationService(
+			store, new SnapshotReportQueries(store));
 	}
 
 	public static BranchAuditorReportApplicationService BranchAuditorReport(
 		IApexPostRepository repository)
 	{
 		var store = new SnapshotStore(repository);
-		return new BranchAuditorReportApplicationService(store, store);
+		return new BranchAuditorReportApplicationService(
+			store, new SnapshotReportQueries(store));
 	}
 
 	public static MixedBasketApplicationService MixedBasket(

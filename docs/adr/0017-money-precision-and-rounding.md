@@ -54,5 +54,10 @@ This has been live since the M3 cutover, and `MoneyAboveTwoDecimals_IsRoundedAtT
 
   **Measured** on 2026-10-31 in the M3 live run against a disposable database, before the fix: a voided sale stored a `Payment` of 5,123.96 and a `Refund` of 5,123.97. `Reversal_OfASaleWithShipping_RefundsExactlyTheStoredPayment` now proves equality on a sale whose reloaded total rounds differently, for a void and a refund.
 - T-SQL reports in M4 must calculate tax the same way: stored line amounts × stored rates, rounded only for display.
-- **Open: the Daily Sales screen and the dashboard show unrounded sums.** They calculate in `PaidSalesSummary`, not in T-SQL, so the rule above does not cover them, and they can show three or more decimals. One sale with a parcel added 26.455 INR. `usp_DailyBranchSales` rounds the same sum to two decimals. This ADR does not settle the screen format: fixed two decimals would also turn `20` into `20.00`, against the display behaviour described above. Stored values and calculations are correct either way.
+- **Settled by the Week 3 trainer feedback: daily sales totals show two decimals.** These screens used to show unrounded sums, such as 26.455 INR for one sale with a parcel. Now:
+  - *The Daily Sales report:* reads `usp_DailyBranchSales`, which rounds retail and service to two decimals. The table shows them with `N2`, so `20` is shown as `20.00`.
+  - *The dashboard:* `PaidSalesSummary` rounds each column the same way, half away from zero.
+  - *Totals on both screens:* the sum of the two rounded columns.
+  - *Stored values and calculations:* unchanged.
+  - *Evidence:* see [DESIGN.md section 4.10](../../DESIGN.md#410-week-3-trainer-feedback).
 - Dimensions use `decimal(8,2)` with no converter, because no calculation uses them.

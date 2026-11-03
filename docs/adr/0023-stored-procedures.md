@@ -75,12 +75,18 @@ A test runs a real sale and `usp_AdjustStock` as a user holding only this role, 
 ## Alternatives considered
 
 - **LINQ for all three.** Reports can be LINQ, and M5 uses it for three of them, but Part D requires these procedures, and LINQ gives no `EXECUTE`-only boundary for non-application callers.
-- **Route the stock screen through `usp_AdjustStock`.** Not done. `StockAdjustmentApplicationService` raises the low-stock event from the domain, which a procedure cannot do, and M4 must keep existing behaviour.
+- **Route the stock screen through `usp_AdjustStock`.** Not done, and not done after the Week 3 trainer feedback either. That feedback asked for at least `usp_DailyBranchSales` on a screen. `StockAdjustmentApplicationService` raises the low-stock event from the domain, and a procedure cannot do that. The screen also validates through the domain's rules, so moving it would change existing behaviour.
 
 ## Consequences
 
 - **The adjustment rules exist twice:** in the domain and in `usp_AdjustStock`. Tests cover each rule in the procedure, but a change to the rule must be made in both places.
-- **Screen use since M5.** `usp_LowStockReport` backs the low-stock report and dashboard. `usp_DailyBranchSales` is not on a screen, because it rounds and those pages show unrounded amounts. The stock screen stays on the domain path, so `usp_AdjustStock` is not on one either.
+- **Screen use.**
+  - *`usp_LowStockReport`:* has backed the low-stock report and the dashboard since M5.
+  - *`usp_DailyBranchSales`:* has backed the Daily Sales report since the Week 3 trainer feedback. The path is `DailyBranchSalesReportApplicationService` → `IReportQueryService.GetDailySalesAsync` → `SqlReportQueryService` → `IStoredProcedures.GetDailyBranchSalesAsync`.
+  - *Rounding on screen:* the procedure rounds retail and service to two decimals. The page's total is the sum of those two columns, so each row adds up. The dashboard rounds each column the same way, so the two pages agree.
+  - *Verified by:* `DailySalesReport_IsServedByTheProcedure` records the `EXEC dbo.usp_DailyBranchSales` command and shows that no paid lines are read. `DailySales_ShowsTotalsRoundedToTwoDecimals` shows 26.455 displayed as 26.46.
+  - *`usp_AdjustStock`:* the stock screen stays on the domain path, so this procedure is still not on a screen.
+- **The Daily Sales page refuses 9999-12-31.** The procedure has no next day to end that date's range, so it refuses the date, and the page answers 400 (`DailySales_LastRepresentableDateIsABadRequest`).
 - **`usp_AdjustStock` raises no low-stock event.**
 - **A retry risk for `usp_AdjustStock`:** the call goes through the context's execution strategy. If a connection failed after the commit and before the reply, a transient-failure retry could apply it twice. It has no idempotency key because its parameters are fixed by the brief. A caller should check `StockAdjustments` after a connection failure.
 - An EF Core read taken before `usp_AdjustStock` becomes stale, because the rowversion changes, so a later `SaveChanges` gets the normal conflict. A test covers this.

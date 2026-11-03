@@ -21,4 +21,8 @@
     <ProjectReference Include="..\..\src\ApexPost.Application\ApexPost.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Shared\IApexPostRepository.cs" Link="TestDoubles\IApexPostRepository.cs" />
+  </ItemGroup>
+
 </Project>

@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="ApexPost.Testing" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,6 +26,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\DisposableSqlDatabase.cs" Link="DisposableSqlDatabase.cs" />
     <Compile Include="..\Shared\SqlTestSettings.cs" Link="SqlTestSettings.cs" />
+    <Compile Include="..\Shared\IApexPostRepository.cs" Link="IApexPostRepository.cs" />
   </ItemGroup>
 
 </Project>

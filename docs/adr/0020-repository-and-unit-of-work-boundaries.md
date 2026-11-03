@@ -69,4 +69,9 @@ Voiding an open basket writes nothing. A basket with no stored `Payment` entry t
 
 - A catalogue page reads sequentially instead of in parallel, because a `DbContext` cannot run two operations at once.
 - Reports and the dashboard use query services since M5 ([DESIGN.md section 4.8](../../DESIGN.md#48-query-services-and-read-projections)). Parcel status still loads its transaction, untracked, through the repository.
-- `IApexPostRepository` and `ApexPostSnapshot` remain, unused by production services, because test doubles depend on them. The JSON stores were removed in Week 3. `AdministrationApplicationService.GetSnapshotAsync` still returns `ApexPostSnapshot` as a simple container.
+- **`IApexPostRepository` is test-only.** It moved out of `ApexPost.Application` after the Week 3 trainer feedback, into `tests/Shared/IApexPostRepository.cs`. Two test projects link that file:
+  - *Application.Tests:* `FakeApexPostRepository` implements it.
+  - *Web.IntegrationTests:* `SqlSnapshotRepository` implements it.
+- **`DemoDataInitializer` is a static seed source.** Its test-only instance path (`InitializeAsync`) was removed with the interface. The JSON stores were removed earlier in Week 3.
+- **`ApexPostSnapshot` remains in the Application layer.** `AdministrationApplicationService.GetSnapshotAsync` returns it as a simple container.
+- **Report services have one read path.** Each requires `IReportQueryService`. The unit tests supply `SnapshotReportQueries`, which applies the Domain report services to the in-memory store.
