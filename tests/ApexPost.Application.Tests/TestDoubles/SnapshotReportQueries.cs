@@ -57,7 +57,7 @@ internal sealed class SnapshotReportQueries(SnapshotStore store) : IReportQueryS
 	public async Task<IReadOnlyList<ShippingVolumeReportRow>> GetShippingVolumeAsync(
 		CancellationToken cancellationToken = default)
 	{
-		var shipments = await _transactions.GetShipmentsAsync(cancellationToken)
+		var shipments = await store.GetShipmentsAsync(cancellationToken)
 			.ConfigureAwait(false);
 		return new ShippingVolumeReportService().CreateReport(shipments);
 	}
@@ -65,7 +65,7 @@ internal sealed class SnapshotReportQueries(SnapshotStore store) : IReportQueryS
 	public async Task<IReadOnlyList<BranchAuditorReportRow>> GetBranchAuditorReportAsync(
 		CancellationToken cancellationToken = default)
 	{
-		var moneyOrders = await _transactions.GetMoneyOrdersAsync(cancellationToken)
+		var moneyOrders = await store.GetMoneyOrdersAsync(cancellationToken)
 			.ConfigureAwait(false);
 		return new BranchAuditorReportService().CreateReport(moneyOrders
 			.Where(order => order.ProcessingBranchCode is not null)

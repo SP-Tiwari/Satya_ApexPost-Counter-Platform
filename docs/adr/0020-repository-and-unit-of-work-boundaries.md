@@ -73,5 +73,6 @@ Voiding an open basket writes nothing. A basket with no stored `Payment` entry t
   - *Application.Tests:* `FakeApexPostRepository` implements it.
   - *Web.IntegrationTests:* `SqlSnapshotRepository` implements it.
 - **`DemoDataInitializer` is a static seed source.** Its test-only instance path (`InitializeAsync`) was removed with the interface. The JSON stores were removed earlier in Week 3.
-- **`ApexPostSnapshot` remains in the Application layer.** `AdministrationApplicationService.GetSnapshotAsync` returns it as a simple container.
+- **`ApexPostSnapshot` remains in the Application layer.** `DemoDataInitializer.CreateDemoSnapshot` returns it, and `SqlDemoDataSeeder` writes it to SQL Server. `AdministrationApplicationService.GetSnapshotAsync`, which nothing called, was removed.
+- **Repository reads without a production caller were removed:** `IBranchRepository.GetBranchesAsync`, and `ICounterTransactionRepository.GetMoneyOrdersAsync` and `GetShipmentsAsync`. Tests read those rows through `ApexPostDbContext` or `GetMoneyOrdersForBranchAsync`.
 - **Report services have one read path.** Each requires `IReportQueryService`. The unit tests supply `SnapshotReportQueries`, which applies the Domain report services to the in-memory store.

@@ -284,7 +284,7 @@ dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
 
-The latest full run, on 2026-11-03 at 05:29 UTC after the Week 3 trainer-feedback corrections, passed 907 of 907 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 224, Application 140, Infrastructure 240, Web 303. The corrections are traced in [DESIGN.md section 4.10](DESIGN.md#410-week-3-trainer-feedback). The previous full run, on 2026-11-01, passed 904 of 904. A Postman CLI run on that earlier code passed 65 of 65 requests and 188 of 188 assertions. An earlier full run the same day, before the score-improvement changes, passed 892 of 892. The [test results](docs/evidence/week3-test-results.md) record all of these.
+The latest full run, on 2026-11-03 at 10:04 UTC after the Week 3 trainer-feedback corrections and the removal of unused code, passed 906 of 906 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 224, Application 140, Infrastructure 239, Web 303. The corrections are traced in [DESIGN.md section 4.10](DESIGN.md#410-week-3-trainer-feedback). The previous full run, on 2026-11-01, passed 904 of 904. A Postman CLI run on that earlier code passed 65 of 65 requests and 188 of 188 assertions. An earlier full run the same day, before the score-improvement changes, passed 892 of 892. The [test results](docs/evidence/week3-test-results.md) record all of these.
 
 The SQL tests need a local SQL Server instance and Windows authentication with permission to create databases. By default they use the instance `.` and keep disposable database files in `E:\SqlData\ApexPost\Tests`. On another machine, set these environment variables:
 

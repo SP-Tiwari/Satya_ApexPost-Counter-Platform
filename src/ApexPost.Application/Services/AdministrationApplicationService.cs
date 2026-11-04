@@ -66,17 +66,6 @@ public sealed class AdministrationApplicationService
 		_referenceData = referenceData;
 	}
 
-	// Holds only the branches, staff and products that administration manages.
-	public async Task<ApexPostSnapshot> GetSnapshotAsync(
-		string administratorId, CancellationToken cancellationToken = default)
-	{
-		await EnsureAdministratorAsync(administratorId, cancellationToken).ConfigureAwait(false);
-		var branches = await _branches.GetBranchesAsync(cancellationToken).ConfigureAwait(false);
-		var staff = await _staff.GetStaffAsync(cancellationToken).ConfigureAwait(false);
-		var products = await _products.GetProductsAsync(cancellationToken).ConfigureAwait(false);
-		return new ApexPostSnapshot(branches, staff, products, [], [], [], [], [], []);
-	}
-
 	public Task AddStaffAsync(string administratorId, CreateStaffCommand command,
 		CancellationToken cancellationToken = default)
 	{

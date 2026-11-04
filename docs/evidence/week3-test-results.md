@@ -6,10 +6,10 @@ Build, test and Postman results for the Week 3 solution, recorded from the actua
 
 | Item | Value |
 |---|---|
-| Build started | 2026-11-03 05:29:11 UTC |
-| Tests started | 2026-11-03 05:29:22 UTC |
-| Tests finished | 2026-11-03 05:30:47 UTC |
-| Code | The trainer-feedback corrections on `master` ([DESIGN.md section 4.10](../../DESIGN.md#410-week-3-trainer-feedback)). Only documentation changed after this run |
+| Build started | 2026-11-03 10:04:26 UTC |
+| Tests started | 2026-11-03 10:04:37 UTC |
+| Tests finished | 2026-11-03 10:05:59 UTC |
+| Code | The trainer-feedback corrections on `master` ([DESIGN.md section 4.10](../../DESIGN.md#410-week-3-trainer-feedback)), and the removal of production code that nothing called. Only documentation changed after this run |
 | .NET SDK | 10.0.402 |
 
 ```powershell
@@ -23,9 +23,9 @@ dotnet test ApexPost.slnx --no-build
 |---|---:|---:|---:|---:|---|
 | Domain | 224 | 0 | 0 | 224 | None. No existing Domain test file has changed since `b2d9a36` |
 | Application | 140 | 0 | 0 | 140 | None. The four report service test classes run unchanged against the `SnapshotReportQueries` test double |
-| Infrastructure | 240 | 0 | 0 | 240 | Added `DailySalesReport_IsServedByTheProcedure`. Removed `InitializeAsync_DoesNotModifyANonEmptySnapshot`, because `DemoDataInitializer.InitializeAsync` was removed. The `DemoSeed_*` tests cover seeding once |
+| Infrastructure | 239 | 0 | 0 | 239 | Added `DailySalesReport_IsServedByTheProcedure`. Removed `InitializeAsync_DoesNotModifyANonEmptySnapshot`, because `DemoDataInitializer.InitializeAsync` was removed; the `DemoSeed_*` tests cover seeding once. Removed `GetBranches_RestoresCodesAndCounters_WithoutTracking`, because `IBranchRepository.GetBranchesAsync` had no production caller and was removed |
 | Web integration | 303 | 0 | 0 | 303 | Added `DailySales_ShowsTotalsRoundedToTwoDecimals`, `Dashboard_ShowsTodaysSalesRoundedLikeTheDailySalesReport` and `DailySales_LastRepresentableDateIsABadRequest` |
-| **Total** | **907** | **0** | **0** | **907** | **+3** |
+| **Total** | **906** | **0** | **0** | **906** | **+2** |
 
 **After the run:** a read-only query on `master` listed `ApexPostDb` as the only user database. Session sampling during the run was not repeated, and the Postman CLI run below was not repeated on this code.
 

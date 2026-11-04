@@ -417,8 +417,8 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 
 		var expected = await host.InRequestAsync(async services =>
 			new ShippingVolumeReportService().CreateReport(
-				await services.GetRequiredService<ICounterTransactionRepository>()
-					.GetShipmentsAsync()));
+				await services.GetRequiredService<ApexPostDbContext>()
+					.Shipments.AsNoTracking().ToArrayAsync()));
 		var rows = await QueryFileAsync(
 			"reports", "04-shipping-volume-by-zone-and-service-level.sql");
 
@@ -435,9 +435,7 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 
 		var expected = await host.InRequestAsync(async services =>
 			new BranchAuditorReportService().CreateReport(
-				(await services.GetRequiredService<ICounterTransactionRepository>()
-					.GetMoneyOrdersAsync())
-					.Where(order => order.ProcessingBranchCode is not null)
+				(await MoneyOrdersOfEveryBranchAsync(services))
 					.Select(order => new BranchAuditorReportEntry(
 						order.ProcessingBranchCode!, order, order.IdentityVerification))));
 		var rows = await QueryFileAsync(
@@ -626,6 +624,19 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 				.Matching(paidOnDate)
 				.Select(basket => new DailySalesReportEntry(Branch, date, basket))));
 		});
+
+	// Read branch by branch, so each money order keeps its restored verification.
+	private static async Task<IReadOnlyList<Domain.Entities.MoneyOrder>> MoneyOrdersOfEveryBranchAsync(
+		IServiceProvider services)
+	{
+		var branchCodes = await services.GetRequiredService<ApexPostDbContext>()
+			.Branches.AsNoTracking().Select(branch => branch.Code).ToArrayAsync();
+		var transactions = services.GetRequiredService<ICounterTransactionRepository>();
+		var moneyOrders = new List<Domain.Entities.MoneyOrder>();
+		foreach (var branchCode in branchCodes)
+			moneyOrders.AddRange(await transactions.GetMoneyOrdersForBranchAsync(branchCode));
+		return moneyOrders;
+	}
 
 	internal static string Normalize(string sql) =>
 		Regex.Replace(sql.ReplaceLineEndings("\n").Trim(), @"CREATE\s+(OR ALTER\s+)?PROCEDURE", "CREATE PROCEDURE");

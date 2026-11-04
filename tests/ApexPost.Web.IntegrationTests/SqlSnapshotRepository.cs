@@ -25,9 +25,15 @@ internal sealed class SqlSnapshotRepository(IServiceScopeFactory scopes)
 			.Include(basket => basket.LineItems).ThenInclude(line => line.MoneyOrder)
 			.AsSplitQuery()
 			.ToArrayAsync(cancellationToken);
-		var moneyOrders = await scope.ServiceProvider
-			.GetRequiredService<ICounterTransactionRepository>()
-			.GetMoneyOrdersAsync(cancellationToken);
+		var moneyOrders = await context.MoneyOrders.AsNoTracking()
+			.ToArrayAsync(cancellationToken);
+		var verifications = await context.IdentityVerifications.AsNoTracking()
+			.ToDictionaryAsync(record => record.MoneyOrderId, cancellationToken);
+		foreach (var order in moneyOrders)
+		{
+			if (verifications.TryGetValue(order.Id, out var record))
+				order.RestoreIdentityVerification(IdentityVerificationMapper.ToDomain(record));
+		}
 
 		return new ApexPostSnapshot(
 			await context.Branches.Include(branch => branch.CounterTerminals)

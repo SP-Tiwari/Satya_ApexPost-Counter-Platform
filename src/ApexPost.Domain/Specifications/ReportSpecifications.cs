@@ -22,10 +22,3 @@ public sealed class TransactionOnBusinessDateSpecification(DateOnly businessDate
 		candidate.OccurredAtUtc is { } occurredAtUtc &&
 		DateOnly.FromDateTime(occurredAtUtc.UtcDateTime) == businessDate;
 }
-
-public sealed class StockAtBranchSpecification(BranchCode branchCode)
-	: Specification<BranchStock>
-{
-	public override bool IsSatisfiedBy(BranchStock candidate) =>
-		candidate.BranchCode == branchCode;
-}

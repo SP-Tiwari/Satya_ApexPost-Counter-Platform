@@ -26,12 +26,6 @@ public interface ICounterTransactionRepository
 		BranchCode branchCode,
 		CancellationToken cancellationToken = default);
 
-	Task<IReadOnlyList<MoneyOrder>> GetMoneyOrdersAsync(
-		CancellationToken cancellationToken = default);
-
-	Task<IReadOnlyList<ShippingItem>> GetShipmentsAsync(
-		CancellationToken cancellationToken = default);
-
 	// The transaction containing the shipment, or null when none does.
 	Task<TransactionBasket?> FindByShipmentIdAsync(
 		string shipmentId,

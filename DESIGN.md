@@ -188,7 +188,7 @@ classDiagram
 | Shipping volume by zone and service level | Auditor, Administrator | |
 | Money orders and identity verifications per branch | Auditor, Administrator | Includes cancelled money orders |
 
-Report filters are composable specifications (`PaidTransactionSpecification`, `TransactionAtBranchSpecification`, `TransactionOnBusinessDateSpecification`, `StockAtBranchSpecification`), combined with `And`/`Or`/`Not` and applied with the `Matching` extension member.
+Report filters are composable specifications (`PaidTransactionSpecification`, `TransactionAtBranchSpecification`, `TransactionOnBusinessDateSpecification`), combined with `And` and applied with the `Matching` extension member.
 
 ### Dashboard
 
@@ -626,7 +626,7 @@ Week 3 M3 moved the Web application from JSON to SQL Server. `Program.cs` requir
 | Concern | Implementation |
 |---|---|
 | Reports, dashboard, parcel status | The Domain report classes are unchanged. M3 read through repositories and calculated in memory; M5 moved production reads to query services ([section 4.8](#48-query-services-and-read-projections)) |
-| Added repository reads | `GetMoneyOrdersAsync`, `GetShipmentsAsync`, `FindByShipmentIdAsync` |
+| Added repository reads | `GetMoneyOrdersAsync`, `GetShipmentsAsync`, `FindByShipmentIdAsync`. The first two were removed after the Week 3 trainer feedback, when no production code read them any more |
 | `ReferenceDataCache` | Loads through `IReferenceDataSource`. `SqlReferenceDataSource` opens a short-lived scope, because the cache is a singleton |
 | Audit | `SqlAuditStore`, in its own scope and commit ([ADR 0022](docs/adr/0022-audit-store-and-unit-of-work.md)) |
 | Credentials | `SqlStaffCredentialRepository`, in `StaffCredentials` |
@@ -765,18 +765,17 @@ The services keep their authorization checks and return the same report rows, so
 
 `TransactionAccessRule` gained a `CanView` overload that takes a transaction's stored facts, so the rule is applied without loading a basket. The rule itself did not change.
 
-**Domain read methods kept for the unit tests.** Tests call `GetCatalogueAsync`, both `GetCatalogAsync` methods, `GetMoneyOrdersAsync`, `GetTransactionBasketAsync`, `GetTransactionBasketsAsync`, `GetSnapshotAsync` and the repository path of `GetStatusAsync`, so they remain. No controller calls them.
+**Domain read methods kept for the unit tests.** Tests call `GetCatalogueAsync`, both `GetCatalogAsync` methods, `GetMoneyOrdersAsync`, `GetTransactionBasketAsync`, `GetTransactionBasketsAsync` and the repository path of `GetStatusAsync`, so they remain. No controller calls them. `AdministrationApplicationService.GetSnapshotAsync`, which no test or controller called, was removed after the Week 3 trainer feedback.
 
 **Every view now binds to a DTO or view model.** Repository lists stay `AsNoTracking` for the kept methods. Product details in the catalogue still come from the reference-data cache, and are copied into DTOs.
 
 | Repository reads | Change |
 |---|---|
-| `GetBranchesAsync`, `GetProductsAsync`, `GetShippingRatesAsync`, stock `GetForBranchAsync`, transaction `GetForBranchAsync`, `GetMoneyOrdersForBranchAsync`, `GetMoneyOrdersAsync`, `GetShipmentsAsync`, `FindByShipmentIdAsync`, `GetStaffAsync`, `FindForReadAsync` | `AsNoTracking`. `FindAsync` stays tracked, because void, refund and sale processing change what it loads |
+| `GetProductsAsync`, `GetShippingRatesAsync`, stock `GetForBranchAsync`, transaction `GetForBranchAsync`, `GetMoneyOrdersForBranchAsync`, `FindByShipmentIdAsync`, `GetStaffAsync`, `FindForReadAsync` | `AsNoTracking`. `FindAsync` stays tracked, because void, refund and sale processing change what it loads |
 
 **Tracked queries that stay.** `Include` remains only for whole aggregates. Commands need tracking, and `FindByIdAsync` and `FindByCodeAsync` are shared by commands and permission checks, so each request still tracks its staff row, and the dashboard its branch and counters.
 
-**Split queries.** `WholeBaskets()` uses `AsSplitQuery`, because a transaction joins lines, shipments and money orders, which would otherwise repeat its columns for every row. Projections do not need one: `PaidSaleLines` joins one collection, and its tax rate is a scalar subquery. `GetBranchesAsync` includes a single small collection, so it stays one query.
-
+**Split queries.** `WholeBaskets()` uses `AsSplitQuery`, because a transaction joins lines, shipments and money orders, which would otherwise repeat its columns for every row. Projections do not need one: `PaidSaleLines` joins one collection, and its tax rate is a scalar subquery.
 **N+1.** `appsettings.Development.json` logs `Microsoft.EntityFrameworkCore.Database.Command` at Information level. [PERFORMANCE.md](PERFORMANCE.md#the-n1-problem-and-how-it-is-resolved) has the demonstration: 55 commands for a naive loop, 4 for the real read, with the same result.
 
 #### M5 traceability
@@ -984,10 +983,10 @@ flowchart TD
 |---|---|---|
 | Records and value objects | `Money`, `Sku`, `BranchCode`, `Weight`, `Dimensions`, `ShippingRate`, `IdentityVerification`, `CounterSaleDetails` | Validated, immutable values with value equality |
 | Pattern matching | Line tax by item type, basket status transitions, notification text, event dispatch | One readable rule per case |
-| Extension members (`extension` blocks) | `SpecificationExtensions.Matching`, `ApexPostSnapshotExtensions.IsCompletelyEmpty` | Query helpers without changing the types |
+| Extension members (`extension` blocks) | `SpecificationExtensions.Matching` | A query helper without changing the type |
 | `field` keyword | `BranchStock.Quantity`, `MoneyOrder.Status`, `CounterSaleDetails` | Validation or locking in accessors without a hand-written backing field |
 | Generics with constraints | `Specification<T> where T : class`, `RequestValidator.Validate<T>` | Reusable report filters and validation |
-| Delegates (`Func`, `Predicate`, `Action`) | `UpdateAsync(Func<…>)`, `PredicateSpecification<T>`, `SaleReversalService` status callback, subscriber error callback | Caller-supplied behaviour inside a locked or validated operation |
+| Delegates (`Func`, `Predicate`, `Action`) | `IUnitOfWork.ExecuteInTransactionAsync(Func<…>)`, `PredicateSpecification<T>`, `SaleReversalService` status callback, subscriber error callback | Caller-supplied behaviour inside a locked or validated operation |
 | Events | `DomainEventPublisher` C# events | Observer-style notifications |
 | Custom attributes with cached reflection | `NotBlank`, `GreaterThanZero`, `DefinedEnum` plus `RequestValidator` (`ConcurrentDictionary` cache); `[Audited]`, `[RequireApiKey]`, `[RequireAdminNetwork]` | Declarative rules without reflecting on every request |
 | async, `Task.WhenAll`, `SemaphoreSlim`, `ValueTask`, timeouts | See section 9 | |
@@ -1022,10 +1021,10 @@ Only the assignment's allowed libraries are used: xUnit, `Microsoft.AspNetCore.M
 |---|---|---|
 | Domain | 224/224 | Stock, weight-limit, money-order verification and void/refund rules, pricing, transaction access (`CanView`) |
 | Application | 140/140 | Command mapping for every business form, refunds that copy the stored payment, One commit per use case and none on failure (spy Unit of Work), events once across a retry, multi-line counter sales, payment-method configuration, money orders as basket lines (fee, threshold, verification success, failure and timeout), dated reports, catalogue, clerk read access, password hashing and the dummy-hash timing |
-| Infrastructure | 240/240 | The SQL test settings' safety rules and the fixture's checks before migrating, the demo seed's shipments, money orders and reports, index definitions against the migration, model, script and database, migration snapshots, repository translation, the `/sql` files and stored procedures on a real database, compared with the Domain reports, the Daily Sales report served by `usp_DailyBranchSales`, least-privilege role, EF Core write order, SQL repositories and mapping, rollback of a failed sale, rowversion conflicts and retries, concurrent sales, constraints, migrations down and up, seed content, credentials and audit store, concurrency, database health check failure and cancellation paths |
+| Infrastructure | 239/239 | The SQL test settings' safety rules and the fixture's checks before migrating, the demo seed's shipments, money orders and reports, index definitions against the migration, model, script and database, migration snapshots, repository translation, the `/sql` files and stored procedures on a real database, compared with the Domain reports, the Daily Sales report served by `usp_DailyBranchSales`, least-privilege role, EF Core write order, SQL repositories and mapping, rollback of a failed sale, rowversion conflicts and retries, concurrent sales, constraints, migrations down and up, seed content, credentials and audit store, concurrency, database health check failure and cancellation paths |
 | Web | 303/303 | Over-posted fields and route IDs, the demo report screens, two-decimal daily sales totals on the report and dashboard, the exception handler's 500 and 409 mapping, request DTOs on the administration forms, a real goods sale through the `demo` profile settings, the `run-demo.ps1` safety checks, a real two-connection 409, rollback of a failed sale through a route, the Branch Manager void rule on SQL Server, error mappings on real routes, audit failures tested apart from business failures, Problem Details mappings, over-posting, SQL persistence registration, the six required checks (security headers, partner 401 and 403, sign-in 429, sign-in redirect, clerk 403 on void, correlation ID), the access-denied page answering 403, audit opt-in, status codes and transaction ID, catalogue, label preview and its print wiring, clerk sale flow, partner parcel-status API and CORS, invalid startup configuration |
 
-**Total: 907 of 907** on 2026-11-03 at 05:29 UTC, after the Week 3 trainer-feedback corrections ([section 4.10](#410-week-3-trainer-feedback)), with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors. The previous full run, 904 of 904 on 2026-11-01, is in the [test results](docs/evidence/week3-test-results.md).
+**Total: 906 of 906** on 2026-11-03 at 10:04 UTC, after the Week 3 trainer-feedback corrections ([section 4.10](#410-week-3-trainer-feedback)) and the removal of unused code, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors. The previous full run, 904 of 904 on 2026-11-01, is in the [test results](docs/evidence/week3-test-results.md).
 
 ```powershell
 dotnet build ApexPost.slnx --no-incremental
@@ -1052,7 +1051,10 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
   - *Procedures on screens:* `usp_LowStockReport` backs the low-stock report and dashboard. `usp_DailyBranchSales` backs the Daily Sales report.
   - *The stock screen:* stays on the domain path, so it raises the low-stock event ([ADR 0023](docs/adr/0023-stored-procedures.md)).
   - *Duplicated rules:* `usp_AdjustStock` repeats the domain's adjustment rules and raises no low-stock event.
-- **Domain read methods are kept for tests:** see [section 4.8](#48-query-services-and-read-projections). Web tests cover the DTO paths, and the unit tests still cover the kept methods.
+- **Week 2 code that only tests call is kept:** the project owner decided on 2026-11-03 to keep it as the definition of the Week 2 business rules, so the Week 2 tests run unchanged:
+  - *Domain reports:* `DailySalesReportService`, `LowStockReportService`, `ShippingVolumeReportService`, `BranchAuditorReportService` and the report specifications. Since the Week 3 trainer feedback, SQL Server answers every report screen, and the SQL tests compare each report with these classes.
+  - *Use cases:* `TransactionApplicationService.CreateBasketAsync`, `AddLineItemAsync`, `ProcessSaleAsync`, `GetTransactionBasketAsync` and `GetTransactionBasketsAsync`. The sale screen uses `MixedBasketApplicationService`.
+  - *Domain read methods:* see [section 4.8](#48-query-services-and-read-projections). Web tests cover the DTO paths, and the unit tests still cover the kept methods.
 - **Daily totals rounded per column:** the Daily Sales page and the dashboard show retail and service rounded to two decimals, with a total that is their sum. When both columns end in a half cent, `usp_DailyBranchSales`'s own `TotalSales` column, which rounds once, can be 0.01 higher than the page's total ([section 4.7](#47-t-sql-reports-procedures-and-concurrency)). Stored values are unchanged ([ADR 0017](docs/adr/0017-money-precision-and-rounding.md)).
 - **Browser error pages:** an unknown transaction on a browser route is an empty 404, and a 500 on a browser route is Problem Details JSON, not an HTML page.
 - **Demo configuration:** the `demo` profile supplies what a goods sale needs, and the seed fills the shipping and money-order reports. New shipping or money-order sales, the low-stock report and the partner API need further settings, which the README lists.
