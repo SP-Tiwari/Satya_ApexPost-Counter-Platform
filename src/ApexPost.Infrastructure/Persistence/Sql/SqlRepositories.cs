@@ -18,14 +18,6 @@ public sealed class SqlBranchRepository(ApexPostDbContext database)
 			.Include(branch => branch.CounterTerminals)
 			.SingleOrDefaultAsync(branch => branch.Code == code, cancellationToken);
 
-	public async Task<IReadOnlyList<Branch>> GetBranchesAsync(
-		CancellationToken cancellationToken = default) =>
-		await database.Branches
-			.AsNoTracking()
-			.Include(branch => branch.CounterTerminals)
-			.ToArrayAsync(cancellationToken)
-			.ConfigureAwait(false);
-
 	public void Add(Branch branch) => database.Branches.Add(branch);
 }
 
@@ -194,25 +186,6 @@ public sealed class SqlCounterTransactionRepository(ApexPostDbContext database)
 			.ConfigureAwait(false);
 		return moneyOrders;
 	}
-
-	public async Task<IReadOnlyList<MoneyOrder>> GetMoneyOrdersAsync(
-		CancellationToken cancellationToken = default)
-	{
-		var moneyOrders = await database.MoneyOrders
-			.AsNoTracking()
-			.ToArrayAsync(cancellationToken)
-			.ConfigureAwait(false);
-		await RestoreVerificationsAsync(moneyOrders, cancellationToken)
-			.ConfigureAwait(false);
-		return moneyOrders;
-	}
-
-	public async Task<IReadOnlyList<ShippingItem>> GetShipmentsAsync(
-		CancellationToken cancellationToken = default) =>
-		await database.Shipments
-			.AsNoTracking()
-			.ToArrayAsync(cancellationToken)
-			.ConfigureAwait(false);
 
 	public async Task<TransactionBasket?> FindByShipmentIdAsync(
 		string shipmentId,

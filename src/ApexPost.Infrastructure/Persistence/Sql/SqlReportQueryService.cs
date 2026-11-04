@@ -25,6 +25,25 @@ public sealed class SqlReportQueryService(
 			.ToArrayAsync(cancellationToken)
 			.ConfigureAwait(false);
 
+	// usp_DailyBranchSales rounds each column. The row's total is the sum of
+	// the two rounded columns, so the Daily Sales table always adds up.
+	public async Task<DailySalesReportRow?> GetDailySalesAsync(
+		BranchCode branchCode,
+		DateOnly businessDate,
+		CancellationToken cancellationToken = default)
+	{
+		var result = await procedures
+			.GetDailyBranchSalesAsync(branchCode.Value, businessDate, cancellationToken)
+			.ConfigureAwait(false);
+		return result is null
+			? null
+			: new DailySalesReportRow(
+				branchCode,
+				result.BusinessDate,
+				new Money(result.RetailSales, result.Currency),
+				new Money(result.ServiceSales, result.Currency));
+	}
+
 	public async Task<IReadOnlyList<LowStockReportRow>> GetLowStockAsync(
 		BranchCode branchCode,
 		int threshold,

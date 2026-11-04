@@ -8,21 +8,15 @@ public sealed class ShippingVolumeReportApplicationService
 		"An active Auditor or Administrator is required to access shipping-volume reports.";
 
 	private readonly IStaffRepository _staff;
-	private readonly ICounterTransactionRepository _transactions;
-	private readonly IReportQueryService? _queries;
-	private readonly ShippingVolumeReportService _reportService = new();
+	private readonly IReportQueryService _queries;
 
-	// Without it, the report is calculated from repository reads, which is what
-	// the unit tests use with their in-memory fakes.
 	public ShippingVolumeReportApplicationService(
 		IStaffRepository staff,
-		ICounterTransactionRepository transactions,
-		IReportQueryService? queries = null)
+		IReportQueryService queries)
 	{
 		ArgumentNullException.ThrowIfNull(staff);
-		ArgumentNullException.ThrowIfNull(transactions);
+		ArgumentNullException.ThrowIfNull(queries);
 		_staff = staff;
-		_transactions = transactions;
 		_queries = queries;
 	}
 
@@ -44,11 +38,6 @@ public sealed class ShippingVolumeReportApplicationService
 			throw new UnauthorizedAccessException(DeniedMessage);
 		}
 
-		if (_queries is not null)
-			return await _queries.GetShippingVolumeAsync(cancellationToken).ConfigureAwait(false);
-
-		var shipments = await _transactions.GetShipmentsAsync(cancellationToken)
-			.ConfigureAwait(false);
-		return _reportService.CreateReport(shipments);
+		return await _queries.GetShippingVolumeAsync(cancellationToken).ConfigureAwait(false);
 	}
 }

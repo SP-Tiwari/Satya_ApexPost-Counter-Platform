@@ -83,23 +83,6 @@ public sealed class RepositoryTranslationTests(SqlTestHost host) : IAsyncLifetim
 	}
 
 	[Fact]
-	public async Task GetBranches_RestoresCodesAndCounters_WithoutTracking()
-	{
-		await host.InRequestAsync(async services =>
-		{
-			var branches = await services.GetRequiredService<IBranchRepository>()
-				.GetBranchesAsync();
-
-			Assert.Equal(
-				[(SqlTestHost.Branch, 1), (OtherBranch, 2)],
-				branches
-					.Select(branch => (branch.Code, branch.CounterTerminals.Count))
-					.OrderBy(row => row.Code.Value));
-			Assert.Empty(services.GetRequiredService<ApexPostDbContext>().ChangeTracker.Entries());
-		});
-	}
-
-	[Fact]
 	public async Task GetMoneyOrdersForBranch_ReturnsOnlyThatBranch_WithVerifications()
 	{
 		await AddOtherBranchClerkAsync();

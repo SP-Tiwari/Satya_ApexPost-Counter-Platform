@@ -251,9 +251,8 @@ builder.Services.AddScoped<StockAdjustmentApplicationService>(services =>
 builder.Services.AddScoped<LowStockReportApplicationService>(services =>
 	new LowStockReportApplicationService(
 		services.GetRequiredService<IStaffRepository>(),
-		services.GetRequiredService<IStockRepository>(),
-		lowStockThreshold,
-		services.GetRequiredService<IReportQueryService>()));
+		services.GetRequiredService<IReportQueryService>(),
+		lowStockThreshold));
 builder.Services.AddScoped<BranchDashboardApplicationService>(services =>
 	new BranchDashboardApplicationService(
 		services.GetRequiredService<IStaffRepository>(),

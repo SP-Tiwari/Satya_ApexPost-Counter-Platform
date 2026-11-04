@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 using ApexPost.Application.Persistence;
 using ApexPost.Application.Services;
 using ApexPost.Domain.Enums;
+using ApexPost.Domain.Reporting;
+using ApexPost.Domain.Specifications;
 using ApexPost.Infrastructure.Persistence.Sql;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +15,7 @@ using static ApexPost.Infrastructure.Tests.Sql.SqlTestHost;
 namespace ApexPost.Infrastructure.Tests.Sql;
 
 // Runs the files in /sql against the disposable database, and compares each
-// report with the application's own calculation over the same rows.
+// report with the Domain's report services over the same rows.
 [Collection(SqlCollection.Name)]
 public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 {
@@ -27,17 +29,13 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 	public Task DisposeAsync() => Task.CompletedTask;
 
 	[Fact]
-	public async Task DailySalesProcedure_MatchesTheApplicationReport()
+	public async Task DailySalesProcedure_MatchesTheDomainReport()
 	{
 		await SellAsync(Stationery, 3, withShippingAndMoneyOrder: true);
 		await SellAsync(Packaging, 2);
 		var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-		var expected = Assert.Single(await host.InRequestAsync(services =>
-			new DailyBranchSalesReportApplicationService(
-				services.GetRequiredService<IStaffRepository>(),
-				services.GetRequiredService<ICounterTransactionRepository>())
-				.GetReportAsync(ManagerId, today)));
+		var expected = await DomainDailySalesAsync(today);
 		var actual = await ProceduresAsync(procedures =>
 			procedures.GetDailyBranchSalesAsync(Branch.Value, today));
 
@@ -48,6 +46,34 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 		Assert.Equal(TwoPlaces(expected.RetailSales.Amount), actual.RetailSales);
 		Assert.Equal(TwoPlaces(expected.ServiceSales.Amount), actual.ServiceSales);
 		Assert.Equal(TwoPlaces(expected.TotalSales.Amount), actual.TotalSales);
+	}
+
+	// The Daily Sales screen's service, as the Web application builds it.
+	[Fact]
+	public async Task DailySalesReport_IsServedByTheProcedure()
+	{
+		await SellAsync(Stationery, 3, withShippingAndMoneyOrder: true);
+		var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+		IReadOnlyList<DailySalesReportRow> report = [];
+		var commands = await CaptureCommandsAsync(async () =>
+			report = await host.InRequestAsync(services =>
+				new DailyBranchSalesReportApplicationService(
+					services.GetRequiredService<IStaffRepository>(),
+					services.GetRequiredService<IReportQueryService>())
+					.GetReportAsync(ManagerId, today)));
+		var procedure = await ProceduresAsync(procedures =>
+			procedures.GetDailyBranchSalesAsync(Branch.Value, today));
+
+		Assert.Contains(commands, sql =>
+			sql.Contains("EXEC dbo.usp_DailyBranchSales", StringComparison.Ordinal));
+		Assert.DoesNotContain(commands, sql =>
+			sql.Contains("[TransactionLines]", StringComparison.Ordinal));
+		var row = Assert.Single(report);
+		Assert.Equal(Branch, row.BranchCode);
+		Assert.Equal(procedure!.Currency, row.TotalSales.Currency);
+		Assert.Equal(procedure.RetailSales, row.RetailSales.Amount);
+		Assert.Equal(procedure.ServiceSales, row.ServiceSales.Amount);
 	}
 
 	[Fact]
@@ -93,15 +119,14 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 	}
 
 	[Fact]
-	public async Task LowStockProcedure_MatchesTheApplicationReport()
+	public async Task LowStockProcedure_MatchesTheDomainReport()
 	{
 		await SellAsync(Stationery, 8);
 
-		var expected = await host.InRequestAsync(services =>
-			new LowStockReportApplicationService(
-				services.GetRequiredService<IStaffRepository>(),
-				services.GetRequiredService<IStockRepository>(),
-				2).GetReportAsync(ManagerId));
+		var expected = await host.InRequestAsync(async services =>
+			new LowStockReportService().CreateReport(
+				await services.GetRequiredService<IStockRepository>().GetForBranchAsync(Branch),
+				2));
 		var actual = await ProceduresAsync(procedures =>
 			procedures.GetLowStockAsync(Branch.Value, 2));
 
@@ -385,16 +410,15 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 	}
 
 	[Fact]
-	public async Task ShippingVolumeScript_MatchesTheApplicationReport()
+	public async Task ShippingVolumeScript_MatchesTheDomainReport()
 	{
 		await SellAsync(Stationery, 1, withShippingAndMoneyOrder: true);
 		await SellAsync(Stationery, 1, withShippingAndMoneyOrder: true);
 
-		var expected = await host.InRequestAsync(services =>
-			new ShippingVolumeReportApplicationService(
-				services.GetRequiredService<IStaffRepository>(),
-				services.GetRequiredService<ICounterTransactionRepository>())
-				.GetReportAsync(AdministratorId));
+		var expected = await host.InRequestAsync(async services =>
+			new ShippingVolumeReportService().CreateReport(
+				await services.GetRequiredService<ApexPostDbContext>()
+					.Shipments.AsNoTracking().ToArrayAsync()));
 		var rows = await QueryFileAsync(
 			"reports", "04-shipping-volume-by-zone-and-service-level.sql");
 
@@ -404,16 +428,16 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 	}
 
 	[Fact]
-	public async Task MoneyOrderScript_MatchesTheApplicationReport()
+	public async Task MoneyOrderScript_MatchesTheDomainReport()
 	{
 		await SellAsync(Stationery, 1, withShippingAndMoneyOrder: true);
 		await RunFileAsync("demos", "demo-fixture.sql");
 
-		var expected = await host.InRequestAsync(services =>
-			new BranchAuditorReportApplicationService(
-				services.GetRequiredService<IStaffRepository>(),
-				services.GetRequiredService<ICounterTransactionRepository>())
-				.GetReportAsync(AdministratorId));
+		var expected = await host.InRequestAsync(async services =>
+			new BranchAuditorReportService().CreateReport(
+				(await MoneyOrdersOfEveryBranchAsync(services))
+					.Select(order => new BranchAuditorReportEntry(
+						order.ProcessingBranchCode!, order, order.IdentityVerification))));
 		var rows = await QueryFileAsync(
 			"reports", "05-money-orders-and-identity-verifications-per-branch.sql");
 
@@ -588,6 +612,31 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 
 	private static decimal TwoPlaces(decimal value) =>
 		Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+	private Task<DailySalesReportRow> DomainDailySalesAsync(DateOnly date) =>
+		host.InRequestAsync(async services =>
+		{
+			var baskets = await services.GetRequiredService<ICounterTransactionRepository>()
+				.GetForBranchAsync(Branch);
+			var paidOnDate = new PaidTransactionSpecification()
+				.And(new TransactionOnBusinessDateSpecification(date));
+			return Assert.Single(new DailySalesReportService().CreateReport(baskets
+				.Matching(paidOnDate)
+				.Select(basket => new DailySalesReportEntry(Branch, date, basket))));
+		});
+
+	// Read branch by branch, so each money order keeps its restored verification.
+	private static async Task<IReadOnlyList<Domain.Entities.MoneyOrder>> MoneyOrdersOfEveryBranchAsync(
+		IServiceProvider services)
+	{
+		var branchCodes = await services.GetRequiredService<ApexPostDbContext>()
+			.Branches.AsNoTracking().Select(branch => branch.Code).ToArrayAsync();
+		var transactions = services.GetRequiredService<ICounterTransactionRepository>();
+		var moneyOrders = new List<Domain.Entities.MoneyOrder>();
+		foreach (var branchCode in branchCodes)
+			moneyOrders.AddRange(await transactions.GetMoneyOrdersForBranchAsync(branchCode));
+		return moneyOrders;
+	}
 
 	internal static string Normalize(string sql) =>
 		Regex.Replace(sql.ReplaceLineEndings("\n").Trim(), @"CREATE\s+(OR ALTER\s+)?PROCEDURE", "CREATE PROCEDURE");

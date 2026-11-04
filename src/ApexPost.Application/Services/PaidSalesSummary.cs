@@ -2,9 +2,10 @@ using ApexPost.Domain.Reporting;
 
 namespace ApexPost.Application.Services;
 
-// The daily sales totals, calculated from projected lines by the same rules as
-// TransactionBasket: goods are retail, services are services, and money-order
-// principal is neither. Amounts stay unrounded, as they do on the basket.
+// The dashboard's sales totals, calculated from projected lines by the same
+// rules as TransactionBasket: goods are retail, services are services, and
+// money-order principal is neither. Each column is then rounded as
+// usp_DailyBranchSales rounds it, so the dashboard matches the Daily Sales report.
 internal sealed record PaidSalesSummary(
 	int TransactionCount,
 	DailySalesReportRow? Totals,
@@ -38,7 +39,11 @@ internal sealed record PaidSalesSummary(
 		TransactionItemType type)
 	{
 		var matching = lines.Where(line => line.Type == type).ToArray();
-		return matching.Sum(Subtotal) + matching.Sum(Tax);
+		// SQL Server's ROUND on a decimal rounds half away from zero.
+		return Math.Round(
+			matching.Sum(Subtotal) + matching.Sum(Tax),
+			2,
+			MidpointRounding.AwayFromZero);
 	}
 
 	private static decimal Subtotal(PaidSaleLine line) =>

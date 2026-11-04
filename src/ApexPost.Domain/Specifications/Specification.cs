@@ -17,13 +17,6 @@ public abstract class Specification<T> : ISpecification<T>
 	public Specification<T> And(ISpecification<T> other) =>
 		new PredicateSpecification<T>(candidate =>
 			IsSatisfiedBy(candidate) && other.IsSatisfiedBy(candidate));
-
-	public Specification<T> Or(ISpecification<T> other) =>
-		new PredicateSpecification<T>(candidate =>
-			IsSatisfiedBy(candidate) || other.IsSatisfiedBy(candidate));
-
-	public Specification<T> Not() =>
-		new PredicateSpecification<T>(candidate => !IsSatisfiedBy(candidate));
 }
 
 public sealed class PredicateSpecification<T>(Predicate<T> predicate)

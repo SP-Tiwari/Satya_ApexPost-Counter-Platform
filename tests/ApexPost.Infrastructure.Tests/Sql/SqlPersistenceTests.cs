@@ -415,11 +415,12 @@ public sealed class SqlPersistenceTests(SqlTestHost host) : IAsyncLifetime
 		await host.InRequestAsync(async services =>
 		{
 			var transactions = services.GetRequiredService<ICounterTransactionRepository>();
-			var shipment = Assert.Single(await transactions.GetShipmentsAsync());
-			var order = Assert.Single(await transactions.GetMoneyOrdersAsync());
+			var shipment = Assert.Single(await services.GetRequiredService<ApexPostDbContext>()
+				.Shipments.AsNoTracking().ToArrayAsync());
 			var parcel = await transactions.FindByShipmentIdAsync(shipment.Id);
-			Assert.Equal("****1234", order.IdentityVerification?.MaskedDocumentIdentifier);
 			Assert.Equal(request.TransactionId, parcel?.Id);
+			var order = Assert.Single(await transactions.GetMoneyOrdersForBranchAsync(SqlTestHost.Branch));
+			Assert.Equal("****1234", order.IdentityVerification?.MaskedDocumentIdentifier);
 			Assert.Null(await transactions.FindByShipmentIdAsync("missing"));
 		});
 	}

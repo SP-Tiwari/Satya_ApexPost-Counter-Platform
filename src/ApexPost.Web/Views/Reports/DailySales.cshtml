@@ -111,9 +111,9 @@ else
                         <tr>
                             <td>@row.BranchCode</td>
                             <td>@row.BusinessDate</td>
-                            <td>@row.RetailSales @row.Currency</td>
-                            <td>@row.ServiceSales @row.Currency</td>
-                            <td>@row.TotalSales @row.Currency</td>
+                            <td>@row.RetailSales.ToString("N2") @row.Currency</td>
+                            <td>@row.ServiceSales.ToString("N2") @row.Currency</td>
+                            <td>@row.TotalSales.ToString("N2") @row.Currency</td>
                         </tr>
                     }
                 </tbody>

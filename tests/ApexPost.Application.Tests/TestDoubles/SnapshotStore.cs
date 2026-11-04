@@ -66,10 +66,6 @@ internal sealed class SnapshotStore
 			set => Single(set.Branches.Where(branch => branch.Code == code)),
 			cancellationToken);
 
-	public Task<IReadOnlyList<Branch>> GetBranchesAsync(
-		CancellationToken cancellationToken = default) =>
-		ReadAsync(set => Copy(set.Branches), cancellationToken);
-
 	public void Add(Branch branch) => Working.Branches.Add(branch);
 
 	public Task<Product?> FindBySkuAsync(

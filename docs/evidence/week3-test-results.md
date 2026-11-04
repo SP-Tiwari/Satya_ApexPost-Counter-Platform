@@ -2,7 +2,34 @@
 
 Build, test and Postman results for the Week 3 solution, recorded from the actual output. All data is fictional.
 
-## Latest full run
+## Latest full run: after the Week 3 trainer feedback
+
+| Item | Value |
+|---|---|
+| Build started | 2026-11-03 10:04:26 UTC |
+| Tests started | 2026-11-03 10:04:37 UTC |
+| Tests finished | 2026-11-03 10:05:59 UTC |
+| Code | The trainer-feedback corrections on `master` ([DESIGN.md section 4.10](../../DESIGN.md#410-week-3-trainer-feedback)), and the removal of production code that nothing called. Only documentation changed after this run |
+| .NET SDK | 10.0.402 |
+
+```powershell
+dotnet build ApexPost.slnx --no-incremental
+dotnet test ApexPost.slnx --no-build
+```
+
+**Build succeeded, with 0 warnings and 0 errors.**
+
+| Project | Passed | Failed | Skipped | Total | Change from 904 |
+|---|---:|---:|---:|---:|---|
+| Domain | 224 | 0 | 0 | 224 | None. No existing Domain test file has changed since `b2d9a36` |
+| Application | 140 | 0 | 0 | 140 | None. The four report service test classes run unchanged against the `SnapshotReportQueries` test double |
+| Infrastructure | 239 | 0 | 0 | 239 | Added `DailySalesReport_IsServedByTheProcedure`. Removed `InitializeAsync_DoesNotModifyANonEmptySnapshot`, because `DemoDataInitializer.InitializeAsync` was removed; the `DemoSeed_*` tests cover seeding once. Removed `GetBranches_RestoresCodesAndCounters_WithoutTracking`, because `IBranchRepository.GetBranchesAsync` had no production caller and was removed |
+| Web integration | 303 | 0 | 0 | 303 | Added `DailySales_ShowsTotalsRoundedToTwoDecimals`, `Dashboard_ShowsTodaysSalesRoundedLikeTheDailySalesReport` and `DailySales_LastRepresentableDateIsABadRequest` |
+| **Total** | **906** | **0** | **0** | **906** | **+2** |
+
+**After the run:** a read-only query on `master` listed `ApexPostDb` as the only user database. Session sampling during the run was not repeated, and the Postman CLI run below was not repeated on this code.
+
+## Previous full run (2026-11-01)
 
 | Item | Value |
 |---|---|
@@ -59,7 +86,7 @@ dotnet test ApexPost.slnx --no-build
 
 ## Latest Postman CLI run
 
-Run on 2026-11-01 at 15:42 UTC with Postman CLI 1.75.0, after the full run and on the same code.
+Run on 2026-11-01 at 15:42 UTC with Postman CLI 1.75.0, after the previous full run and on the same code. It predates the trainer-feedback corrections.
 
 ```powershell
 ./docs/evidence/m7/run-postman.ps1

@@ -22,6 +22,13 @@ public interface IReportQueryService
 		DateOnly businessDate,
 		CancellationToken cancellationToken = default);
 
+	// The branch's paid sales on one UTC date, with retail and service each
+	// rounded to two decimals. Null when there is no paid sale that day.
+	Task<DailySalesReportRow?> GetDailySalesAsync(
+		BranchCode branchCode,
+		DateOnly businessDate,
+		CancellationToken cancellationToken = default);
+
 	Task<IReadOnlyList<LowStockReportRow>> GetLowStockAsync(
 		BranchCode branchCode,
 		int threshold,

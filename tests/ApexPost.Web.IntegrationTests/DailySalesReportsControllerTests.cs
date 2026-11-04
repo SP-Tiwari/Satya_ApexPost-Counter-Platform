@@ -70,10 +70,63 @@ public sealed class DailySalesReportsControllerTests : IAsyncLifetime
 
 		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 		var html = await response.Content.ReadAsStringAsync();
-		Assert.Matches(@"BR01</td>\s*<td>\d{1,2}/\d{1,2}/2026</td>\s*<td>100 INR</td>\s*<td>20 INR</td>\s*<td>120 INR</td>", html);
+		Assert.Matches(@"BR01</td>\s*<td>\d{1,2}/\d{1,2}/2026</td>\s*<td>100\.00 INR</td>\s*<td>20\.00 INR</td>\s*<td>120\.00 INR</td>", html);
 		Assert.DoesNotContain("BR02", html, StringComparison.Ordinal);
 		// The previous day's sale is reported only for its own date.
-		Assert.DoesNotContain("55 INR", html, StringComparison.Ordinal);
+		Assert.DoesNotContain("55.00 INR", html, StringComparison.Ordinal);
+	}
+
+	// 24.05 at 10% tax is 26.455; usp_DailyBranchSales returns it as 26.46.
+	[Fact]
+	public async Task DailySales_ShowsTotalsRoundedToTwoDecimals()
+	{
+		await SeedAsync(
+			[CreateStaff(ManagerId, StaffRole.BranchManager, "BR01")],
+			[CreatePaidBasket("BR01", 24.05m, 1m, taxRate: 0.1m)]);
+		using var client = CreateClient("BranchManager", ManagerId, "BR01");
+
+		var response = await client.GetAsync(
+			$"/Reports/DailySales?businessDate={ReportDate:yyyy-MM-dd}");
+
+		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+		var html = await response.Content.ReadAsStringAsync();
+		Assert.Matches(@"<td>26\.46 INR</td>\s*<td>1\.10 INR</td>\s*<td>27\.56 INR</td>", html);
+		Assert.DoesNotContain("26.455", html, StringComparison.Ordinal);
+	}
+
+	// The dashboard rounds each column as the procedure does, so its chart
+	// legend matches the Daily Sales report.
+	[Fact]
+	public async Task Dashboard_ShowsTodaysSalesRoundedLikeTheDailySalesReport()
+	{
+		var today = DateOnly.FromDateTime(DateTime.UtcNow);
+		await SeedAsync(
+			[CreateStaff(ManagerId, StaffRole.BranchManager, "BR01")],
+			[CreatePaidBasket(
+				"BR01", 24.05m, 1m, today.DayNumber - ReportDate.DayNumber, taxRate: 0.1m)]);
+		using var client = CreateClient("BranchManager", ManagerId, "BR01");
+
+		var response = await client.GetAsync("/");
+
+		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+		var html = await response.Content.ReadAsStringAsync();
+		Assert.Contains("<span class=\"chart-legend-value\">26.46</span>", html, StringComparison.Ordinal);
+		Assert.Contains("<span class=\"chart-legend-value\">1.1</span>", html, StringComparison.Ordinal);
+		Assert.DoesNotContain("26.455", html, StringComparison.Ordinal);
+	}
+
+	// The procedure refuses 9999-12-31, which has no next day to end the range.
+	[Fact]
+	public async Task DailySales_LastRepresentableDateIsABadRequest()
+	{
+		await SeedAsync(
+			[CreateStaff(ManagerId, StaffRole.BranchManager, "BR01")],
+			[]);
+		using var client = CreateClient("BranchManager", ManagerId, "BR01");
+
+		var response = await client.GetAsync("/Reports/DailySales?businessDate=9999-12-31");
+
+		Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 	}
 
 	[Fact]
@@ -142,11 +195,12 @@ public sealed class DailySalesReportsControllerTests : IAsyncLifetime
 		string branchCode,
 		decimal retail,
 		decimal service,
-		int dayOffset = 0)
+		int dayOffset = 0,
+		decimal taxRate = 0m)
 	{
 		var taxRates = new Dictionary<TaxCategory, decimal>
 		{
-			[TaxCategory.Standard] = 0m
+			[TaxCategory.Standard] = taxRate
 		};
 		var basket = new TransactionBasket(
 			"INR",

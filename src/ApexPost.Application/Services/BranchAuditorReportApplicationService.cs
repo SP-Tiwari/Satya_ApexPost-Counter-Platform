@@ -8,21 +8,15 @@ public sealed class BranchAuditorReportApplicationService
 		"An active Auditor or Administrator is required to access branch auditor reports.";
 
 	private readonly IStaffRepository _staff;
-	private readonly ICounterTransactionRepository _transactions;
-	private readonly IReportQueryService? _queries;
-	private readonly BranchAuditorReportService _reportService = new();
+	private readonly IReportQueryService _queries;
 
-	// Without it, the report is calculated from repository reads, which is what
-	// the unit tests use with their in-memory fakes.
 	public BranchAuditorReportApplicationService(
 		IStaffRepository staff,
-		ICounterTransactionRepository transactions,
-		IReportQueryService? queries = null)
+		IReportQueryService queries)
 	{
 		ArgumentNullException.ThrowIfNull(staff);
-		ArgumentNullException.ThrowIfNull(transactions);
+		ArgumentNullException.ThrowIfNull(queries);
 		_staff = staff;
-		_transactions = transactions;
 		_queries = queries;
 	}
 
@@ -44,18 +38,6 @@ public sealed class BranchAuditorReportApplicationService
 			throw new UnauthorizedAccessException(DeniedMessage);
 		}
 
-		if (_queries is not null)
-			return await _queries.GetBranchAuditorReportAsync(cancellationToken).ConfigureAwait(false);
-
-		var moneyOrders = await _transactions.GetMoneyOrdersAsync(cancellationToken)
-			.ConfigureAwait(false);
-		var entries = moneyOrders
-			.Where(order => order.ProcessingBranchCode is not null)
-			.Select(order => new BranchAuditorReportEntry(
-				order.ProcessingBranchCode!,
-				order,
-				order.IdentityVerification));
-
-		return _reportService.CreateReport(entries);
+		return await _queries.GetBranchAuditorReportAsync(cancellationToken).ConfigureAwait(false);
 	}
 }

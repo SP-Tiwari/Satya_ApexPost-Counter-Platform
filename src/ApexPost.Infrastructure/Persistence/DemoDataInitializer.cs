@@ -13,13 +13,9 @@ internal sealed record DemoServiceSales(
 	IReadOnlyList<ShippingRate> ExtraShippingRates,
 	IReadOnlyList<TransactionBasket> Sales);
 
-public sealed class DemoDataInitializer(
-	IApexPostRepository repository,
-	TimeProvider? timeProvider = null)
+// SqlDemoDataSeeder writes these records to SQL Server.
+public static class DemoDataInitializer
 {
-	private readonly TimeProvider _timeProvider =
-		timeProvider ?? TimeProvider.System;
-
 	// The demo seed is the only seed source. Staff IDs are exposed so demo
 	// logins can be provisioned for exactly these records.
 	public static IReadOnlyList<string> DemoStaffIds { get; } =
@@ -37,24 +33,8 @@ public sealed class DemoDataInitializer(
 	private const decimal DemoMoneyOrderFee = 25m;
 	private const string DemoCurrency = "INR";
 
-	public async Task<bool> InitializeAsync(
-		CancellationToken cancellationToken = default)
-	{
-		var initialized = false;
-		await repository.UpdateAsync(snapshot =>
-		{
-			if (!snapshot.IsCompletelyEmpty)
-				return snapshot;
-
-			initialized = true;
-			return CreateDemoSnapshot(_timeProvider.GetUtcNow());
-		}, cancellationToken).ConfigureAwait(false);
-
-		return initialized;
-	}
-
 	// With a payment method, sales record a counter and clerk like real ones.
-	internal static ApexPostSnapshot CreateDemoSnapshot(
+	public static ApexPostSnapshot CreateDemoSnapshot(
 		DateTimeOffset seededAtUtc,
 		int saleCount = 40,
 		string? paymentMethod = null)
@@ -268,22 +248,5 @@ public sealed class DemoDataInitializer(
 			});
 
 		return new DemoServiceSales(extraRates, [.. shipmentSales, .. moneyOrderSales]);
-	}
-}
-
-internal static class ApexPostSnapshotExtensions
-{
-	extension(ApexPostSnapshot snapshot)
-	{
-		public bool IsCompletelyEmpty =>
-			snapshot.Branches.Count == 0 &&
-			snapshot.Staff.Count == 0 &&
-			snapshot.Products.Count == 0 &&
-			snapshot.BranchStocks.Count == 0 &&
-			snapshot.ShippingItems.Count == 0 &&
-			snapshot.ShippingRates.Count == 0 &&
-			snapshot.MoneyOrders.Count == 0 &&
-			snapshot.IdentityVerifications.Count == 0 &&
-			snapshot.TransactionBaskets.Count == 0;
 	}
 }

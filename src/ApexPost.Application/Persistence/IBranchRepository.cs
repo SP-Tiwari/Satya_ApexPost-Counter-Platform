@@ -7,8 +7,5 @@ public interface IBranchRepository
 		BranchCode code,
 		CancellationToken cancellationToken = default);
 
-	Task<IReadOnlyList<Branch>> GetBranchesAsync(
-		CancellationToken cancellationToken = default);
-
 	void Add(Branch branch);
 }
