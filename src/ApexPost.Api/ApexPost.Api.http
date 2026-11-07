@@ -1,0 +1,234 @@
+# ApexPost API (Week 4 Part B): one success and at least one failure per endpoint.
+# Run the requests in order against a database migrated with AddTrackedShipments.
+# All values are fictional. Start the API with:
+#   dotnet run --project src/ApexPost.Api --launch-profile https
+
+@baseUrl = https://localhost:7280
+@trackingNumber = APX-00000001
+@otherTrackingNumber = APX-00000002
+@scanId = scan::0b6f3c1a-5d2e-4f8b-9a71-2c4e6d8f0a13
+
+### 1. POST /api/shipments: 201 Created with a Location header
+POST {{baseUrl}}/api/shipments
+Content-Type: application/json
+
+{
+  "trackingNumber": "{{trackingNumber}}",
+  "recipientName": "DEMO Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "1 Demo Street",
+  "recipientCity": "Pune",
+  "weightKg": 2.5
+}
+
+### 2. POST /api/shipments: 409, the tracking number already exists
+POST {{baseUrl}}/api/shipments
+Content-Type: application/json
+
+{
+  "trackingNumber": "{{trackingNumber}}",
+  "recipientName": "DEMO Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "1 Demo Street",
+  "recipientCity": "Pune",
+  "weightKg": 2.5
+}
+
+### 3. POST /api/shipments: 400 ValidationProblemDetails (tracking number, phone, weight, missing city)
+POST {{baseUrl}}/api/shipments
+Content-Type: application/json
+
+{
+  "trackingNumber": "APX-123",
+  "recipientName": "DEMO Recipient",
+  "recipientPhone": "98765",
+  "recipientAddress": "1 Demo Street",
+  "weightKg": 75
+}
+
+### 4. POST /api/shipments: 415, not JSON
+POST {{baseUrl}}/api/shipments
+Content-Type: text/plain
+
+trackingNumber=APX-00000003
+
+### 5. POST /api/shipments: 201, a second shipment for the filters and the scan rules
+POST {{baseUrl}}/api/shipments
+Content-Type: application/json
+
+{
+  "trackingNumber": "{{otherTrackingNumber}}",
+  "recipientName": "DEMO Second Recipient",
+  "recipientPhone": "+919812345678",
+  "recipientAddress": "2 Demo Road",
+  "recipientCity": "Mumbai",
+  "weightKg": 0.1
+}
+
+### 6. GET /api/shipments: 200, the first page (pageSize defaults to 20)
+GET {{baseUrl}}/api/shipments
+
+### 7. GET /api/shipments: 200, filtered by status and city
+GET {{baseUrl}}/api/shipments?page=1&pageSize=50&status=Created&city=Pune
+
+### 8. GET /api/shipments: 400, pageSize above the maximum of 50
+GET {{baseUrl}}/api/shipments?pageSize=51
+
+### 9. GET /api/shipments/{trackingNumber}: 200
+GET {{baseUrl}}/api/shipments/{{trackingNumber}}
+
+### 10. GET /api/shipments/{trackingNumber}: 404, unknown tracking number
+GET {{baseUrl}}/api/shipments/APX-99999999
+
+### 11. PUT /api/shipments/{trackingNumber}: 200, details replaced
+PUT {{baseUrl}}/api/shipments/{{trackingNumber}}
+Content-Type: application/json
+
+{
+  "recipientName": "DEMO Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "10 Demo Avenue",
+  "recipientCity": "Pune",
+  "weightKg": 3
+}
+
+### 12. PUT /api/shipments/{trackingNumber}: 400, the weight is outside 0.1 to 70 kg
+PUT {{baseUrl}}/api/shipments/{{trackingNumber}}
+Content-Type: application/json
+
+{
+  "recipientName": "DEMO Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "10 Demo Avenue",
+  "recipientCity": "Pune",
+  "weightKg": 0.05
+}
+
+### 13. PATCH /api/shipments/{trackingNumber}/status: 200, Created to PickedUp (status 1)
+# Statuses are numbers in Part B: 0 Created, 1 PickedUp, 2 InTransit,
+# 3 OutForDelivery, 4 Delivered, 5 Failed.
+PATCH {{baseUrl}}/api/shipments/{{trackingNumber}}/status
+Content-Type: application/json
+
+{ "status": 1 }
+
+### 14. PATCH /api/shipments/{trackingNumber}/status: 409, PickedUp cannot go straight to Delivered
+PATCH {{baseUrl}}/api/shipments/{{trackingNumber}}/status
+Content-Type: application/json
+
+{ "status": 4 }
+
+### 15. PATCH /api/shipments/{trackingNumber}/status: 400, not a defined status
+PATCH {{baseUrl}}/api/shipments/{{trackingNumber}}/status
+Content-Type: application/json
+
+{ "status": 42 }
+
+### 16. DELETE /api/shipments/{trackingNumber}: 409, the shipment is no longer Created
+DELETE {{baseUrl}}/api/shipments/{{trackingNumber}}
+
+### 17. POST /api/shipments/{trackingNumber}/scans: 200, accepted 2
+# Scan types are numbers: 0 Pickup, 1 InTransit, 2 Delivered, 3 Failed.
+POST {{baseUrl}}/api/shipments/{{trackingNumber}}/scans
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "{{scanId}}",
+      "trackingNumber": "{{trackingNumber}}",
+      "scanType": 0,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2026-11-07T08:00:00Z",
+      "notes": "Collected from DEMO sender"
+    },
+    {
+      "scanId": "scan::7d1e9a42-3b6c-4e8f-b2a5-9c0d1f3e5a77",
+      "trackingNumber": "{{trackingNumber}}",
+      "scanType": 1,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune sorting centre",
+      "scannedAtUtc": "2026-11-07T09:30:00Z"
+    }
+  ]
+}
+
+### 18. POST /api/shipments/{trackingNumber}/scans: 200, the same scan again is a duplicate, plus two rejections
+POST {{baseUrl}}/api/shipments/{{trackingNumber}}/scans
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "{{scanId}}",
+      "trackingNumber": "{{trackingNumber}}",
+      "scanType": 0,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2026-11-07T08:00:00Z"
+    },
+    {
+      "scanId": "not-a-scan-id",
+      "trackingNumber": "{{trackingNumber}}",
+      "scanType": 1,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2026-11-07T08:10:00Z"
+    },
+    {
+      "scanId": "scan::4a8c2e6f-1b3d-4f5a-8c7e-0d2f4b6a8c91",
+      "trackingNumber": "{{otherTrackingNumber}}",
+      "scanType": 1,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2026-11-07T08:20:00Z"
+    }
+  ]
+}
+
+### 19. POST /api/shipments/{trackingNumber}/scans: 400, a scan time in the future
+POST {{baseUrl}}/api/shipments/{{trackingNumber}}/scans
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "scan::9e3b5d7f-2a4c-4e6b-8d0f-1a3c5e7b9d24",
+      "trackingNumber": "{{trackingNumber}}",
+      "scanType": 1,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2099-01-01T00:00:00Z"
+    }
+  ]
+}
+
+### 20. POST /api/shipments/{trackingNumber}/scans: 404, unknown tracking number
+POST {{baseUrl}}/api/shipments/APX-99999999/scans
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "scan::5c7e9a1b-3d5f-4b7d-9f1a-2b4d6f8a0c35",
+      "trackingNumber": "APX-99999999",
+      "scanType": 0,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2026-11-07T08:00:00Z"
+    }
+  ]
+}
+
+### 21. GET /api/shipments/{trackingNumber}/scans: 200, the history oldest first
+GET {{baseUrl}}/api/shipments/{{trackingNumber}}/scans
+
+### 22. GET /api/shipments/{trackingNumber}/scans: 404, unknown tracking number
+GET {{baseUrl}}/api/shipments/APX-99999999/scans
+
+### 23. DELETE /api/shipments/{trackingNumber}: 204, the second shipment is still Created
+DELETE {{baseUrl}}/api/shipments/{{otherTrackingNumber}}
+
+### 24. DELETE /api/shipments/{trackingNumber}: 404, it is gone
+DELETE {{baseUrl}}/api/shipments/{{otherTrackingNumber}}

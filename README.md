@@ -10,6 +10,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 - `src/ApexPost.Web` — MVC controllers and views, authentication, middleware, and composition root.
 - `src/ApexPost.Courier.Offline` — Week 4: the courier device's local Couchbase Lite store, repository, SQL++ queries, outbox and change listener. See [Courier offline storage](#courier-offline-storage-week-4-part-a).
 - `src/ApexPost.Courier.Harness` — Week 4: the console harness for the courier store.
+- `src/ApexPost.Api` — Week 4: the REST API for tracked shipments and courier scans, over the same SQL Server database. See [Shipments API](#shipments-api-week-4-part-b).
 - `tests/*` — Domain, Application, Infrastructure, Web integration and courier offline tests.
 
 ## Implemented workflows and protections
@@ -305,6 +306,19 @@ The collection change listener logs the IDs of every changed document, along wit
 
 Implementation paths are under `src/ApexPost.Courier.Offline` unless they start with `src/`. All the tests are in `tests/ApexPost.Courier.Offline.Tests`.
 
+## Shipments API (Week 4 Part B)
+
+`src/ApexPost.Api` is an ASP.NET Core Web API for tracked shipments and their courier scans. It uses minimal hosting in `Program.cs` and reuses the Week 3 `ApexPostDbContext`, repositories and unit of work. Its two tables, `TrackedShipments` and `TrackedShipmentScans`, come from the `AddTrackedShipments` migration ([ADR 0028](docs/adr/0028-tracked-shipments-storage.md)). The endpoints, status codes and validation rules are in [API-NOTES.md](API-NOTES.md).
+
+The API has its own User Secrets. Set the connection string there, never in `appsettings.json`, and apply the migrations to that database as in [Create the tables](#create-the-tables):
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:ApexPostDb" "<your-connection-string>" --project src/ApexPost.Api
+dotnet run --project src/ApexPost.Api --launch-profile https
+```
+
+It listens on `https://localhost:7280` and `http://localhost:5280`.
+
 ## Documentation and sample records
 
 - [Design](DESIGN.md): architecture and domain diagrams, pipeline order, middleware versus filters, threats and mitigations, auditing, concurrency, C# 14 features, SOLID mapping
@@ -323,7 +337,9 @@ dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
 
-The latest full run, on 2026-11-03 at 10:04 UTC after the Week 3 trainer-feedback corrections and the removal of unused code, passed 906 of 906 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 224, Application 140, Infrastructure 239, Web 303. The corrections are traced in [DESIGN.md section 4.10](DESIGN.md#410-week-3-trainer-feedback). The previous full run, on 2026-11-01, passed 904 of 904. A Postman CLI run on that earlier code passed 65 of 65 requests and 188 of 188 assertions. An earlier full run the same day, before the score-improvement changes, passed 892 of 892. The [test results](docs/evidence/week3-test-results.md) record all of these.
+The latest full run, on 2026-11-07 at 11:14 UTC on the Week 4 Part B branch, passed 1,124 of 1,124 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 276, Application 140, Courier.Offline 68, Infrastructure 239, Web 303 and API integration 98. It is recorded in [docs/evidence/week4-part-b](docs/evidence/week4-part-b/README.md).
+
+The last full Week 3 run, on 2026-11-03 at 10:04 UTC after the Week 3 trainer-feedback corrections and the removal of unused code, passed 906 of 906 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 224, Application 140, Infrastructure 239, Web 303. The corrections are traced in [DESIGN.md section 4.10](DESIGN.md#410-week-3-trainer-feedback). The previous full run, on 2026-11-01, passed 904 of 904. A Postman CLI run on that earlier code passed 65 of 65 requests and 188 of 188 assertions. An earlier full run the same day, before the score-improvement changes, passed 892 of 892. The [test results](docs/evidence/week3-test-results.md) record all of these.
 
 The SQL tests need a local SQL Server instance and Windows authentication with permission to create databases. By default they use the instance `.` and keep disposable database files in `E:\SqlData\ApexPost\Tests`. On another machine, set these environment variables:
 

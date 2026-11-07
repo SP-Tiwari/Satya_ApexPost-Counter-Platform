@@ -35,6 +35,7 @@ public static class SqlPersistenceRegistration
 		services.AddScoped<IStoredProcedures, SqlStoredProcedures>();
 		services.AddScoped<IReportQueryService, SqlReportQueryService>();
 		services.AddScoped<IScreenQueryService, SqlScreenQueryService>();
+		services.AddScoped<ITrackedShipmentRepository, SqlTrackedShipmentRepository>();
 
 		services.AddScoped<SqlStaffCredentialRepository>();
 		services.AddScoped<IStaffCredentialRepository>(provider =>

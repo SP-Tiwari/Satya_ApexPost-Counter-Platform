@@ -1,0 +1,31 @@
+# Build and test run on 2026-11-07, branch feature/week4-part-b-rest-api
+# .NET SDK 10.0.402. The pass and fail lines are copied from the dotnet test output.
+
+## dotnet build ApexPost.slnx --no-incremental (started 11:13:49 UTC)
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+## dotnet test ApexPost.slnx --no-build (11:14:06 to 11:15:27 UTC)
+
+Passed!  - Failed:     0, Passed:   140, Skipped:     0, Total:   140, Duration: 3 s - ApexPost.Application.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   276, Skipped:     0, Total:   276, Duration: 572 ms - ApexPost.Domain.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    68, Skipped:     0, Total:    68, Duration: 4 s - ApexPost.Courier.Offline.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    98, Skipped:     0, Total:    98, Duration: 16 s - ApexPost.Api.IntegrationTests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   239, Skipped:     0, Total:   239, Duration: 24 s - ApexPost.Infrastructure.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   303, Skipped:     0, Total:   303, Duration: 1 m 6 s - ApexPost.Web.IntegrationTests.dll (net10.0)
+
+Total: 1,124 passed, 0 failed, 0 skipped.
+
+Change from the Part A merge baseline of 974 (master fe9d45d, 2026-11-07 10:09 UTC):
+- Domain 224 -> 276: ShipmentStatusTransitionRuleTests (37) and TrackedShipmentTests (15).
+- API integration: 98, a new project.
+- Infrastructure stays 239. Two existing tests now include the two new tables and the new index:
+  Migrations_RevertToNothingAndReapply and Database_HasExactlyTheDesignedIndexes.
+- Application, Courier.Offline and Web are unchanged.
+
+## After the run: read-only query on master
+
+SELECT name FROM sys.databases WHERE database_id > 4  ->  ApexPostDb only.
+The disposable ApexPost_Test_* databases were dropped.

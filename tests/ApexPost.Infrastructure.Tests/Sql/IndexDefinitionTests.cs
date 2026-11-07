@@ -64,6 +64,13 @@ public sealed class IndexDefinitionTests(SqlTestHost host) : IAsyncLifetime
 		"TransactionLines.IX_TransactionLines_Sku (Sku) INCLUDE ()"
 	];
 
+	// Added by AddTrackedShipments (ADR 0028), after AddPerformanceIndexes, so it
+	// is absent when that migration is rolled back.
+	private static readonly string[] TrackedShipmentIndexes =
+	[
+		"TrackedShipmentScans.IX_TrackedShipmentScans_TrackingNumber (TrackingNumber) INCLUDE ()"
+	];
+
 	public Task InitializeAsync() => host.ResetAsync();
 
 	public Task DisposeAsync() => Task.CompletedTask;
@@ -73,7 +80,7 @@ public sealed class IndexDefinitionTests(SqlTestHost host) : IAsyncLifetime
 	{
 		var actual = await host.QueryAsync(ReadIndexesAsync);
 
-		Assert.Equal(Sorted([.. PerformanceIndexes, .. OtherIndexes]), actual);
+		Assert.Equal(Sorted([.. PerformanceIndexes, .. OtherIndexes, .. TrackedShipmentIndexes]), actual);
 	}
 
 	[Fact]

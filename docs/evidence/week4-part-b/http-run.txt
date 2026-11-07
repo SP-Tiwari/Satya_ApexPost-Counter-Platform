@@ -1,0 +1,284 @@
+﻿# ApexPost.Api.http, all 24 requests in file order, sent to the running API on 2026-11-07 11:24:14 UTC.
+# API: dotnet run --project src/ApexPost.Api --launch-profile https (Development), against an isolated
+# ApexPost_Test_* database built by the five migrations, with no shipments at the start.
+# Lines starting > are the request as sent, < the response.
+
+### 1. POST /api/shipments: 201 Created with a Location header
+> POST https://localhost:7280/api/shipments
+> Content-Type: application/json
+> {
+>   "trackingNumber": "APX-00000001",
+>   "recipientName": "DEMO Recipient",
+>   "recipientPhone": "+919876543210",
+>   "recipientAddress": "1 Demo Street",
+>   "recipientCity": "Pune",
+>   "weightKg": 2.5
+> }
+< HTTP/1.1 201 Created
+< Location: https://localhost:7280/api/shipments/APX-00000001
+< Content-Type: application/json; charset=utf-8
+< {"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"1 Demo Street","recipientCity":"Pune","weightKg":2.5,"status":0}
+
+### 2. POST /api/shipments: 409, the tracking number already exists
+> POST https://localhost:7280/api/shipments
+> Content-Type: application/json
+> {
+>   "trackingNumber": "APX-00000001",
+>   "recipientName": "DEMO Recipient",
+>   "recipientPhone": "+919876543210",
+>   "recipientAddress": "1 Demo Street",
+>   "recipientCity": "Pune",
+>   "weightKg": 2.5
+> }
+< HTTP/1.1 409 Conflict
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"The shipment's current state refuses this request.","status":409,"detail":"Shipment APX-00000001 already exists.","traceId":"00-289796126cad0e64dfa9dcd20953e629-eacdf7339317e530-00"}
+
+### 3. POST /api/shipments: 400 ValidationProblemDetails (tracking number, phone, weight, missing city)
+> POST https://localhost:7280/api/shipments
+> Content-Type: application/json
+> {
+>   "trackingNumber": "APX-123",
+>   "recipientName": "DEMO Recipient",
+>   "recipientPhone": "98765",
+>   "recipientAddress": "1 Demo Street",
+>   "weightKg": 75
+> }
+< HTTP/1.1 400 Bad Request
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"WeightKg":["The weight must be between 0.1 and 70 kg."],"RecipientCity":["The RecipientCity field is required."],"RecipientPhone":["The recipient phone must be in E.164 format, such as +919876543210."],"TrackingNumber":["The tracking number must be APX- followed by eight digits."]},"traceId":"00-dc71d5e16372660e916aff76d558aa5a-cb6331178764b80c-00"}
+
+### 4. POST /api/shipments: 415, not JSON
+> POST https://localhost:7280/api/shipments
+> Content-Type: text/plain
+> trackingNumber=APX-00000003
+< HTTP/1.1 415 Unsupported Media Type
+< Content-Type: application/problem+json
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.16","title":"Unsupported Media Type","status":415,"traceId":"00-b1e8df736c19fb93134d1e5589021e67-7bc6ebf2e3823807-00"}
+
+### 5. POST /api/shipments: 201, a second shipment for the filters and the scan rules
+> POST https://localhost:7280/api/shipments
+> Content-Type: application/json
+> {
+>   "trackingNumber": "APX-00000002",
+>   "recipientName": "DEMO Second Recipient",
+>   "recipientPhone": "+919812345678",
+>   "recipientAddress": "2 Demo Road",
+>   "recipientCity": "Mumbai",
+>   "weightKg": 0.1
+> }
+< HTTP/1.1 201 Created
+< Location: https://localhost:7280/api/shipments/APX-00000002
+< Content-Type: application/json; charset=utf-8
+< {"trackingNumber":"APX-00000002","recipientName":"DEMO Second Recipient","recipientPhone":"+919812345678","recipientAddress":"2 Demo Road","recipientCity":"Mumbai","weightKg":0.1,"status":0}
+
+### 6. GET /api/shipments: 200, the first page (pageSize defaults to 20)
+> GET https://localhost:7280/api/shipments
+< HTTP/1.1 200 OK
+< Content-Type: application/json; charset=utf-8
+< {"items":[{"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"1 Demo Street","recipientCity":"Pune","weightKg":2.5,"status":0},{"trackingNumber":"APX-00000002","recipientName":"DEMO Second Recipient","recipientPhone":"+919812345678","recipientAddress":"2 Demo Road","recipientCity":"Mumbai","weightKg":0.1,"status":0}],"page":1,"pageSize":20,"totalCount":2}
+
+### 7. GET /api/shipments: 200, filtered by status and city
+> GET https://localhost:7280/api/shipments?page=1&pageSize=50&status=Created&city=Pune
+< HTTP/1.1 200 OK
+< Content-Type: application/json; charset=utf-8
+< {"items":[{"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"1 Demo Street","recipientCity":"Pune","weightKg":2.5,"status":0}],"page":1,"pageSize":50,"totalCount":1}
+
+### 8. GET /api/shipments: 400, pageSize above the maximum of 50
+> GET https://localhost:7280/api/shipments?pageSize=51
+< HTTP/1.1 400 Bad Request
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"PageSize":["The field PageSize must be between 1 and 50."]},"traceId":"00-3db75edd13e8c8cddb70ceb5f96e0662-018c3f8a15ae95c4-00"}
+
+### 9. GET /api/shipments/{trackingNumber}: 200
+> GET https://localhost:7280/api/shipments/APX-00000001
+< HTTP/1.1 200 OK
+< Content-Type: application/json; charset=utf-8
+< {"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"1 Demo Street","recipientCity":"Pune","weightKg":2.5,"status":0}
+
+### 10. GET /api/shipments/{trackingNumber}: 404, unknown tracking number
+> GET https://localhost:7280/api/shipments/APX-99999999
+< HTTP/1.1 404 Not Found
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-8e59d0022d7c3d80456ee758ee51d904-63dec0c928a51b6b-00"}
+
+### 11. PUT /api/shipments/{trackingNumber}: 200, details replaced
+> PUT https://localhost:7280/api/shipments/APX-00000001
+> Content-Type: application/json
+> {
+>   "recipientName": "DEMO Recipient",
+>   "recipientPhone": "+919876543210",
+>   "recipientAddress": "10 Demo Avenue",
+>   "recipientCity": "Pune",
+>   "weightKg": 3
+> }
+< HTTP/1.1 200 OK
+< Content-Type: application/json; charset=utf-8
+< {"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"10 Demo Avenue","recipientCity":"Pune","weightKg":3,"status":0}
+
+### 12. PUT /api/shipments/{trackingNumber}: 400, the weight is outside 0.1 to 70 kg
+> PUT https://localhost:7280/api/shipments/APX-00000001
+> Content-Type: application/json
+> {
+>   "recipientName": "DEMO Recipient",
+>   "recipientPhone": "+919876543210",
+>   "recipientAddress": "10 Demo Avenue",
+>   "recipientCity": "Pune",
+>   "weightKg": 0.05
+> }
+< HTTP/1.1 400 Bad Request
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"WeightKg":["The weight must be between 0.1 and 70 kg."]},"traceId":"00-0c999ec8266c4caf6748f407404b8b77-58a47d6e28c479b5-00"}
+
+### 13. PATCH /api/shipments/{trackingNumber}/status: 200, Created to PickedUp (status 1)
+> PATCH https://localhost:7280/api/shipments/APX-00000001/status
+> Content-Type: application/json
+> { "status": 1 }
+< HTTP/1.1 200 OK
+< Content-Type: application/json; charset=utf-8
+< {"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"10 Demo Avenue","recipientCity":"Pune","weightKg":3,"status":1}
+
+### 14. PATCH /api/shipments/{trackingNumber}/status: 409, PickedUp cannot go straight to Delivered
+> PATCH https://localhost:7280/api/shipments/APX-00000001/status
+> Content-Type: application/json
+> { "status": 4 }
+< HTTP/1.1 409 Conflict
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"The shipment's current state refuses this request.","status":409,"detail":"A shipment cannot move from PickedUp to Delivered.","traceId":"00-a167401ea6c94bee464caeb849616c74-beb0cd4e4387fbe5-00"}
+
+### 15. PATCH /api/shipments/{trackingNumber}/status: 400, not a defined status
+> PATCH https://localhost:7280/api/shipments/APX-00000001/status
+> Content-Type: application/json
+> { "status": 42 }
+< HTTP/1.1 400 Bad Request
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"Status":["The field Status is invalid."]},"traceId":"00-f9a619110ce50d275ecce62966f1c185-76eaab91fe2ea97a-00"}
+
+### 16. DELETE /api/shipments/{trackingNumber}: 409, the shipment is no longer Created
+> DELETE https://localhost:7280/api/shipments/APX-00000001
+< HTTP/1.1 409 Conflict
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"The shipment's current state refuses this request.","status":409,"detail":"Shipment APX-00000001 is PickedUp; only a Created shipment can be deleted.","traceId":"00-937707a5bdfd4ec9486a461d220ff5e9-ec9e1ddb8e6ac5d4-00"}
+
+### 17. POST /api/shipments/{trackingNumber}/scans: 200, accepted 2
+> POST https://localhost:7280/api/shipments/APX-00000001/scans
+> Content-Type: application/json
+> {
+>   "scans": [
+>     {
+>       "scanId": "scan::0b6f3c1a-5d2e-4f8b-9a71-2c4e6d8f0a13",
+>       "trackingNumber": "APX-00000001",
+>       "scanType": 0,
+>       "courierId": "COURIER-DEMO-07",
+>       "location": "Pune hub",
+>       "scannedAtUtc": "2026-11-07T08:00:00Z",
+>       "notes": "Collected from DEMO sender"
+>     },
+>     {
+>       "scanId": "scan::7d1e9a42-3b6c-4e8f-b2a5-9c0d1f3e5a77",
+>       "trackingNumber": "APX-00000001",
+>       "scanType": 1,
+>       "courierId": "COURIER-DEMO-07",
+>       "location": "Pune sorting centre",
+>       "scannedAtUtc": "2026-11-07T09:30:00Z"
+>     }
+>   ]
+> }
+< HTTP/1.1 200 OK
+< Content-Type: application/json; charset=utf-8
+< {"accepted":2,"duplicatesSkipped":0,"rejected":0,"rejections":[]}
+
+### 18. POST /api/shipments/{trackingNumber}/scans: 200, the same scan again is a duplicate, plus two rejections
+> POST https://localhost:7280/api/shipments/APX-00000001/scans
+> Content-Type: application/json
+> {
+>   "scans": [
+>     {
+>       "scanId": "scan::0b6f3c1a-5d2e-4f8b-9a71-2c4e6d8f0a13",
+>       "trackingNumber": "APX-00000001",
+>       "scanType": 0,
+>       "courierId": "COURIER-DEMO-07",
+>       "location": "Pune hub",
+>       "scannedAtUtc": "2026-11-07T08:00:00Z"
+>     },
+>     {
+>       "scanId": "not-a-scan-id",
+>       "trackingNumber": "APX-00000001",
+>       "scanType": 1,
+>       "courierId": "COURIER-DEMO-07",
+>       "location": "Pune hub",
+>       "scannedAtUtc": "2026-11-07T08:10:00Z"
+>     },
+>     {
+>       "scanId": "scan::4a8c2e6f-1b3d-4f5a-8c7e-0d2f4b6a8c91",
+>       "trackingNumber": "APX-00000002",
+>       "scanType": 1,
+>       "courierId": "COURIER-DEMO-07",
+>       "location": "Pune hub",
+>       "scannedAtUtc": "2026-11-07T08:20:00Z"
+>     }
+>   ]
+> }
+< HTTP/1.1 200 OK
+< Content-Type: application/json; charset=utf-8
+< {"accepted":0,"duplicatesSkipped":1,"rejected":2,"rejections":[{"scanId":"not-a-scan-id","reason":"The scan ID must have the format scan::{Guid}."},{"scanId":"scan::4a8c2e6f-1b3d-4f5a-8c7e-0d2f4b6a8c91","reason":"The scan is for APX-00000002, not APX-00000001."}]}
+
+### 19. POST /api/shipments/{trackingNumber}/scans: 400, a scan time in the future
+> POST https://localhost:7280/api/shipments/APX-00000001/scans
+> Content-Type: application/json
+> {
+>   "scans": [
+>     {
+>       "scanId": "scan::9e3b5d7f-2a4c-4e6b-8d0f-1a3c5e7b9d24",
+>       "trackingNumber": "APX-00000001",
+>       "scanType": 1,
+>       "courierId": "COURIER-DEMO-07",
+>       "location": "Pune hub",
+>       "scannedAtUtc": "2099-01-01T00:00:00Z"
+>     }
+>   ]
+> }
+< HTTP/1.1 400 Bad Request
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"Scans[0].ScannedAtUtc":["ScannedAtUtc cannot be in the future."]},"traceId":"00-db16a279b4f77e6a4a846570650e46f1-e92271a1bbe65ec0-00"}
+
+### 20. POST /api/shipments/{trackingNumber}/scans: 404, unknown tracking number
+> POST https://localhost:7280/api/shipments/APX-99999999/scans
+> Content-Type: application/json
+> {
+>   "scans": [
+>     {
+>       "scanId": "scan::5c7e9a1b-3d5f-4b7d-9f1a-2b4d6f8a0c35",
+>       "trackingNumber": "APX-99999999",
+>       "scanType": 0,
+>       "courierId": "COURIER-DEMO-07",
+>       "location": "Pune hub",
+>       "scannedAtUtc": "2026-11-07T08:00:00Z"
+>     }
+>   ]
+> }
+< HTTP/1.1 404 Not Found
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-3038ca4c45a85cc41517fc4aa53de911-b74cd6cef9b6ab58-00"}
+
+### 21. GET /api/shipments/{trackingNumber}/scans: 200, the history oldest first
+> GET https://localhost:7280/api/shipments/APX-00000001/scans
+< HTTP/1.1 200 OK
+< Content-Type: application/json; charset=utf-8
+< [{"scanId":"scan::0b6f3c1a-5d2e-4f8b-9a71-2c4e6d8f0a13","scanType":0,"courierId":"COURIER-DEMO-07","location":"Pune hub","scannedAtUtc":"2026-11-07T08:00:00+00:00","notes":"Collected from DEMO sender"},{"scanId":"scan::7d1e9a42-3b6c-4e8f-b2a5-9c0d1f3e5a77","scanType":1,"courierId":"COURIER-DEMO-07","location":"Pune sorting centre","scannedAtUtc":"2026-11-07T09:30:00+00:00","notes":null}]
+
+### 22. GET /api/shipments/{trackingNumber}/scans: 404, unknown tracking number
+> GET https://localhost:7280/api/shipments/APX-99999999/scans
+< HTTP/1.1 404 Not Found
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-680c451d421e2190b5a3966387765cff-5cf590adc1efd299-00"}
+
+### 23. DELETE /api/shipments/{trackingNumber}: 204, the second shipment is still Created
+> DELETE https://localhost:7280/api/shipments/APX-00000002
+< HTTP/1.1 204 No Content
+
+### 24. DELETE /api/shipments/{trackingNumber}: 404, it is gone
+> DELETE https://localhost:7280/api/shipments/APX-00000002
+< HTTP/1.1 404 Not Found
+< Content-Type: application/problem+json; charset=utf-8
+< {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-00000002.","traceId":"00-78853a8dab23613d46e1ee678b09e192-0fa571ac00d11873-00"}
