@@ -70,7 +70,8 @@ internal sealed class ApiFactory(
 
 internal static class Api
 {
-	public const string Shipments = "/api/shipments";
+	// Version 1, the Part B contract. ApiVersioningTests covers version 2.
+	public const string Shipments = "/api/v1/shipments";
 
 	public static string Shipment(string trackingNumber) => $"{Shipments}/{trackingNumber}";
 

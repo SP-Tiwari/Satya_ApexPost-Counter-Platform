@@ -1,0 +1,7 @@
+# The published OpenAPI contracts are kept byte for byte as the API serves
+# them, so line endings are never converted.
+contracts/*.json -text
+
+# The client is NSwag output, regenerated and never edited by hand, so the
+# whitespace checks (git diff --check) do not apply to it.
+src/ApexPost.Client/Generated/*.cs -whitespace

@@ -1,18 +1,53 @@
+using System.Net.Mime;
 using ApexPost.Api.Models;
 using ApexPost.Application.Services;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApexPost.Api.Controllers;
 
 // Thin: each action binds its input, calls TrackedShipmentApplicationService
 // and turns the outcome into an HTTP result. The rules live in the service and
-// the domain.
+// the domain. Each route name is the operation's OpenAPI operationId, so it is
+// part of the contract and must not change.
+// The OpenAPI generator copies each XML <summary> over [EndpointSummary], so
+// the two are kept identical. It also writes the description of any <param>
+// that is not an operation parameter, such as cancellationToken, onto the
+// request body, in tag order, so the request tag comes last.
+
+/// <summary>
+/// Version 1 (deprecated) of tracked shipments: the paged list, one shipment,
+/// and creating, replacing, changing the status of and deleting a shipment.
+/// It keeps the Week 4 Part B contract unchanged; version 2 is in
+/// <see cref="V2.ShipmentsController"/>.
+/// </summary>
+/// <param name="shipments">The application service that holds the shipment rules.</param>
 [ApiController]
 [Route(ShipmentRoutes.Shipments)]
+[Tags("Shipments")]
+[ApiVersion("1.0", Deprecated = true)]
+[ProducesResponseType<ProblemDetails>(
+	StatusCodes.Status500InternalServerError, MediaTypeNames.Application.ProblemJson)]
 public sealed class ShipmentsController(TrackedShipmentApplicationService shipments)
 	: ControllerBase
 {
-	[HttpGet]
+	/// <summary>List shipments by page, status and city</summary>
+	/// <remarks>
+	/// Returns one page of shipments, ordered by tracking number and optionally
+	/// filtered by status and city. <c>page</c> defaults to 1 and
+	/// <c>pageSize</c> to 20; the largest page size is 50.
+	/// </remarks>
+	/// <param name="query">The page, the page size and the optional filters.</param>
+	/// <param name="cancellationToken">Cancels the request.</param>
+	/// <returns>The requested page and the total number of matching shipments.</returns>
+	/// <response code="200">The page of shipments.</response>
+	/// <response code="400">A query value is invalid, such as a page size above 50 or an unknown status.</response>
+	/// <response code="500">An unexpected error occurred.</response>
+	[HttpGet(Name = "ListShipments")]
+	[EndpointSummary("List shipments by page, status and city")]
+	[ProducesResponseType<ShipmentPageResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+	[ProducesResponseType<ValidationProblemDetails>(
+		StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
 	public async Task<ActionResult<ShipmentPageResponse>> List(
 		[FromQuery] ShipmentListQuery query,
 		CancellationToken cancellationToken)
@@ -22,7 +57,18 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 		return Ok(page.ToResponse(query));
 	}
 
-	[HttpGet(ShipmentRoutes.TrackingNumber)]
+	/// <summary>Get a shipment by tracking number</summary>
+	/// <remarks>Returns the shipment's recipient, weight and current status.</remarks>
+	/// <param name="trackingNumber">The tracking number: APX- followed by eight digits, such as APX-00000001.</param>
+	/// <param name="cancellationToken">Cancels the request.</param>
+	/// <returns>The shipment.</returns>
+	/// <response code="200">The shipment.</response>
+	/// <response code="404">No shipment has the tracking number, or it is not APX- followed by eight digits.</response>
+	/// <response code="500">An unexpected error occurred.</response>
+	[HttpGet(ShipmentRoutes.TrackingNumber, Name = "GetShipment")]
+	[EndpointSummary("Get a shipment by tracking number")]
+	[ProducesResponseType<ShipmentResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)]
 	public async Task<ActionResult<ShipmentResponse>> Get(
 		string trackingNumber,
 		CancellationToken cancellationToken)
@@ -33,8 +79,28 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 			: Ok(shipment.ToResponse());
 	}
 
-	[HttpPost]
-	[Consumes("application/json")]
+	/// <summary>Create a shipment</summary>
+	/// <remarks>
+	/// Creates the shipment with the status Created. The <c>Location</c> header of the 201 response is the URL of the new
+	/// shipment.
+	/// </remarks>
+	/// <param name="cancellationToken">Cancels the request.</param>
+	/// <param name="request">The tracking number and the shipment details.</param>
+	/// <returns>The created shipment.</returns>
+	/// <response code="201">The shipment was created.</response>
+	/// <response code="400">The request failed validation or its JSON is malformed.</response>
+	/// <response code="409">A shipment with this tracking number already exists.</response>
+	/// <response code="415">The body is not application/json.</response>
+	/// <response code="500">An unexpected error occurred.</response>
+	[HttpPost(Name = "CreateShipment")]
+	[EndpointSummary("Create a shipment")]
+	[Consumes(MediaTypeNames.Application.Json)]
+	[ProducesResponseType<ShipmentResponse>(StatusCodes.Status201Created, MediaTypeNames.Application.Json)]
+	[ProducesResponseType<ValidationProblemDetails>(
+		StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(
+		StatusCodes.Status415UnsupportedMediaType, MediaTypeNames.Application.ProblemJson)]
 	public async Task<ActionResult<ShipmentResponse>> Create(
 		CreateShipmentRequest request,
 		CancellationToken cancellationToken)
@@ -48,8 +114,31 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 			: this.ShipmentProblem(result, request.TrackingNumber!);
 	}
 
-	[HttpPut(ShipmentRoutes.TrackingNumber)]
-	[Consumes("application/json")]
+	/// <summary>Replace a shipment's editable details</summary>
+	/// <remarks>
+	/// The editable details are the recipient's name, phone, address and city,
+	/// and the weight. The tracking number and the status do not change.
+	/// </remarks>
+	/// <param name="trackingNumber">The tracking number: APX- followed by eight digits, such as APX-00000001.</param>
+	/// <param name="cancellationToken">Cancels the request.</param>
+	/// <param name="request">The new details.</param>
+	/// <returns>The shipment with its new details.</returns>
+	/// <response code="200">The details were replaced.</response>
+	/// <response code="400">The request failed validation or its JSON is malformed.</response>
+	/// <response code="404">No shipment has the tracking number, or it is not APX- followed by eight digits.</response>
+	/// <response code="409">Another change was made to the shipment at the same time.</response>
+	/// <response code="415">The body is not application/json.</response>
+	/// <response code="500">An unexpected error occurred.</response>
+	[HttpPut(ShipmentRoutes.TrackingNumber, Name = "ReplaceShipment")]
+	[EndpointSummary("Replace a shipment's editable details")]
+	[Consumes(MediaTypeNames.Application.Json)]
+	[ProducesResponseType<ShipmentResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+	[ProducesResponseType<ValidationProblemDetails>(
+		StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(
+		StatusCodes.Status415UnsupportedMediaType, MediaTypeNames.Application.ProblemJson)]
 	public async Task<ActionResult<ShipmentResponse>> Replace(
 		string trackingNumber,
 		UpdateShipmentRequest request,
@@ -62,8 +151,32 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 			: this.ShipmentProblem(result, trackingNumber);
 	}
 
-	[HttpPatch(ShipmentRoutes.TrackingNumber + "/status")]
-	[Consumes("application/json")]
+	/// <summary>Change a shipment's status</summary>
+	/// <remarks>
+	/// Moves the shipment to its next status. The allowed path is Created, PickedUp, InTransit, OutForDelivery and then
+	/// Delivered or Failed. Each status moves only to the next one, and
+	/// Delivered and Failed are final.
+	/// </remarks>
+	/// <param name="trackingNumber">The tracking number: APX- followed by eight digits, such as APX-00000001.</param>
+	/// <param name="cancellationToken">Cancels the request.</param>
+	/// <param name="request">The new status.</param>
+	/// <returns>The shipment with its new status.</returns>
+	/// <response code="200">The status was changed.</response>
+	/// <response code="400">The status is missing or not a defined status, or the JSON is malformed.</response>
+	/// <response code="404">No shipment has the tracking number, or it is not APX- followed by eight digits.</response>
+	/// <response code="409">The transition is not allowed, or another change was made to the shipment at the same time.</response>
+	/// <response code="415">The body is not application/json.</response>
+	/// <response code="500">An unexpected error occurred.</response>
+	[HttpPatch(ShipmentRoutes.TrackingNumber + "/status", Name = "ChangeShipmentStatus")]
+	[EndpointSummary("Change a shipment's status")]
+	[Consumes(MediaTypeNames.Application.Json)]
+	[ProducesResponseType<ShipmentResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+	[ProducesResponseType<ValidationProblemDetails>(
+		StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(
+		StatusCodes.Status415UnsupportedMediaType, MediaTypeNames.Application.ProblemJson)]
 	public async Task<ActionResult<ShipmentResponse>> ChangeStatus(
 		string trackingNumber,
 		UpdateStatusRequest request,
@@ -76,7 +189,22 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 			: this.ShipmentProblem(result, trackingNumber);
 	}
 
-	[HttpDelete(ShipmentRoutes.TrackingNumber)]
+	/// <summary>Delete a shipment in Created status</summary>
+	/// <remarks>
+	/// Deletes the shipment and its scans. A shipment that has moved past Created
+	/// cannot be deleted.
+	/// </remarks>
+	/// <param name="trackingNumber">The tracking number: APX- followed by eight digits, such as APX-00000001.</param>
+	/// <param name="cancellationToken">Cancels the request.</param>
+	/// <response code="204">The shipment was deleted.</response>
+	/// <response code="404">No shipment has the tracking number, or it is not APX- followed by eight digits.</response>
+	/// <response code="409">The shipment's status is not Created, or another change was made to it at the same time.</response>
+	/// <response code="500">An unexpected error occurred.</response>
+	[HttpDelete(ShipmentRoutes.TrackingNumber, Name = "DeleteShipment")]
+	[EndpointSummary("Delete a shipment in Created status")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
 	public async Task<IActionResult> Delete(
 		string trackingNumber,
 		CancellationToken cancellationToken)
