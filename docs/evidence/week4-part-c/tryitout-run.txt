@@ -1,0 +1,128 @@
+Swagger UI: https://localhost:7280/swagger/index.html
+Title shown: ApexPost Logistics API v1 OAS 3.1
+Operations shown (8): operations-Scans-UploadShipmentScans, operations-Scans-GetShipmentScans, operations-Shipments-ListShipments, operations-Shipments-CreateShipment, operations-Shipments-GetShipment, operations-Shipments-ReplaceShipment, operations-Shipments-DeleteShipment, operations-Shipments-ChangeShipmentStatus
+
+01. [PASS] CreateShipment - Create APX-00000101
+    expected 201, Swagger UI shows 201
+    request: curl -X 'POST' 'https://localhost:7280/api/shipments' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "trackingNumber": "APX-00000101", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 2.5 }'
+    response: Response body Download { "trackingNumber": "APX-00000101", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 2.5, "status": 0 } Response headers content-type: application/json; charset=utf-8 date: Sat,07 Nov 2026 15:21:52 GMT location: https://localhost:7280/api/shipments/APX-00000101 server: Kestrel
+
+02. [PASS] CreateShipment - Create APX-00000101 again (duplicate)
+    expected 409, Swagger UI shows 409
+    request: curl -X 'POST' 'https://localhost:7280/api/shipments' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "trackingNumber": "APX-00000101", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 2.5 }'
+    response: Error: response status is 409 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10", "title": "The shipment's current state refuses this request.", "status": 409, "detail": "Shipment APX-00000101 already exists.", "traceId": "00-4fdab302a72c6b94c6ed8abdd9c02657-c1ac06f66e406ece-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:21:54 GMT server: Kestrel
+
+03. [PASS] CreateShipment - Create with an invalid tracking number, phone and weight
+    expected 400, Swagger UI shows 400
+    request: curl -X 'POST' 'https://localhost:7280/api/shipments' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "trackingNumber": "APX-1", "recipientName": "DEMO Recipient", "recipientPhone": "12345", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 0 }'
+    response: Error: response status is 400 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1", "title": "One or more validation errors occurred.", "status": 400, "errors": { "WeightKg": [ "The weight must be between 0.1 and 70 kg." ], "RecipientPhone": [ "The recipient phone must be in E.164 format, such as +919876543210." ], "TrackingNumber": [ "The tracking number must be APX- followed by eight digits." ] }, "traceId": "00-6c805e20de6983026e5134b2a6d181d3-3ed702e860cfba10-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:21:55 GMT server: Kestrel
+
+04. [PASS] CreateShipment - Create APX-00000102
+    expected 201, Swagger UI shows 201
+    request: curl -X 'POST' 'https://localhost:7280/api/shipments' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "trackingNumber": "APX-00000102", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 2.5 }'
+    response: Response body Download { "trackingNumber": "APX-00000102", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 2.5, "status": 0 } Response headers content-type: application/json; charset=utf-8 date: Sat,07 Nov 2026 15:21:57 GMT location: https://localhost:7280/api/shipments/APX-00000102 server: Kestrel
+
+05. [PASS] ListShipments - List page 1, page size 20
+    expected 200, Swagger UI shows 200
+    request: curl -X 'GET' 'https://localhost:7280/api/shipments?Page=1&PageSize=20' -H 'accept: */*'
+    response: Response body Download { "items": [ { "trackingNumber": "APX-00000101", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 2.5, "status": 0 }, { "trackingNumber": "APX-00000102", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 2.5, "status": 0 } ], "page": 1, "pageSize": 20, "totalCount": 2 } Response headers content-type: application/json; charset=utf-8 date: Sat,07 Nov 2026 15:21:59 GMT server: Kestrel
+
+06. [PASS] ListShipments - List with status 0 and city Pune
+    expected 200, Swagger UI shows 200
+    request: curl -X 'GET' 'https://localhost:7280/api/shipments?Status=0&City=Pune' -H 'accept: */*'
+    response: Response body Download { "items": [ { "trackingNumber": "APX-00000101", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 2.5, "status": 0 }, { "trackingNumber": "APX-00000102", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 2.5, "status": 0 } ], "page": 1, "pageSize": 20, "totalCount": 2 } Response headers content-type: application/json; charset=utf-8 date: Sat,07 Nov 2026 15:22:00 GMT server: Kestrel
+
+07. [PASS] ListShipments - List with page size 51 (schema maximum is 50)
+    expected Swagger UI to block the request; inputs marked invalid: PageSize; request sent: no
+
+08. [PASS] ListShipments - List with undefined status 9
+    expected 400, Swagger UI shows 400
+    request: curl -X 'GET' 'https://localhost:7280/api/shipments?Status=9' -H 'accept: */*'
+    response: Error: response status is 400 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1", "title": "One or more validation errors occurred.", "status": 400, "errors": { "Status": [ "The value '9' is invalid." ] }, "traceId": "00-d11b03021bbeb5c34d4fbbd60facd241-bbb9176aa91335fe-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:05 GMT server: Kestrel
+
+09. [PASS] GetShipment - Get APX-00000101
+    expected 200, Swagger UI shows 200
+    request: curl -X 'GET' 'https://localhost:7280/api/shipments/APX-00000101' -H 'accept: */*'
+    response: Response body Download { "trackingNumber": "APX-00000101", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "1 Demo Street", "recipientCity": "Pune", "weightKg": 2.5, "status": 0 } Response headers content-type: application/json; charset=utf-8 date: Sat,07 Nov 2026 15:22:06 GMT server: Kestrel
+
+10. [PASS] GetShipment - Get unknown APX-99999999
+    expected 404, Swagger UI shows 404
+    request: curl -X 'GET' 'https://localhost:7280/api/shipments/APX-99999999' -H 'accept: */*'
+    response: Error: response status is 404 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5", "title": "Shipment not found.", "status": 404, "detail": "No shipment has tracking number APX-99999999.", "traceId": "00-df9cebc49fdfea5b637fde782ef866d4-a0a7cd4c4d0b5b9a-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:08 GMT server: Kestrel
+
+11. [PASS] ReplaceShipment - Replace APX-00000101 details
+    expected 200, Swagger UI shows 200
+    request: curl -X 'PUT' 'https://localhost:7280/api/shipments/APX-00000101' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "recipientName": "DEMO Recipient Updated", "recipientPhone": "+919876543211", "recipientAddress": "2 Demo Street", "recipientCity": "Mumbai", "weightKg": 3.75 }'
+    response: Response body Download { "trackingNumber": "APX-00000101", "recipientName": "DEMO Recipient Updated", "recipientPhone": "+919876543211", "recipientAddress": "2 Demo Street", "recipientCity": "Mumbai", "weightKg": 3.75, "status": 0 } Response headers content-type: application/json; charset=utf-8 date: Sat,07 Nov 2026 15:22:10 GMT server: Kestrel
+
+12. [PASS] ReplaceShipment - Replace with weight 0.05
+    expected 400, Swagger UI shows 400
+    request: curl -X 'PUT' 'https://localhost:7280/api/shipments/APX-00000101' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "recipientName": "DEMO Recipient Updated", "recipientPhone": "+919876543211", "recipientAddress": "2 Demo Street", "recipientCity": "Mumbai", "weightKg": 0.05 }'
+    response: Error: response status is 400 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1", "title": "One or more validation errors occurred.", "status": 400, "errors": { "WeightKg": [ "The weight must be between 0.1 and 70 kg." ] }, "traceId": "00-2d41d57bb07781de690061f346c51201-c01a6e1ccb0d4fef-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:11 GMT server: Kestrel
+
+13. [PASS] ReplaceShipment - Replace unknown APX-99999999
+    expected 404, Swagger UI shows 404
+    request: curl -X 'PUT' 'https://localhost:7280/api/shipments/APX-99999999' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "recipientName": "DEMO Recipient Updated", "recipientPhone": "+919876543211", "recipientAddress": "2 Demo Street", "recipientCity": "Mumbai", "weightKg": 3 }'
+    response: Error: response status is 404 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5", "title": "Shipment not found.", "status": 404, "detail": "No shipment has tracking number APX-99999999.", "traceId": "00-a0a96378e9148af46b14f497baa6230f-2d4c0a0617af5c4f-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:13 GMT server: Kestrel
+
+14. [PASS] ChangeShipmentStatus - APX-00000101 to PickedUp (1)
+    expected 200, Swagger UI shows 200
+    request: curl -X 'PATCH' 'https://localhost:7280/api/shipments/APX-00000101/status' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "status": 1 }'
+    response: Response body Download { "trackingNumber": "APX-00000101", "recipientName": "DEMO Recipient Updated", "recipientPhone": "+919876543211", "recipientAddress": "2 Demo Street", "recipientCity": "Mumbai", "weightKg": 3.75, "status": 1 } Response headers content-type: application/json; charset=utf-8 date: Sat,07 Nov 2026 15:22:14 GMT server: Kestrel
+
+15. [PASS] ChangeShipmentStatus - APX-00000101 PickedUp to Delivered (4)
+    expected 409, Swagger UI shows 409
+    request: curl -X 'PATCH' 'https://localhost:7280/api/shipments/APX-00000101/status' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "status": 4 }'
+    response: Error: response status is 409 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10", "title": "The shipment's current state refuses this request.", "status": 409, "detail": "A shipment cannot move from PickedUp to Delivered.", "traceId": "00-09db4fabf8e468a8f1c943ff84fd9d92-fae4ad7cc652df36-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:16 GMT server: Kestrel
+
+16. [PASS] ChangeShipmentStatus - Undefined status 42
+    expected 400, Swagger UI shows 400
+    request: curl -X 'PATCH' 'https://localhost:7280/api/shipments/APX-00000101/status' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "status": 42 }'
+    response: Error: response status is 400 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1", "title": "One or more validation errors occurred.", "status": 400, "errors": { "Status": [ "The field Status is invalid." ] }, "traceId": "00-a39a52888308d7ba052482c781e9c67d-e2c194a45a53cefe-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:18 GMT server: Kestrel
+
+17. [PASS] UploadShipmentScans - Upload two scans for APX-00000101
+    expected 200, Swagger UI shows 200
+    request: curl -X 'POST' 'https://localhost:7280/api/shipments/APX-00000101/scans' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "scans": [ { "scanId": "scan::7c9e6679-7425-40de-944b-e07fc1f90ae7", "trackingNumber": "APX-00000101", "scanType": 0, "courierId": "COURIER-DEMO-07", "location": "Pune hub", "scannedAtUtc": "2026-11-07T14:11:48Z", "notes": null }, { "scanId": "scan::16fd2706-8baf-433b-82eb-8c7fada847da", "trackingNumber": "APX-00000101", "scanType": 1, "courierId": "COURIER-DEMO-07", "location": "Mumbai hub", "scannedAtUtc": "2026-11-07T14:21:48Z", "notes": "Fictional demo scan" } ] }'
+    response: Response body Download { "accepted": 2, "duplicatesSkipped": 0, "rejected": 0, "rejections": [] } Response headers content-type: application/json; charset=utf-8 date: Sat,07 Nov 2026 15:22:20 GMT server: Kestrel
+
+18. [PASS] UploadShipmentScans - Upload the same two scans again (idempotent)
+    expected 200, Swagger UI shows 200
+    request: curl -X 'POST' 'https://localhost:7280/api/shipments/APX-00000101/scans' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "scans": [ { "scanId": "scan::7c9e6679-7425-40de-944b-e07fc1f90ae7", "trackingNumber": "APX-00000101", "scanType": 0, "courierId": "COURIER-DEMO-07", "location": "Pune hub", "scannedAtUtc": "2026-11-07T14:11:48Z", "notes": null }, { "scanId": "scan::16fd2706-8baf-433b-82eb-8c7fada847da", "trackingNumber": "APX-00000101", "scanType": 1, "courierId": "COURIER-DEMO-07", "location": "Mumbai hub", "scannedAtUtc": "2026-11-07T14:21:48Z", "notes": "Fictional demo scan" } ] }'
+    response: Response body Download { "accepted": 0, "duplicatesSkipped": 2, "rejected": 0, "rejections": [] } Response headers content-type: application/json; charset=utf-8 date: Sat,07 Nov 2026 15:22:21 GMT server: Kestrel
+
+19. [PASS] UploadShipmentScans - Upload a scan dated 2099 (future)
+    expected 400, Swagger UI shows 400
+    request: curl -X 'POST' 'https://localhost:7280/api/shipments/APX-00000101/scans' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "scans": [ { "scanId": "scan::7c9e6679-7425-40de-944b-e07fc1f90ae7", "trackingNumber": "APX-00000101", "scanType": 0, "courierId": "COURIER-DEMO-07", "location": "Pune hub", "scannedAtUtc": "2099-01-01T00:00:00Z", "notes": null } ] }'
+    response: Error: response status is 400 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1", "title": "One or more validation errors occurred.", "status": 400, "errors": { "Scans[0].ScannedAtUtc": [ "ScannedAtUtc cannot be in the future." ] }, "traceId": "00-e36e1ca0ba98903127d1e94fc9e03c02-17056ee2b7454093-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:23 GMT server: Kestrel
+
+20. [PASS] UploadShipmentScans - Upload to unknown APX-99999999
+    expected 404, Swagger UI shows 404
+    request: curl -X 'POST' 'https://localhost:7280/api/shipments/APX-99999999/scans' -H 'accept: */*' -H 'Content-Type: application/json' -d '{ "scans": [ { "scanId": "scan::7c9e6679-7425-40de-944b-e07fc1f90ae7", "trackingNumber": "APX-99999999", "scanType": 0, "courierId": "COURIER-DEMO-07", "location": "Pune hub", "scannedAtUtc": "2026-11-07T14:11:48Z", "notes": null }, { "scanId": "scan::16fd2706-8baf-433b-82eb-8c7fada847da", "trackingNumber": "APX-99999999", "scanType": 1, "courierId": "COURIER-DEMO-07", "location": "Mumbai hub", "scannedAtUtc": "2026-11-07T14:21:48Z", "notes": "Fictional demo scan" } ] }'
+    response: Error: response status is 404 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5", "title": "Shipment not found.", "status": 404, "detail": "No shipment has tracking number APX-99999999.", "traceId": "00-1b543adc4f01b92ce0b174e44bfdd68d-f53723fe548aefab-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:25 GMT server: Kestrel
+
+21. [PASS] GetShipmentScans - Scan history of APX-00000101
+    expected 200, Swagger UI shows 200
+    request: curl -X 'GET' 'https://localhost:7280/api/shipments/APX-00000101/scans' -H 'accept: */*'
+    response: Response body Download [ { "scanId": "scan::7c9e6679-7425-40de-944b-e07fc1f90ae7", "scanType": 0, "courierId": "COURIER-DEMO-07", "location": "Pune hub", "scannedAtUtc": "2026-11-07T14:11:48+00:00", "notes": null }, { "scanId": "scan::16fd2706-8baf-433b-82eb-8c7fada847da", "scanType": 1, "courierId": "COURIER-DEMO-07", "location": "Mumbai hub", "scannedAtUtc": "2026-11-07T14:21:48+00:00", "notes": "Fictional demo scan" } ] Response headers content-type: application/json; charset=utf-8 date: Sat,07 Nov 2026 15:22:26 GMT server: Kestrel
+
+22. [PASS] GetShipmentScans - Scan history of unknown APX-99999999
+    expected 404, Swagger UI shows 404
+    request: curl -X 'GET' 'https://localhost:7280/api/shipments/APX-99999999/scans' -H 'accept: */*'
+    response: Error: response status is 404 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5", "title": "Shipment not found.", "status": 404, "detail": "No shipment has tracking number APX-99999999.", "traceId": "00-fe8ba049ece5a16628ad0b60baa67a49-74573bdc23024918-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:28 GMT server: Kestrel
+
+23. [PASS] DeleteShipment - Delete APX-00000101 (PickedUp)
+    expected 409, Swagger UI shows 409
+    request: curl -X 'DELETE' 'https://localhost:7280/api/shipments/APX-00000101' -H 'accept: */*'
+    response: Error: response status is 409 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10", "title": "The shipment's current state refuses this request.", "status": 409, "detail": "Shipment APX-00000101 is PickedUp; only a Created shipment can be deleted.", "traceId": "00-da3176fcd2b1677647e0ecc1bdfa66d3-31b49410221e6463-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:29 GMT server: Kestrel
+
+24. [PASS] DeleteShipment - Delete APX-00000102 (Created)
+    expected 204, Swagger UI shows 204
+    request: curl -X 'DELETE' 'https://localhost:7280/api/shipments/APX-00000102' -H 'accept: */*'
+    response: Response headers date: Sat,07 Nov 2026 15:22:31 GMT server: Kestrel
+
+25. [PASS] DeleteShipment - Delete APX-00000102 again
+    expected 404, Swagger UI shows 404
+    request: curl -X 'DELETE' 'https://localhost:7280/api/shipments/APX-00000102' -H 'accept: */*'
+    response: Error: response status is 404 Response body Download { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5", "title": "Shipment not found.", "status": 404, "detail": "No shipment has tracking number APX-00000102.", "traceId": "00-b5dcd8660e7af03fffb871564ad78a60-df784761e24609a2-00" } Response headers content-type: application/problem+json; charset=utf-8 date: Sat,07 Nov 2026 15:22:33 GMT server: Kestrel
+
+25 of 25 Try it out executions returned the expected status.

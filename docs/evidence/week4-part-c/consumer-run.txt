@@ -1,0 +1,20 @@
+$ dotnet run --project src/ApexPost.Client.Consumer
+1. Created APX-32024998: status Created, recipient DEMO Recipient, Pune, 2.5 kg
+2. Fetched APX-32024998: status Created, latest scan none
+3. Uploaded two scans: accepted 2, duplicates skipped 0, rejected 0
+4. APX-00000000: 404 Shipment not found. (handled as ApiException<ProblemDetails>)
+exit code: 0
+
+$ dotnet run --project src/ApexPost.Client.Consumer   (run again: a new tracking number)
+1. Created APX-61124845: status Created, recipient DEMO Recipient, Pune, 2.5 kg
+2. Fetched APX-61124845: status Created, latest scan none
+3. Uploaded two scans: accepted 2, duplicates skipped 0, rejected 0
+4. APX-00000000: 404 Shipment not found. (handled as ApiException<ProblemDetails>)
+exit code: 0
+
+$ curl https://localhost:7280/api/v2/shipments/APX-32024998   (the first run's shipment, read directly)
+{"trackingNumber":"APX-32024998","recipient":{"name":"DEMO Recipient","phone":"+919876543210","address":"1 Demo Street","city":"Pune"},"weightKg":2.5,"status":"Created","latestScan":{"scanType":1,"location":"Pune hub","scannedAtUtc":"2026-11-07T16:12:37.58+00:00"}}
+
+$ dotnet run --project src/ApexPost.Client.Consumer   (after the API was stopped)
+The API could not be reached at https://localhost:7280/: No connection could be made because the target machine actively refused it. (localhost:7280)
+exit code: 1

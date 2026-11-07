@@ -21,6 +21,14 @@ public sealed partial class TrackedShipment
 	public ShipmentStatus Status { get; private set; }
 	public IReadOnlyList<TrackedShipmentScan> Scans => _scans.AsReadOnly();
 
+	// The most recent scan, or null when there is none: the last in history order,
+	// which is by scan time and then by scan ID.
+	public TrackedShipmentScan? LatestScan =>
+		_scans
+			.OrderBy(scan => scan.ScannedAtUtc)
+			.ThenBy(scan => scan.ScanId, StringComparer.Ordinal)
+			.LastOrDefault();
+
 	// A shipment may be deleted only before a courier has picked it up.
 	public bool CanBeDeleted => Status == ShipmentStatus.Created;
 

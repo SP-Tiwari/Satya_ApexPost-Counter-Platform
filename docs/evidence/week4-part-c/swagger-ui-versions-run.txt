@@ -1,0 +1,68 @@
+--- opened (default)
+{
+  "options": [
+    "v2",
+    "v1 (deprecated)"
+  ],
+  "selected": "v2",
+  "title": "ApexPost Logistics API v2 OAS 3.1",
+  "description": "Tracked shipments and offline courier scan uploads for ApexPost Logistics. Every error response is a Problem Details object (RFC 9457).",
+  "link": "/openapi/v2.json",
+  "operations": [
+    "POST /api/v2/shipments/{trackingNumber}/scans",
+    "GET /api/v2/shipments/{trackingNumber}/scans",
+    "GET /api/v2/shipments",
+    "POST /api/v2/shipments",
+    "GET /api/v2/shipments/{trackingNumber}",
+    "PUT /api/v2/shipments/{trackingNumber}",
+    "DELETE /api/v2/shipments/{trackingNumber}",
+    "PATCH /api/v2/shipments/{trackingNumber}/status"
+  ]
+}
+--- v2 GetShipment 200 example
+{
+  "trackingNumber": "string",
+  "recipient": {
+    "name": "string",
+    "phone": "string",
+    "address": "string",
+    "city": "string"
+  },
+  "weightKg": 0.1,
+  "status": "Created",
+  "latestScan": null
+}
+--- after choosing v1 (deprecated)
+{
+  "options": [
+    "v2",
+    "v1 (deprecated)"
+  ],
+  "selected": "v1 (deprecated)",
+  "title": "ApexPost Logistics API v1 OAS 3.1",
+  "description": "Tracked shipments and offline courier scan uploads for ApexPost Logistics. Every error response is a Problem Details object (RFC 9457). Version 1.0 is deprecated; use version 2.0.",
+  "link": "/openapi/v1.json",
+  "operations": [
+    "POST /api/v1/shipments/{trackingNumber}/scans [deprecated]",
+    "GET /api/v1/shipments/{trackingNumber}/scans [deprecated]",
+    "GET /api/v1/shipments [deprecated]",
+    "POST /api/v1/shipments [deprecated]",
+    "GET /api/v1/shipments/{trackingNumber} [deprecated]",
+    "PUT /api/v1/shipments/{trackingNumber} [deprecated]",
+    "DELETE /api/v1/shipments/{trackingNumber} [deprecated]",
+    "PATCH /api/v1/shipments/{trackingNumber}/status [deprecated]"
+  ]
+}
+--- v1 GetShipment 200 example
+{
+  "trackingNumber": "string",
+  "recipientName": "string",
+  "recipientPhone": "string",
+  "recipientAddress": "string",
+  "recipientCity": "string",
+  "weightKg": 0.1,
+  "status": 0
+}
+--- documents fetched by Swagger UI
+200 /openapi/v2.json
+200 /openapi/v1.json

@@ -5,10 +5,27 @@
     <ProjectReference Include="..\ApexPost.Infrastructure\ApexPost.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Asp.Versioning.Mvc" Version="10.2.1" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.2.1" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.3.1" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The XML comments on the controllers and DTOs become the OpenAPI summaries,
+         descriptions and response descriptions (Week 4 Part C, C3). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- AV0029 and AV0030 recommend the Asp.Versioning.OpenApi package's
+         AddApiVersioning().AddOpenApi() and MapOpenApi().WithDocumentPerVersion().
+         The per-version documents (Week 4 Part C, C5) are instead registered with
+         the built-in AddOpenApi(), one document per API Explorer group name (v1,
+         v2), so each document already lists only its own version's operations.
+         Both rules only recommend that package, so they are suppressed. -->
+    <NoWarn>$(NoWarn);AV0029;AV0030</NoWarn>
     <!-- ConnectionStrings:ApexPostDb is read from User Secrets, never from appsettings.json. -->
     <UserSecretsId>5b0e4c31-7a2f-4d8e-9c61-3f8a2d4b7e90</UserSecretsId>
   </PropertyGroup>
