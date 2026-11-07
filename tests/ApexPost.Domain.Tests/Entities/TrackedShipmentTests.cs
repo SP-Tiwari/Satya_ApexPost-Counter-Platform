@@ -86,6 +86,36 @@ public class TrackedShipmentTests
 		Assert.Equal(TimeSpan.Zero, scan.ScannedAtUtc.Offset);
 	}
 
+	[Fact]
+	public void LatestScan_WithoutScans_IsNull()
+	{
+		Assert.Null(CreateShipment().LatestScan);
+	}
+
+	[Fact]
+	public void LatestScan_IsTheMostRecentByScanTime_NotByUploadOrder()
+	{
+		var shipment = CreateShipment();
+		var morning = new DateTimeOffset(2026, 11, 7, 9, 0, 0, TimeSpan.Zero);
+
+		shipment.AddScan(CreateScan("scan::0d1e2f3a-4b5c-4d6e-8f70-81a2b3c4d5e6", ShipmentScanType.InTransit, morning.AddHours(2)));
+		shipment.AddScan(CreateScan("scan::1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d", ShipmentScanType.Pickup, morning));
+
+		Assert.Equal(ShipmentScanType.InTransit, shipment.LatestScan!.ScanType);
+		Assert.Equal(morning.AddHours(2), shipment.LatestScan.ScannedAtUtc);
+	}
+
+	[Fact]
+	public void LatestScan_ForScansAtTheSameTime_IsTheLastByScanId()
+	{
+		var shipment = CreateShipment();
+
+		shipment.AddScan(CreateScan("scan::bbbbbbbb-0000-4000-8000-000000000002", ShipmentScanType.Delivered));
+		shipment.AddScan(CreateScan("scan::aaaaaaaa-0000-4000-8000-000000000001", ShipmentScanType.InTransit));
+
+		Assert.Equal("scan::bbbbbbbb-0000-4000-8000-000000000002", shipment.LatestScan!.ScanId);
+	}
+
 	private static TrackedShipment CreateShipment(string trackingNumber = "APX-12345678") =>
 		new(trackingNumber, "DEMO Recipient", "+919876543210", "1 Demo Street", "Pune", new Weight(1.5m));
 
