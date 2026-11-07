@@ -16,6 +16,8 @@ internal sealed class DisposableSqlDatabase : IDisposable
 	// In foreign-key order. Roles and ProductCategories keep their migration seed.
 	private const string ResetSql =
 		"""
+		DELETE FROM TrackedShipmentScans;
+		DELETE FROM TrackedShipments;
 		DELETE FROM AuditEntries;
 		DELETE FROM StaffCredentials;
 		DELETE FROM StockAdjustments;

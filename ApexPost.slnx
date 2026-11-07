@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/ApexPost.Api/ApexPost.Api.csproj" />
     <Project Path="src/ApexPost.Application/ApexPost.Application.csproj" />
     <Project Path="src/ApexPost.Courier.Harness/ApexPost.Courier.Harness.csproj" />
     <Project Path="src/ApexPost.Courier.Offline/ApexPost.Courier.Offline.csproj" />
@@ -8,6 +9,7 @@
     <Project Path="src/ApexPost.Web/ApexPost.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/ApexPost.Api.IntegrationTests/ApexPost.Api.IntegrationTests.csproj" />
     <Project Path="tests/ApexPost.Application.Tests/ApexPost.Application.Tests.csproj" />
     <Project Path="tests/ApexPost.Courier.Offline.Tests/ApexPost.Courier.Offline.Tests.csproj" />
     <Project Path="tests/ApexPost.Domain.Tests/ApexPost.Domain.Tests.csproj" />

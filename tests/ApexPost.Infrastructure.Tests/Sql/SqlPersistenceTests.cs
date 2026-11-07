@@ -750,8 +750,9 @@ public sealed class SqlPersistenceTests(SqlTestHost host) : IAsyncLifetime
 		await migrator.MigrateAsync(Migration.InitialDatabase);
 		Assert.Equal(1, await CountTablesAsync(context));
 
+		// 20 Week 3 tables, plus TrackedShipments and TrackedShipmentScans (ADR 0028).
 		await migrator.MigrateAsync();
-		Assert.Equal(20, await CountTablesAsync(context));
+		Assert.Equal(22, await CountTablesAsync(context));
 	}
 
 	[Theory]

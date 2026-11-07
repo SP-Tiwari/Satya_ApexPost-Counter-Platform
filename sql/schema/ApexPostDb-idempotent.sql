@@ -1044,3 +1044,71 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261107102433_AddTrackedShipments'
+)
+BEGIN
+    CREATE TABLE [TrackedShipments] (
+        [TrackingNumber] varchar(12) NOT NULL,
+        [RecipientName] nvarchar(100) NOT NULL,
+        [RecipientPhone] varchar(20) NOT NULL,
+        [RecipientAddress] nvarchar(200) NOT NULL,
+        [RecipientCity] nvarchar(100) NOT NULL,
+        [WeightKg] decimal(10,3) NOT NULL,
+        [Status] varchar(20) NOT NULL,
+        [CreatedAtUtc] datetime2(3) NOT NULL DEFAULT (SYSUTCDATETIME()),
+        [CreatedBy] varchar(128) NOT NULL DEFAULT (SUSER_SNAME()),
+        [ModifiedAtUtc] datetime2(3) NULL,
+        [RowVersion] rowversion NOT NULL,
+        CONSTRAINT [PK_TrackedShipments] PRIMARY KEY ([TrackingNumber]),
+        CONSTRAINT [CK_TrackedShipments_Status] CHECK ([Status] IN ('Created', 'PickedUp', 'InTransit', 'OutForDelivery', 'Delivered', 'Failed')),
+        CONSTRAINT [CK_TrackedShipments_TrackingNumber] CHECK ([TrackingNumber] LIKE 'APX-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'),
+        CONSTRAINT [CK_TrackedShipments_Weight] CHECK ([WeightKg] > 0)
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261107102433_AddTrackedShipments'
+)
+BEGIN
+    CREATE TABLE [TrackedShipmentScans] (
+        [ScanId] varchar(42) NOT NULL,
+        [ScanType] varchar(20) NOT NULL,
+        [CourierId] varchar(50) NOT NULL,
+        [Location] nvarchar(200) NOT NULL,
+        [ScannedAtUtc] datetime2(3) NOT NULL,
+        [Notes] nvarchar(500) NULL,
+        [CreatedAtUtc] datetime2(3) NOT NULL DEFAULT (SYSUTCDATETIME()),
+        [CreatedBy] varchar(128) NOT NULL DEFAULT (SUSER_SNAME()),
+        [ModifiedAtUtc] datetime2(3) NULL,
+        [TrackingNumber] varchar(12) NOT NULL,
+        CONSTRAINT [PK_TrackedShipmentScans] PRIMARY KEY ([ScanId]),
+        CONSTRAINT [CK_TrackedShipmentScans_ScanId] CHECK ([ScanId] LIKE 'scan::________-____-____-____-____________'),
+        CONSTRAINT [CK_TrackedShipmentScans_ScanType] CHECK ([ScanType] IN ('Pickup', 'InTransit', 'Delivered', 'Failed')),
+        CONSTRAINT [FK_TrackedShipmentScans_TrackedShipments_TrackingNumber] FOREIGN KEY ([TrackingNumber]) REFERENCES [TrackedShipments] ([TrackingNumber]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261107102433_AddTrackedShipments'
+)
+BEGIN
+    CREATE INDEX [IX_TrackedShipmentScans_TrackingNumber] ON [TrackedShipmentScans] ([TrackingNumber]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261107102433_AddTrackedShipments'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261107102433_AddTrackedShipments', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

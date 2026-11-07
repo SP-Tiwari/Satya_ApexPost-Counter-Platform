@@ -12,6 +12,7 @@ This document describes the platform as implemented on the `master` branch. Wher
 | `ApexPost.Application` | Use cases (application services), persistence/security/audit/courier/verification abstractions, the domain-event publisher, the reference-data cache and request validation. | Domain |
 | `ApexPost.Infrastructure` | `ApexPostDbContext`, EF Core mappings and migrations, SQL Server repositories and stores, demo seed, and the simulated courier and identity-verification services. | Application, Domain |
 | `ApexPost.Web` | MVC controllers and views, middleware, filters, authentication, authorization policies, the partner API and the composition root (`Program.cs`). | Application, Infrastructure |
+| `ApexPost.Api` | Week 4 REST API for tracked shipments and courier scans: thin `[ApiController]` controllers, request and response DTOs, Problem Details, the global exception handler and a minimal-hosting composition root. It reuses `ApexPostDbContext`, the repositories and the unit of work. See [API-NOTES.md](API-NOTES.md) and [ADR 0028](docs/adr/0028-tracked-shipments-storage.md). | Application, Infrastructure |
 
 ```mermaid
 flowchart LR
@@ -1093,3 +1094,4 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 | [0024](docs/adr/0024-index-choices.md) | Index choices from execution-plan evidence |
 | [0025](docs/adr/0025-domain-errors-and-http-status.md) | State conflicts stay 409, a deliberate deviation |
 | [0027](docs/adr/0027-couchbase-lite-courier-offline-store.md) | Couchbase Lite courier offline store (Week 4 Part A; see [OFFLINE-DESIGN.md](OFFLINE-DESIGN.md)) |
+| [0028](docs/adr/0028-tracked-shipments-storage.md) | Tracked shipments storage for the Week 4 API: two new tables, added without changing Week 3 (Week 4 Part B) |
