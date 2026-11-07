@@ -1,0 +1,23 @@
+﻿# Build and test runs on 2026-11-02, branch feature/week4-part-a-courier-offline
+# .NET SDK 10.0.402. dotnet build ApexPost.slnx --no-incremental: 0 warnings, 0 errors.
+
+## Checkpoint run: dotnet test ApexPost.slnx --no-build (about 18:12 UTC)
+
+Passed!  - Failed:     0, Passed:   224, Skipped:     0, Total:   224, Duration: 1 s - ApexPost.Domain.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   140, Skipped:     0, Total:   140, Duration: 2 s - ApexPost.Application.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    68, Skipped:     0, Total:    68, Duration: 3 s - ApexPost.Courier.Offline.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   240, Skipped:     0, Total:   240, Duration: 28 s - ApexPost.Infrastructure.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   300, Skipped:     0, Total:   300, Duration: 1 m 6 s - ApexPost.Web.IntegrationTests.dll (net10.0)
+
+Total: 972 passed, 0 failed, 0 skipped. The 904 Week 3 tests are unchanged, and the 68 are new courier offline tests.
+
+## Earlier run, one project at a time (18:05 UTC)
+
+ApexPost.Domain.Tests           Passed 224 / 224
+ApexPost.Application.Tests      Passed 140 / 140
+ApexPost.Infrastructure.Tests   Passed 240 / 240
+ApexPost.Web.IntegrationTests   Failed 1, passed 299 / 300
+  [FAIL] ApexPost.Web.IntegrationTests.TransactionsControllerTests.SetBranchStatus_UnknownBranch_Returns404
+ApexPost.Courier.Offline.Tests  Passed 68 / 68
+
+The failure did not reproduce. The test passed on its own, and the whole Web project then passed 300 of 300 in two more runs and in the checkpoint run above. Its failure message was not captured, so the cause is not established. A Visual Studio test host (vstest.console) was running on the machine at the time. The Web project does not reference the courier projects, and no Week 3 source or test file changed on this branch.

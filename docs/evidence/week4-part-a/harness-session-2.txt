@@ -1,0 +1,72 @@
+# Session 2: restart against the same database, then delete scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122 (the APX-DEMO-2002 scan).
+
+[info] CourierDatabase: Opened apexpost_courier at E:\DotNetTraining\Day01\ApexPost-Counter-Platform\out\courier-evidence\apexpost_courier.cblite2\.
+[info] CourierDatabase: Change listener registered.
+
+=== ApexPost courier (offline) | pending scans (live): 0 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 2
+Tracking number: APX-DEMO-2002
+Scans for APX-DEMO-2002, oldest first: 1
+  scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122 | APX-DEMO-2002 | Pickup | COURIER-DEMO-07 | Demo Street 12 | 2026-11-02 18:00:08.703Z | Failed | -
+
+=== ApexPost courier (offline) | pending scans (live): 0 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 5
+Scan ID (scan::{Guid}): scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122
+Deleted scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122.
+
+=== ApexPost courier (offline) | pending scans (live): 0 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 5
+Scan ID (scan::{Guid}): scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122
+No scan scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122.
+
+=== ApexPost courier (offline) | pending scans (live): 0 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 2
+Tracking number: APX-DEMO-2002
+Scans for APX-DEMO-2002, oldest first: 0
+
+=== ApexPost courier (offline) | pending scans (live): 0 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 3
+[info] CourierDatabase: Changed documents: scan::e9a6fed0-2382-4c3c-bf87-6fb6350b6122. Pending scans: 0.
+Pending scans, oldest first: 0
+
+=== ApexPost courier (offline) | pending scans (live): 0 ===
+1. Add Scan
+2. Find by Tracking Number
+3. List Pending
+4. Simulate Sync
+5. Delete Scan
+6. Exit
+Choose an option: 6
+Goodbye.
+[info] CourierDatabase: Change listener removed.
+[info] CourierDatabase: Closed apexpost_courier.

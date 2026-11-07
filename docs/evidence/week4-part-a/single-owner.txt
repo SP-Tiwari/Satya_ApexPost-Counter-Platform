@@ -1,0 +1,5 @@
+# A second process started while another harness process holds the same database open.
+
+$ ApexPost.Courier.Harness --data-dir out/courier-evidence
+apexpost_courier is already open in another process or instance. An embedded database must have a single owner.
+exit code 1

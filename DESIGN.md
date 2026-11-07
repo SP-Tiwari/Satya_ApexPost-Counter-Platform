@@ -1092,3 +1092,4 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 | [0023](docs/adr/0023-stored-procedures.md) | Which operations are stored procedures, and why |
 | [0024](docs/adr/0024-index-choices.md) | Index choices from execution-plan evidence |
 | [0025](docs/adr/0025-domain-errors-and-http-status.md) | State conflicts stay 409, a deliberate deviation |
+| [0027](docs/adr/0027-couchbase-lite-courier-offline-store.md) | Couchbase Lite courier offline store (Week 4 Part A; see [OFFLINE-DESIGN.md](OFFLINE-DESIGN.md)) |

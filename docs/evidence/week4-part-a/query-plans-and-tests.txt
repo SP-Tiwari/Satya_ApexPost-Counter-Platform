@@ -1,0 +1,31 @@
+# SQL++ query plans and query tests
+# dotnet test tests/ApexPost.Courier.Offline.Tests --filter ScanQueryTests --logger "console;verbosity=detailed"
+# Run 2026-11-02T18:00:31Z. Each plan is Couchbase Lite's IQuery.Explain() output for the query the repository runs.
+
+E:\DotNetTraining\Day01\ApexPost-Counter-Platform\tests\ApexPost.Courier.Offline.Tests\bin\Debug\net10.0\ApexPost.Courier.Offline.Tests.dll
+2026-11-2 11:30:30.967+05:30 [.NET TP Worker]| WARNING)  [Database] c4log_enableFatalExceptionBacktrace is a no-op now
+2026-11-2 11:30:30.982+05:30 [.NET TP Worker]| INFO)  [Database] (Startup) [.NET TP Worker (7)] CouchbaseLite/4.1.2 (.NET; Microsoft Windows 10.0.22000) Build/2 LiteCore/4.1.2 (5)
+2026-11-2 11:30:30.983+05:30 [.NET TP Worker]| WARNING)  [Database] c4log_enableFatalExceptionBacktrace is a no-op now
+  Passed ApexPost.Courier.Offline.Tests.ScanQueryTests.ListPending_UsesTheSyncStatusIndex
+  Standard Output Messages:
+ SELECT _.key AS id, fl_result(fl_value(_.body, 'trackingNumber')), fl_result(fl_value(_.body, 'scanType')), fl_result(fl_value(_.body, 'courierId')), fl_result(fl_value(_.body, 'location')), fl_result(fl_value(_.body, 'scannedAtUtc')), fl_result(fl_value(_.body, 'notes')), fl_result(fl_value(_.body, 'syncStatus')) FROM kv_default AS _ WHERE fl_value(_.body, 'syncStatus') = $_syncStatus AND (_.flags & 1 = 0) ORDER BY fl_value(_.body, 'scannedAtUtc'), _.key
+4|0|61| SEARCH _ USING INDEX idx_scans_syncStatus (<expr>=?)
+39|0|0| USE TEMP B-TREE FOR ORDER BY
+{"FROM":[{"COLLECTION":"_"}],"ORDER_BY":[[".scannedAtUtc"],["_.",["meta()"],".id"]],"WHAT":[["AS",["_.",["meta()"],".id"],"id"],[".trackingNumber"],[".scanType"],[".courierId"],[".location"],[".scannedAtUtc"],[".notes"],[".syncStatus"]],"WHERE":["=",[".syncStatus"],["$syncStatus"]]}
+  Passed ApexPost.Courier.Offline.Tests.ScanQueryTests.Parameters_TreatQuerySyntaxAsAPlainValue(hostile: "APX-TEST-0001' OR trackingNumber IS NOT MISSING OR"···)
+  Passed ApexPost.Courier.Offline.Tests.ScanQueryTests.Parameters_TreatQuerySyntaxAsAPlainValue(hostile: "' OR 1=1 --")
+  Passed ApexPost.Courier.Offline.Tests.ScanQueryTests.Parameters_TreatQuerySyntaxAsAPlainValue(hostile: "\" OR TRUE OR \"")
+  Passed ApexPost.Courier.Offline.Tests.ScanQueryTests.CountByScanType_CountsOnlyThatCourier
+  Passed ApexPost.Courier.Offline.Tests.ScanQueryTests.FindByTrackingNumber_ReturnsOnlyThatShipmentOrderedByScannedAtUtc
+  Passed ApexPost.Courier.Offline.Tests.ScanQueryTests.FindByTrackingNumber_UsesTheTrackingNumberIndex
+  Standard Output Messages:
+ SELECT _.key AS id, fl_result(fl_value(_.body, 'trackingNumber')), fl_result(fl_value(_.body, 'scanType')), fl_result(fl_value(_.body, 'courierId')), fl_result(fl_value(_.body, 'location')), fl_result(fl_value(_.body, 'scannedAtUtc')), fl_result(fl_value(_.body, 'notes')), fl_result(fl_value(_.body, 'syncStatus')) FROM kv_default AS _ WHERE fl_value(_.body, 'trackingNumber') = $_trackingNumber AND (_.flags & 1 = 0) ORDER BY fl_value(_.body, 'scannedAtUtc'), _.key
+4|0|61| SEARCH _ USING INDEX idx_scans_trackingNumber (<expr>=?)
+39|0|0| USE TEMP B-TREE FOR ORDER BY
+{"FROM":[{"COLLECTION":"_"}],"ORDER_BY":[[".scannedAtUtc"],["_.",["meta()"],".id"]],"WHAT":[["AS",["_.",["meta()"],".id"],"id"],[".trackingNumber"],[".scanType"],[".courierId"],[".location"],[".scannedAtUtc"],[".notes"],[".syncStatus"]],"WHERE":["=",[".trackingNumber"],["$trackingNumber"]]}
+  Passed ApexPost.Courier.Offline.Tests.ScanQueryTests.ListPending_ReturnsOnlyPendingScansOldestFirst
+  Passed ApexPost.Courier.Offline.Tests.ScanQueryTests.QueryText_UsesParametersAndNoFormattedValues [< 1 ms]
+Test Run Successful.
+Total tests: 9
+     Passed: 9
+ Total time: 1.4759 Seconds
