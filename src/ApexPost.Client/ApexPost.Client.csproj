@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The typed C# client for version 2 of the ApexPost Logistics API.
+       Generated/ApexPostApiClient.cs is written by NSwag from the published
+       contract ../../contracts/v2.json with nswag.json and is never edited by
+       hand; see README.md. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="nswag.json" />
+  </ItemGroup>
+
+</Project>

@@ -21,6 +21,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ApexPost.Api\ApexPost.Api.csproj" />
+    <ProjectReference Include="..\..\src\ApexPost.Client.Consumer\ApexPost.Client.Consumer.csproj" />
+  </ItemGroup>
+
+  <!-- The published contracts, compared with the documents the API generates. -->
+  <ItemGroup>
+    <None Include="..\..\contracts\*.json" LinkBase="contracts" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
