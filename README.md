@@ -304,7 +304,16 @@ The collection change listener logs the IDs of every changed document, along wit
 | Domain classes reference no Couchbase types | `Domain/` namespace | `ArchitectureTests` |
 | Console harness menu | `src/ApexPost.Courier.Harness` | `CourierHarnessTests`, [harness sessions](docs/evidence/week4-part-a/README.md) |
 
-Implementation paths are under `src/ApexPost.Courier.Offline` unless they start with `src/`. All the tests are in `tests/ApexPost.Courier.Offline.Tests`.
+Implementation paths are under `src/ApexPost.Courier.Offline` unless they start with `src/`. All the tests are in `tests/ApexPost.Courier.Offline.Tests`. Each test opens its own database in a new GUID-named folder and deletes it afterwards. The parent folder is chosen by `CourierTestStorage` in `TestSupport.cs`, in this order:
+
+1. `APEXPOST_COURIER_TEST_DATA_DIRECTORY`, when set. It must be an absolute path on a drive that exists; otherwise the tests fail with a clear message instead of using another folder.
+2. `E:\ApexPostTestData\CourierOffline`, when the E: drive exists (the development machine).
+3. `%TEMP%\ApexPostCourierTests` on any other machine.
+
+```powershell
+$env:APEXPOST_COURIER_TEST_DATA_DIRECTORY = "D:\ApexPostTestData\CourierOffline"
+dotnet test tests/ApexPost.Courier.Offline.Tests
+```
 
 ## Shipments API (Week 4 Part B)
 

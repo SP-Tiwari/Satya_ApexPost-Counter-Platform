@@ -6,13 +6,52 @@ using Microsoft.Extensions.Logging;
 
 namespace ApexPost.Courier.Offline.Tests;
 
+// Where the per-test database folders go. A configured folder always wins and is
+// never replaced silently: it must be absolute and on a drive that exists.
+// Without one, the development folder on E: is used when that drive exists, and
+// the normal temporary folder everywhere else.
+internal static class CourierTestStorage
+{
+	public const string DirectoryVariable = "APEXPOST_COURIER_TEST_DATA_DIRECTORY";
+	public const string DevelopmentDirectory = @"E:\ApexPostTestData\CourierOffline";
+	public const string TempFolderName = "ApexPostCourierTests";
+
+	public static string FromEnvironment() =>
+		Resolve(
+			Environment.GetEnvironmentVariable(DirectoryVariable),
+			Directory.Exists,
+			System.IO.Path.GetTempPath());
+
+	public static string Resolve(
+		string? configuredDirectory,
+		Func<string, bool> directoryExists,
+		string tempDirectory)
+	{
+		if (!string.IsNullOrWhiteSpace(configuredDirectory))
+		{
+			if (!System.IO.Path.IsPathFullyQualified(configuredDirectory))
+				throw new InvalidOperationException(
+					$"{DirectoryVariable} must be an absolute folder path.");
+
+			if (!directoryExists(System.IO.Path.GetPathRoot(configuredDirectory)!))
+				throw new InvalidOperationException(
+					$"The drive for {DirectoryVariable} is unavailable. A configured folder is never replaced by another one.");
+
+			return configuredDirectory;
+		}
+
+		return directoryExists(System.IO.Path.GetPathRoot(DevelopmentDirectory)!)
+			? DevelopmentDirectory
+			: System.IO.Path.Combine(tempDirectory, TempFolderName);
+	}
+}
+
 // A fresh database folder per test, deleted afterwards. Couchbase Lite runs in
 // process against these files; no server or network is involved.
 internal sealed class CourierDatabaseFolder : IDisposable
 {
 	public string Path { get; } = System.IO.Path.Combine(
-		System.IO.Path.GetTempPath(),
-		"ApexPostCourierTests",
+		CourierTestStorage.FromEnvironment(),
 		Guid.NewGuid().ToString("N"));
 
 	public void Dispose()
