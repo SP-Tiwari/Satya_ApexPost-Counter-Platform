@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using ApexPost.Api.Models;
 using ApexPost.Api.Security;
+using ApexPost.Courier.Sync;
 using ApexPost.Domain.Enums;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -122,6 +123,11 @@ internal static class TestTokens
 
 	public static string Courier() => Create(CourierId,ApexPostClaims.CourierRole);
 
+	// The courier client's token store (ApexPost.Courier.Sync), holding a valid
+	// Courier token for the whole test.
+	public static ITokenStore CourierTokenStore() =>
+		new FixedTokenStore(new AccessToken(Courier(), DateTimeOffset.UtcNow.AddHours(1)));
+
 	public static string Admin() => Create(null, ApexPostClaims.AdminRole);
 
 	public static string Create(string? courierId, params string[] roles) =>
@@ -160,6 +166,15 @@ internal static class TestTokens
 		client.DefaultRequestHeaders.Authorization =
 			token is null ? null : new AuthenticationHeaderValue("Bearer", token);
 		return client;
+	}
+
+	private sealed class FixedTokenStore(AccessToken token) : ITokenStore
+	{
+		public AccessToken? GetToken() => token;
+
+		public void SaveToken(AccessToken newToken) => throw new NotSupportedException();
+
+		public void ClearToken() => throw new NotSupportedException();
 	}
 }
 

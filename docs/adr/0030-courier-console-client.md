@@ -30,11 +30,11 @@ Following the trainer's guidance, the project owner decided that the client is a
 | Unsupported platforms | DPAPI exists only on Windows. On any other OS, `AddCourierSync`'s token store throws `PlatformNotSupportedException` with a clear message. It never falls back to a plaintext file or to memory |
 | 401 handling (D10) | `AuthHeaderHandler` reports a 401 to `CourierSession`, which clears the rejected token and raises `SignInRequired`, the console's equivalent of navigating to the Login page |
 | Resilience (D7) | `CourierResilience` adds a `Microsoft.Extensions.Http.Resilience` (Polly) pipeline to the typed client, exactly as a MAUI app would: overall timeout, retry (3, exponential with jitter, transient failures only, retry-safe requests only), circuit breaker and attempt timeout. No substitution was needed. The values and reasons are in [RESILIENCE.md](../../RESILIENCE.md) |
+| Offline sync (D9) | `ApiShipmentUploader` replaces Part A's fake uploader. The Part A outbox uploads `Pending` scans in batches of 20. Only the server's final answer makes a scan `Synced` or `Failed`; a temporary failure leaves it `Pending` and stops the run. Rules and tests are in [OFFLINE-DESIGN.md](../../OFFLINE-DESIGN.md#4-synchronization-with-the-api-part-d-d9) |
+| Connectivity (`Connectivity.ConnectivityChanged` substitute, D9) | `SystemNetworkStatus` (`INetworkStatus`) uses `NetworkChange.NetworkAvailabilityChanged` and `NetworkInterface.GetIsNetworkAvailable()`. `SyncCoordinator` syncs when the network has been back for 3 s, one run at a time. These see network adapters only, not whether the API answers; an API that is down is handled by the circuit breaker |
 
-**Decided, not implemented yet:** the later Part D milestones will add the following.
-- Batch uploads in the Part A outbox. Temporary failures will leave scans `Pending`; only an answer from the server will make a scan `Failed`.
-- Detecting connectivity with `System.Net.NetworkInformation.NetworkChange` instead of MAUI `Connectivity`.
-- The console menus and the offline banner (D11).
+**Decided, not implemented yet:** a later Part D milestone will add the following.
+- The console menus (Login, New Scan, Pending Scans, Sync Status) and the offline banner (D11). They will start `SyncCoordinator` and read `SyncState`.
 
 They will be recorded here and in the documents they affect when they exist.
 

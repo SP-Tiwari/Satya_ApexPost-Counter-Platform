@@ -303,7 +303,7 @@ The collection change listener logs the IDs of every changed document, along wit
 | `ShipmentScan` document, `scan::{Guid}` IDs | `Domain/ShipmentScan.cs`, `Domain/ShipmentScanId.cs`, `Persistence/ShipmentScanDocument.cs` | `ShipmentScanTests`, `Create_StoresTheSevenFieldsAsAJsonDocument` |
 | `IScanRepository`, `CouchbaseScanRepository`, key-value CRUD and list all | `Application/IScanRepository.cs`, `Persistence/CouchbaseScanRepository.cs` | `CouchbaseScanRepositoryTests` |
 | Three SQL++ queries, parameters only, value indexes | `Persistence/ScanQueries.cs`; indexes created in `CourierDatabase` | `ScanQueryTests`, [query plans](docs/evidence/week4-part-a/query-plans-and-tests.txt) |
-| Save locally first as `Pending`; `OutboxService` with a fake `IShipmentUploader` | `Domain/ShipmentScan.Record`, `Application/OutboxService.cs`, `Uploading/FakeShipmentUploader.cs` | `OutboxServiceTests`, [harness session](docs/evidence/week4-part-a/harness-session-1.txt) |
+| Save locally first as `Pending`; `OutboxService` with a fake `IShipmentUploader` (since Part D: batches of 20, and the real uploader in the courier client, see [Courier console client](#courier-console-client-week-4-part-d)) | `Domain/ShipmentScan.Record`, `Application/OutboxService.cs`, `Uploading/FakeShipmentUploader.cs` | `OutboxServiceTests`, [harness session](docs/evidence/week4-part-a/harness-session-1.txt) |
 | Change listener logging IDs and a live pending count; token removed on dispose | `CourierDatabase.StartChangeListener`, `StopChangeListener`, `Dispose` | `ChangeListenerTests` |
 | Domain classes reference no Couchbase types | `Domain/` namespace | `ArchitectureTests` |
 | Console harness menu | `src/ApexPost.Courier.Harness` | `CourierHarnessTests`, [harness sessions](docs/evidence/week4-part-a/README.md) |
@@ -359,6 +359,10 @@ The assignment's courier app is built as a .NET console application instead of a
   - `CourierResilience`, the retry, circuit breaker and timeouts of every call (D7; see [RESILIENCE.md](RESILIENCE.md)).
   - `DpapiTokenStore`, which keeps the token encrypted with Windows DPAPI.
   - The source-generated JSON context `CourierJsonContext` and the Problem Details handling (`ApiResult`, `ApiError`).
+  - The offline sync (D9; see [OFFLINE-DESIGN.md](OFFLINE-DESIGN.md#4-synchronization-with-the-api-part-d-d9)):
+    - `ApiShipmentUploader`, the real `IShipmentUploader` for the Part A outbox.
+    - `SyncCoordinator`, which syncs when the network returns (`SystemNetworkStatus`), one run at a time.
+    - `SyncState`: last sync, counts, failures and circuit state.
   - `AddCourierSync`, which registers all of it.
 - **`src/ApexPost.Courier.Console`:** the console application. In this version it checks the configuration, then reports the API root and whether a usable token is stored. The Login, New Scan, Pending Scans and Sync Status menus are not implemented yet.
 
@@ -378,6 +382,9 @@ The token's storage, the 401 handling and the logging rules are in [SECURITY.md]
 | D8 shared JSON options (camelCase, case-insensitive, enums as strings) with a source-generated `JsonSerializerContext` | `CourierJsonContext.cs`, `Contracts/ApiContracts.cs` | `CourierJsonTests` |
 | D7 retry (3, exponential backoff with jitter; network errors, 408 and 5xx only; retry-safe requests only), circuit breaker, per-attempt and overall timeouts, with logging | `CourierResilience.cs`, added in `AddCourierSync`; `ApexApiClient.UploadScansAsync` marks the upload safe to retry. Values and reasons: [RESILIENCE.md](RESILIENCE.md) | `ResilienceTests`; against the real API, `tests/ApexPost.Api.IntegrationTests/CourierClientRetryTests.cs` |
 | D8 Problem Details and validation errors shown as friendly messages; null, unknown and malformed responses handled | `ApiErrors.cs`, `ApiResult.cs`, `ApexApiClient.cs` | `ApexApiClientTests` (error, malformed-body and unknown-field cases) |
+| D9 the fake `IShipmentUploader` replaced by the real API call; `Pending` scans uploaded in batches of 20; each scan marked `Synced` or `Failed` from the API's answer, or left `Pending` without one | `ApiShipmentUploader.cs`; `OutboxService.cs` and `IShipmentUploader.cs` in `src/ApexPost.Courier.Offline` (batch of 20, `RetryLater`) | `ApiShipmentUploaderTests`, `OfflineSyncTests`; `OutboxServiceTests` (`tests/ApexPost.Courier.Offline.Tests`); end to end, `tests/ApexPost.Api.IntegrationTests/CourierOfflineSyncTests.cs` |
+| D9 sync when connectivity returns (console substitute for MAUI `Connectivity.ConnectivityChanged`) | `NetworkStatus.cs` (`SystemNetworkStatus`: `NetworkChange`, `NetworkInterface`), `SyncCoordinator.cs` (3 s debounce, single flight, shutdown) | `SyncCoordinatorTests` |
+| D9 / D7 scans keep being saved locally while the circuit is open; D10 a 401 leaves scans `Pending` and clears the token | `ApiShipmentUploader` (`RetryLater`), circuit state published to `SyncState.cs` from `CourierResilience` | `OfflineSyncTests.WhileTheCircuitIsOpen_ScansAreStillSavedLocally_AndStayPending`, `Unauthorized_LeavesEveryScanPending_ClearsTheToken_AndStopsTheRun` |
 
 ## API documentation: OpenAPI and Swagger UI (Week 4 Part C)
 
@@ -537,7 +544,19 @@ dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
 
-**Week 4 Part D Milestone 3 verification (latest, D7 resilience):** on 2026-11-09 at 19:39 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx` then passed 1,484 of 1,484 tests, with 0 failed and 0 skipped. Every code and test file was last changed before that build:
+**Week 4 Part D Milestone 4 verification (latest, D9 offline sync):** on 2026-11-09 at 20:07 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx` then passed 1,523 of 1,523 tests, with 0 failed and 0 skipped. Every code and test file was last changed before that build:
+
+| Project | Passed |
+|---|---|
+| Domain | 279 |
+| Application | 140 |
+| Courier.Offline | 80 (the outbox tests now cover batches of 20 and temporary failures) |
+| Courier.Sync | 178 (including the uploader, offline-sync and coordinator tests) |
+| API integration | 304 (including the end-to-end offline sync against the real API) |
+| Infrastructure | 239 |
+| Web integration | 303 |
+
+**Week 4 Part D Milestone 3 verification (D7 resilience):** on 2026-11-09 at 19:39 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx` then passed 1,484 of 1,484 tests, with 0 failed and 0 skipped. Every code and test file was last changed before that build:
 
 | Project | Passed |
 |---|---|

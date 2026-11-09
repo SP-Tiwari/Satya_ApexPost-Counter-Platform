@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
+using ApexPost.Courier.Offline.Application;
+using ApexPost.Courier.Offline.Domain;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -60,6 +62,14 @@ internal sealed class ClientHost : IDisposable
 	public ApexApiClient Client => _services.GetRequiredService<ApexApiClient>();
 
 	public CourierSession Session => _services.GetRequiredService<CourierSession>();
+
+	public SyncState State => _services.GetRequiredService<SyncState>();
+
+	public ApiShipmentUploader Uploader() =>
+		new(Client, _services.GetRequiredService<ILogger<ApiShipmentUploader>>());
+
+	public OutboxService Outbox(IScanRepository scans) =>
+		new(scans, Uploader(), _services.GetRequiredService<ILogger<OutboxService>>());
 
 	public void Dispose() => _services.Dispose();
 }
@@ -200,5 +210,91 @@ internal sealed class RecordingLoggerProvider : ILoggerProvider
 			Exception? exception,
 			Func<TState, Exception?, string> formatter) =>
 			messages.Enqueue($"{logLevel} {category}: {formatter(state, exception)} {exception}");
+	}
+}
+
+// IScanRepository in memory, with the ordering rules of CouchbaseScanRepository
+// (oldest first, then by ID), for tests of the outbox and the sync coordinator
+// that do not need Couchbase Lite.
+internal sealed class InMemoryScanRepository : IScanRepository
+{
+	private readonly Lock _gate = new();
+	private readonly Dictionary<string, ShipmentScan> _scans = new(StringComparer.Ordinal);
+
+	public void Create(ShipmentScan scan)
+	{
+		lock (_gate)
+		{
+			if (scan.SyncStatus != SyncStatus.Pending || !_scans.TryAdd(scan.Id, scan))
+				throw new InvalidOperationException($"Scan {scan.Id} cannot be created.");
+		}
+	}
+
+	public ShipmentScan? GetById(string id)
+	{
+		lock (_gate)
+			return _scans.GetValueOrDefault(id);
+	}
+
+	public void Update(ShipmentScan scan)
+	{
+		lock (_gate)
+		{
+			if (!_scans.ContainsKey(scan.Id))
+				throw new KeyNotFoundException(scan.Id);
+			_scans[scan.Id] = scan;
+		}
+	}
+
+	public bool Delete(string id)
+	{
+		lock (_gate)
+			return _scans.Remove(id);
+	}
+
+	public IReadOnlyList<ShipmentScan> ListAll() => Where(_ => true);
+
+	public IReadOnlyList<ShipmentScan> FindByTrackingNumber(string trackingNumber) =>
+		Where(scan => scan.TrackingNumber == trackingNumber);
+
+	public IReadOnlyList<ShipmentScan> ListPending() =>
+		Where(scan => scan.SyncStatus == SyncStatus.Pending);
+
+	public IReadOnlyList<ScanTypeCount> CountByScanType(string courierId) =>
+		[.. Where(scan => scan.CourierId == courierId)
+			.GroupBy(scan => scan.ScanType)
+			.OrderBy(group => group.Key)
+			.Select(group => new ScanTypeCount(group.Key, group.Count()))];
+
+	public SyncStatus StatusOf(ShipmentScan scan) => GetById(scan.Id)!.SyncStatus;
+
+	private List<ShipmentScan> Where(Func<ShipmentScan, bool> predicate)
+	{
+		lock (_gate)
+		{
+			return [.. _scans.Values
+				.Where(predicate)
+				.OrderBy(scan => scan.ScannedAtUtc)
+				.ThenBy(scan => scan.Id, StringComparer.Ordinal)];
+		}
+	}
+}
+
+// Fictional scans for COURIER-DEMO-07, one minute apart, oldest first.
+internal static class TestScans
+{
+	public static ShipmentScan For(string trackingNumber, int minute, ScanType scanType = ScanType.Pickup) =>
+		ShipmentScan.Record(
+			trackingNumber,
+			scanType,
+			TestValues.CourierId,
+			"Pune hub",
+			TestValues.Now.AddMinutes(minute - 120));
+
+	public static List<ShipmentScan> Store(InMemoryScanRepository repository, params ShipmentScan[] scans)
+	{
+		foreach (var scan in scans)
+			repository.Create(scan);
+		return [.. scans];
 	}
 }
