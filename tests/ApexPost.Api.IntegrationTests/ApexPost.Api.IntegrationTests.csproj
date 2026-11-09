@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ApexPost.Api\ApexPost.Api.csproj" />
     <ProjectReference Include="..\..\src\ApexPost.Client.Consumer\ApexPost.Client.Consumer.csproj" />
+    <ProjectReference Include="..\..\src\ApexPost.Courier.Sync\ApexPost.Courier.Sync.csproj" />
   </ItemGroup>
 
   <!-- The published contracts, compared with the documents the API generates. -->

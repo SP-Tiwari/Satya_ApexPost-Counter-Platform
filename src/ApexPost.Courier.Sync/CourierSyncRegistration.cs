@@ -10,8 +10,9 @@ public static class CourierSyncRegistration
 	public const string BaseUrlKey = "ApexPostApi:BaseUrl";
 
 	// Registers ApexApiClient as a typed client (D6): IHttpClientFactory creates
-	// and pools its HttpClient, whose BaseAddress is ApexPostApi:BaseUrl, and
-	// AuthHeaderHandler adds the bearer token. Also registers the token store,
+	// and pools its HttpClient, whose BaseAddress is ApexPostApi:BaseUrl,
+	// AuthHeaderHandler adds the bearer token, and CourierResilience adds the
+	// retry, circuit breaker and timeouts (D7). Also registers the token store,
 	// the session and a TimeProvider, unless the host registered its own.
 	// Returns the client builder so the host can extend the pipeline.
 	public static IHttpClientBuilder AddCourierSync(
@@ -28,9 +29,14 @@ public static class CourierSyncRegistration
 		services.TryAddSingleton<CourierSession>();
 		services.TryAddTransient<AuthHeaderHandler>();
 
+		// AuthHeaderHandler is outside the resilience handler, so every attempt
+		// carries the same token and a 401 (never retried) is handled once.
+		// HttpClient.Timeout keeps its 100 s default, above the pipeline's
+		// overall timeout, so the pipeline decides when a call has failed.
 		return services
 			.AddHttpClient<ApexApiClient>(client => client.BaseAddress = baseAddress)
 			.AddHttpMessageHandler<AuthHeaderHandler>()
+			.AddCourierResilience()
 			// IHttpClientFactory's request logs never show a header value, so the
 			// Authorization header cannot reach a log.
 			.RedactLoggedHeaders(_ => true);

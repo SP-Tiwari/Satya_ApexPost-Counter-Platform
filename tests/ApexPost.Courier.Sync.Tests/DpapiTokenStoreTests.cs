@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Time.Testing;
 
 namespace ApexPost.Courier.Sync.Tests;
 
@@ -15,7 +16,7 @@ public sealed class DpapiTokenStoreTests : IDisposable
 		"ApexPost.Courier.Sync.Tests",
 		Guid.NewGuid().ToString("N"));
 
-	private readonly FixedTimeProvider _time = new(TestValues.Now);
+	private readonly FakeTimeProvider _time = new(TestValues.Now);
 	private readonly RecordingLoggerProvider _logs = new();
 
 	private string TokenFile => Path.Combine(_directory, DpapiTokenStore.FileName);
@@ -77,7 +78,7 @@ public sealed class DpapiTokenStoreTests : IDisposable
 		store.SaveToken(new AccessToken(TestValues.Token, TestValues.Now.AddMinutes(5)));
 		Assert.NotNull(store.GetToken());
 
-		_time.Now = TestValues.Now.AddMinutes(5);
+		_time.SetUtcNow(TestValues.Now.AddMinutes(5));
 
 		Assert.Null(store.GetToken());
 		Assert.False(File.Exists(TokenFile));

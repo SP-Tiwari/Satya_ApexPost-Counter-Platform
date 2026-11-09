@@ -10,8 +10,11 @@ namespace ApexPost.Courier.Sync;
 // its HttpClient (AddCourierSync), whose BaseAddress is the configured API
 // root and whose pipeline includes AuthHeaderHandler. Every body goes through
 // the source-generated CourierJsonContext. An answer from the server is an
-// ApiResult; a call that never reached the server throws (HttpRequestException
-// or a timeout), so the caller can keep the scans for a later attempt.
+// ApiResult (after any retries, the last answer). A call that never got an
+// answer throws, so the caller can keep the scans for a later attempt:
+// HttpRequestException (network), TimeoutRejectedException (attempt or overall
+// timeout) or BrokenCircuitException (circuit open); see CourierResilience.
+// The token request is not marked safe to retry, so it is sent once.
 public sealed class ApexApiClient(HttpClient httpClient)
 {
 	public const string DevelopmentTokenPath = "dev/token";
@@ -64,12 +67,19 @@ public sealed class ApexApiClient(HttpClient httpClient)
 		ArgumentException.ThrowIfNullOrWhiteSpace(trackingNumber);
 		ArgumentNullException.ThrowIfNull(request);
 
+		// Safe to retry: every scan carries its ID, and the API stores an ID
+		// once, so a repeated upload only counts the scans as duplicates. The
+		// JSON content serializes the same request again for each attempt.
+		using var message = new HttpRequestMessage(
+			HttpMethod.Post,
+			$"api/v2/shipments/{Uri.EscapeDataString(trackingNumber)}/scans")
+		{
+			Content = JsonContent.Create(request, CourierJsonContext.Default.ScanUploadRequest)
+		};
+		CourierResilience.MarkRetrySafe(message);
+
 		using var response = await httpClient
-			.PostAsJsonAsync(
-				$"api/v2/shipments/{Uri.EscapeDataString(trackingNumber)}/scans",
-				request,
-				CourierJsonContext.Default.ScanUploadRequest,
-				cancellationToken)
+			.SendAsync(message, cancellationToken)
 			.ConfigureAwait(false);
 		if (!response.IsSuccessStatusCode)
 		{
