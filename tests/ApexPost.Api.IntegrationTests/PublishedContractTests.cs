@@ -9,8 +9,9 @@ namespace ApexPost.Api.IntegrationTests;
 // change is recorded in VERSIONING.md.
 public sealed class PublishedContractTests
 {
-	// The host the contracts were published from: the API's http profile.
-	private const string PublishedFrom = "http://localhost:5280/";
+	// The host the contracts were published from: the API's https profile
+	// (Week 4 Part D redirects every http request to it).
+	private const string PublishedFrom = "https://localhost:7280/";
 
 	[Theory]
 	[InlineData("v1")]

@@ -1,4 +1,4 @@
-# ApexPost API notes (Week 4 Parts B and C)
+# ApexPost API notes (Week 4 Parts B, C and D)
 
 `src/ApexPost.Api` exposes tracked shipments and their courier scans as a REST API over the Week 3 SQL Server database. It reuses `ApexPostDbContext`, the repositories and the unit of work through `AddApexPostSqlPersistence`. Storage decisions are in [ADR 0028](docs/adr/0028-tracked-shipments-storage.md). All data is fictional.
 
@@ -10,14 +10,14 @@ Every route starts with the API version (Part C, C4; see [API versioning](#api-v
 
 | Verb | Route | Action | Purpose | Status codes |
 |---|---|---|---|---|
-| GET | `/api/v1/shipments?page=&pageSize=&status=&city=` | `ShipmentsController.List` | Paged, filtered list, ordered by tracking number. `page` defaults to 1, `pageSize` to 20, and its maximum is 50 | 200, 400 |
-| GET | `/api/v1/shipments/{trackingNumber}` | `ShipmentsController.Get` | One shipment | 200, 404 |
-| POST | `/api/v1/shipments` | `ShipmentsController.Create` | Creates a shipment with status `Created`; the `Location` header comes from `CreatedAtAction` | 201, 400, 409, 415 |
-| PUT | `/api/v1/shipments/{trackingNumber}` | `ShipmentsController.Replace` | Replaces the editable details: recipient name, phone, address and city, and the weight | 200, 400, 404, 409, 415 |
-| PATCH | `/api/v1/shipments/{trackingNumber}/status` | `ShipmentsController.ChangeStatus` | Changes the status only | 200, 400, 404, 409, 415 |
-| DELETE | `/api/v1/shipments/{trackingNumber}` | `ShipmentsController.Delete` | Deletes a shipment, with its scans, only while its status is `Created` | 204, 404, 409 |
-| POST | `/api/v1/shipments/{trackingNumber}/scans` | `ShipmentScansController.Upload` | Bulk upload of offline scans from Part A, idempotent by scan ID | 200, 400, 404, 415 |
-| GET | `/api/v1/shipments/{trackingNumber}/scans` | `ShipmentScansController.History` | The shipment's scans, oldest first | 200, 404 |
+| GET | `/api/v1/shipments?page=&pageSize=&status=&city=` | `ShipmentsController.List` | Paged, filtered list, ordered by tracking number. `page` defaults to 1, `pageSize` to 20, and its maximum is 50. Admin (Part D) | 200, 400, 401, 403 |
+| GET | `/api/v1/shipments/{trackingNumber}` | `ShipmentsController.Get` | One shipment. Any signed-in user (Part D) | 200, 401, 404 |
+| POST | `/api/v1/shipments` | `ShipmentsController.Create` | Creates a shipment with status `Created`; the `Location` header comes from `CreatedAtAction`. Admin (Part D) | 201, 400, 401, 403, 409, 415 |
+| PUT | `/api/v1/shipments/{trackingNumber}` | `ShipmentsController.Replace` | Replaces the editable details: recipient name, phone, address and city, and the weight. Admin (Part D) | 200, 400, 401, 403, 404, 409, 415 |
+| PATCH | `/api/v1/shipments/{trackingNumber}/status` | `ShipmentsController.ChangeStatus` | Changes the status only. Courier (Part D) | 200, 400, 401, 403, 404, 409, 415 |
+| DELETE | `/api/v1/shipments/{trackingNumber}` | `ShipmentsController.Delete` | Deletes a shipment, with its scans, only while its status is `Created`. Admin (Part D) | 204, 401, 403, 404, 409 |
+| POST | `/api/v1/shipments/{trackingNumber}/scans` | `ShipmentScansController.Upload` | Bulk upload of offline scans from Part A, idempotent by scan ID. Courier token, own `courierId` only (Part D) | 200, 400, 401, 403, 404, 415 |
+| GET | `/api/v1/shipments/{trackingNumber}/scans` | `ShipmentScansController.History` | The shipment's scans, oldest first. Any signed-in user (Part D) | 200, 401, 404 |
 
 Any route can also return 500 through the global exception handler, and a 409 when a change conflicts with another one made at the same time.
 
@@ -29,7 +29,9 @@ Any route can also return 500 through the global exception handler, and a 409 wh
 | 201 Created | A shipment was created. `Location` is the URL of `GET /api/v{version}/shipments/{trackingNumber}` in the same version | `CreatedAtAction(nameof(Get), ...)` |
 | 204 No Content | A shipment was deleted | `NoContent()` |
 | 400 Bad Request | Validation failed, including malformed JSON | `[ApiController]` automatic validation: `ValidationProblemDetails` |
-| 404 Not Found | No shipment has the tracking number, or the route does not match | `ShipmentProblems.ShipmentNotFound`; `UseStatusCodePages` for unmatched routes |
+| 401 Unauthorized | Any shipment or scan route without a valid token (missing, malformed, expired, wrong issuer, audience or signature), an anonymous request that matches no route, or the partner route without a valid `X-Api-Key` (Part D) | JWT bearer challenge written by `UseStatusCodePages`; `PartnerApiKeyMiddleware` |
+| 403 Forbidden | A valid token without the required role, or a scan upload with another courier's `courierId` (Part D) | Authorization forbid written by `UseStatusCodePages`; `RequireOwnScansAttribute` |
+| 404 Not Found | No shipment has the tracking number, or the route does not match (for a signed-in caller since Part D) | `ShipmentProblems.ShipmentNotFound`; `UseStatusCodePages` for unmatched routes |
 | 409 Conflict | A duplicate tracking number, a refused status transition, deleting a shipment that is not `Created`, or a concurrent change that outlasted the retries | `ShipmentProblems.ShipmentProblem`; `ApiExceptionHandler` for `DuplicateRecordException` and `ConcurrencyConflictException` |
 | 415 Unsupported Media Type | A body that is not `application/json` | `[Consumes("application/json")]` |
 | 500 Internal Server Error | Any other unhandled error | `ApiExceptionHandler` |
@@ -55,7 +57,7 @@ The request DTOs are in `src/ApexPost.Api/Models/`. No request binds to an EF en
 | `UpdateStatusRequest` | `status` | Required; a defined `ShipmentStatus` |
 | `ScanUploadRequest` | `scans` | Required; 1 to 100 scans |
 | Each scan (`ScanUploadItem`) | `scanId`, `trackingNumber` | Required. A malformed ID or a different tracking number rejects that scan, not the request |
-| | `scanType` | Required; a defined `ShipmentScanType`: `Pickup`, `InTransit`, `Delivered` or `Failed` |
+| | `scanType` | Required; a defined `ShipmentScanType`: `Pickup`, `InTransit`, `Delivered` or `Failed`, as the number (0 to 3) or, since Part D, the name |
 | | `courierId` | Required; at most 50 |
 | | `location` | Required; at most 200 |
 | | `scannedAtUtc` | Required; **custom rule `[NotInFuture]`** |
@@ -80,20 +82,50 @@ Each scan carries its Part A ID, `scan::{Guid}`, which is the primary key of `Tr
 
 A scan is accepted even when the shipment is already `Delivered` or `Failed`, because a device can upload a scan recorded offline after the status changed. The response is `{ accepted, duplicatesSkipped, rejected, rejections: [{ scanId, reason }] }`. If another upload stores the same scan at the same moment, the database refuses the second copy, and the upload runs once more so that scan is counted as a duplicate.
 
+## Security (Week 4 Part D)
+
+The design, configuration and OAuth2 background are in [SECURITY.md](SECURITY.md); this section lists what each endpoint requires. A bearer token is sent as `Authorization: Bearer <token>`; in Development it comes from `dotnet user-jwts` or `POST /dev/token`.
+
+The rules are the same in version 1 and version 2, so the deprecated version cannot be used to get round them.
+
+| Verb | Route (`/api/v1/...` and `/api/v2/...`) | Requires | Additional status codes |
+|---|---|---|---|
+| GET | `…/shipments` | Bearer token with the Admin role | 401, 403 |
+| GET | `…/shipments/{trackingNumber}` | Any valid bearer token | 401 |
+| POST | `…/shipments` | Bearer token with the Admin role | 401, 403 |
+| PUT | `…/shipments/{trackingNumber}` | Bearer token with the Admin role | 401, 403 |
+| PATCH | `…/shipments/{trackingNumber}/status` | Bearer token with the Courier role | 401, 403 |
+| DELETE | `…/shipments/{trackingNumber}` | Bearer token with the Admin role | 401, 403 |
+| POST | `…/shipments/{trackingNumber}/scans` | Bearer token with the Courier role; every scan's `courierId` must equal the token's `courierId` claim, or the whole batch is refused | 401, 403 |
+| GET | `…/shipments/{trackingNumber}/scans` | Any valid bearer token | 401 |
+| GET | `/api/v2/partner/shipments/{trackingNumber}` (v2 only) | A partner key in the `X-Api-Key` header; no bearer token (`[AllowAnonymous]` exempts it from the fallback policy) | 401; 500 when no partner key is configured |
+
+**Fallback policy:** any other request, including one that matches no route, needs a signed-in user. An anonymous request to an unknown route, an unsupported version or a malformed tracking number is therefore a 401, while a signed-in caller gets the 404 described above. Only the partner route, `POST /dev/token` and the Development OpenAPI documents and Swagger UI are anonymous.
+
+**Partner route:** `PartnerShipmentsController.Get` returns `PartnerShipmentResponse { trackingNumber, status, destinationCity, latestScan }`, with `status` as its name and `latestScan` as in the v2 shipment. It is a deliberately minimal view: the recipient's name, phone number and address are not returned. Its `operationId` is `GetPartnerShipment` and its tag `Partner`.
+
+**Every 401 and 403 is Problem Details** (`application/problem+json`). A bearer 401 also carries `WWW-Authenticate: Bearer`. The ownership 403 names the token's `courierId` in `detail` and stores no scan.
+
+**HTTPS:** a plain `http://` request is redirected (307) to `https://` in every environment, and responses outside Development carry `Strict-Transport-Security`.
+
+**OpenAPI security:** the v2 document's `components.securitySchemes` declares `Bearer` and `PartnerApiKey`, and every operation lists the one it requires, so Swagger UI shows an Authorize button for both. The v1 document declares `Bearer` only, because all its operations need a token too.
+
+**Verification:** `tests/ApexPost.Api.IntegrationTests/SecurityTests.cs`. Its `AuthorizationMatrix` test runs every operation of both versions with no token, a Courier token and an Admin token (48 cases). The mapping from each requirement to its tests is in [SECURITY.md](SECURITY.md#requirement-traceability).
+
 ## OpenAPI metadata (Week 4 Part C, C3)
 
-The built-in generator writes the documents from the controllers (Development only). Since C5 there is one per version, `/openapi/v1.json` and `/openapi/v2.json` (see [Version-specific OpenAPI documents](#version-specific-openapi-documents-week-4-part-c-c5)). The table shows version 1. Version 2 has the same operation IDs, tags, summaries and declared responses under `/api/v2`. Each operation carries the following metadata:
+The built-in generator writes the documents from the controllers (Development only). Since C5 there is one per version, `/openapi/v1.json` and `/openapi/v2.json` (see [Version-specific OpenAPI documents](#version-specific-openapi-documents-week-4-part-c-c5)). The table shows version 1. Version 2 has the same operation IDs, tags and summaries under `/api/v2`, plus the Part D partner operation. Since Part D, both versions also declare 401 on every operation, and 403 on those limited to a role, as the table shows (see [Security](#security-week-4-part-d)). Each operation carries the following metadata:
 
 | `operationId` (route name) | Verb and route | Tag | Summary (`[EndpointSummary]`) | Declared responses (`[ProducesResponseType]`) |
 |---|---|---|---|---|
-| `ListShipments` | GET `/api/v1/shipments` | Shipments | List shipments by page, status and city | 200, 400, 500 |
-| `GetShipment` | GET `/api/v1/shipments/{trackingNumber}` | Shipments | Get a shipment by tracking number | 200, 404, 500 |
-| `CreateShipment` | POST `/api/v1/shipments` | Shipments | Create a shipment | 201, 400, 409, 415, 500 |
-| `ReplaceShipment` | PUT `/api/v1/shipments/{trackingNumber}` | Shipments | Replace a shipment's editable details | 200, 400, 404, 409, 415, 500 |
-| `ChangeShipmentStatus` | PATCH `/api/v1/shipments/{trackingNumber}/status` | Shipments | Change a shipment's status | 200, 400, 404, 409, 415, 500 |
-| `DeleteShipment` | DELETE `/api/v1/shipments/{trackingNumber}` | Shipments | Delete a shipment in Created status | 204, 404, 409, 500 |
-| `UploadShipmentScans` | POST `/api/v1/shipments/{trackingNumber}/scans` | Scans | Upload offline courier scans | 200, 400, 404, 409, 415, 500 |
-| `GetShipmentScans` | GET `/api/v1/shipments/{trackingNumber}/scans` | Scans | Get a shipment's scan history | 200, 404, 500 |
+| `ListShipments` | GET `/api/v1/shipments` | Shipments | List shipments by page, status and city | 200, 400, 401, 403, 500 |
+| `GetShipment` | GET `/api/v1/shipments/{trackingNumber}` | Shipments | Get a shipment by tracking number | 200, 401, 404, 500 |
+| `CreateShipment` | POST `/api/v1/shipments` | Shipments | Create a shipment | 201, 400, 401, 403, 409, 415, 500 |
+| `ReplaceShipment` | PUT `/api/v1/shipments/{trackingNumber}` | Shipments | Replace a shipment's editable details | 200, 400, 401, 403, 404, 409, 415, 500 |
+| `ChangeShipmentStatus` | PATCH `/api/v1/shipments/{trackingNumber}/status` | Shipments | Change a shipment's status | 200, 400, 401, 403, 404, 409, 415, 500 |
+| `DeleteShipment` | DELETE `/api/v1/shipments/{trackingNumber}` | Shipments | Delete a shipment in Created status | 204, 401, 403, 404, 409, 500 |
+| `UploadShipmentScans` | POST `/api/v1/shipments/{trackingNumber}/scans` | Scans | Upload offline courier scans | 200, 400, 401, 403, 404, 409, 415, 500 |
+| `GetShipmentScans` | GET `/api/v1/shipments/{trackingNumber}/scans` | Scans | Get a shipment's scan history | 200, 401, 404, 500 |
 
 - **Response types:** every status code an action can return is declared, with its type and media type. Success responses are `application/json`; 400 is `ValidationProblemDetails` and other errors are `ProblemDetails`, all as `application/problem+json`. 500 is declared once on each controller, because every action can return it through `ApiExceptionHandler`. The write operations also declare the 409 that the handler returns when a concurrent change outlasts the unit of work's retries.
 - **Route names:** each action's route name (for example `[HttpGet(Name = "ListShipments")]`) becomes its `operationId`, and later the method name in the generated client. The names are part of the contract and must not change.
@@ -111,10 +143,10 @@ The built-in generator writes the documents from the controllers (Development on
 
 | Test | Checks |
 |---|---|
-| `OpenApiDocument_EachOperation_HasItsMetadataAndEveryResponseCode` (16 cases: 8 per version) | For each operation: its `operationId`, its single tag, its summary and a description. Its response codes are exactly those in the table above, each with a description and the expected media type |
-| `OpenApiDocument_ListsOnlyItsOwnVersion_WithOneUniqueOperationIdPerAction` (v1, v2) | Exactly the eight operations of the table, under the document's own version, with eight distinct operation IDs |
+| `OpenApiDocument_EachOperation_HasItsMetadataAndEveryResponseCode` (17 cases: 8 in v1, 9 in v2) | For each operation: its `operationId`, its single tag, its summary and a description. Its response codes are exactly those in the table above, each with a description and the expected media type |
+| `OpenApiDocument_ListsOnlyItsOwnVersion_WithOneUniqueOperationIdPerAction` (v1, v2) | Exactly the operations of the version (eight in v1; nine in v2 with the Part D partner operation), under the document's own version, with distinct operation IDs |
 | `OpenApiDocument_ParametersAndRequestBodies_HaveTheirXmlDescriptions` (v1, v2) | Every list query parameter and `trackingNumber` has a description. Each request body has its request's own description |
-| `OpenApiDocument_EachDto_AndEachOfItsProperties_HasAnXmlDescription` (15 cases) | Each request and response DTO of version 1, and each version 2 DTO, has a description, and so does each of its properties |
+| `OpenApiDocument_EachDto_AndEachOfItsProperties_HasAnXmlDescription` (16 cases) | Each request and response DTO of version 1, and each version 2 DTO, has a description, and so does each of its properties |
 
 **Try it out:** on 2026-11-07 every operation was executed from Swagger UI against an isolated database with fictional data: 25 executions, each with the expected result. After versioning (C4) the same 25 executions were repeated against `/api/v1`, again all as expected. The run, with each request and the response Swagger UI displayed, and two screenshots are in [docs/evidence/week4-part-c](docs/evidence/week4-part-c/README.md).
 
@@ -204,8 +236,8 @@ The built-in generator writes the documents from the controllers (Development on
 | Test | Checks |
 |---|---|
 | `OpenApiDocument_InDevelopment_IsServedWithTheApiInfo` (v1, v2) | Each document is served, parses with no errors in `Microsoft.OpenApi`, and has the title, contact, description and its own `info.version` |
-| `OpenApiDocument_ListsOnlyItsOwnVersion_WithOneUniqueOperationIdPerAction` (v1, v2) | Every path starts with the document's own `/api/{version}/`, and the operations are exactly the eight expected, with unique operation IDs |
-| `OpenApiDocument_EachOperation_HasItsMetadataAndEveryResponseCode` (16 cases) | The C3 metadata of every operation in both documents |
+| `OpenApiDocument_ListsOnlyItsOwnVersion_WithOneUniqueOperationIdPerAction` (v1, v2) | Every path starts with the document's own `/api/{version}/`, and the operations are exactly the expected ones (eight in v1, nine in v2), with unique operation IDs |
+| `OpenApiDocument_EachOperation_HasItsMetadataAndEveryResponseCode` (17 cases) | The C3 metadata of every operation in both documents |
 | `OpenApiDocument_MarksOnlyTheDeprecatedVersion` (v1, v2) | All eight v1 operations are `deprecated` and the v1 description names version 2. No v2 operation is deprecated |
 | `OpenApiDocument_V1_HasThePartBShipmentSchema` | The flat v1 `ShipmentResponse`, the integer `ShipmentStatus`, and no v2 schema |
 | `OpenApiDocument_V2_HasTheNestedRecipient_TheLatestScan_AndAStringStatus` | The v2 `ShipmentResponse`, `RecipientResponse`, `LatestScanResponse` and the string `ShipmentStatus` enum |

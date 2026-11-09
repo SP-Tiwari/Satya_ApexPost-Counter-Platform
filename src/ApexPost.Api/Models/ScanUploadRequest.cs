@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using ApexPost.Api.Validation;
 using ApexPost.Domain.Enums;
 
@@ -35,9 +36,13 @@ public sealed record ScanUploadItem
 	[Required]
 	public string? TrackingNumber { get; init; }
 
-	/// <summary>The scan type. Required: 0 Pickup, 1 InTransit, 2 Delivered or 3 Failed.</summary>
+	/// <summary>
+	/// The scan type. Required: 0 Pickup, 1 InTransit, 2 Delivered or 3 Failed,
+	/// as the number or as the name. Responses always return the number.
+	/// </summary>
 	/// <example>0</example>
 	[Required, EnumDataType(typeof(ShipmentScanType))]
+	[JsonConverter(typeof(EnumNameInputConverter<ShipmentScanType>))]
 	public ShipmentScanType? ScanType { get; init; }
 
 	/// <summary>The courier who scanned the shipment. Required; at most 50 characters.</summary>

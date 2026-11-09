@@ -1,0 +1,389 @@
+
+=== [21:08:30 UTC] 1. Start signed out; Sync Status ===
+2026-11-10 02:38:30.488+05:30 [2]| INFO)  [Database] (Startup) [2] CouchbaseLite/4.1.2 (.NET; Microsoft Windows 10.0.22000) Build/2 LiteCore/4.1.2 (5)
+
+=== ApexPost courier | not signed in | pending scans (live): 0 ===
+1. Login (request a development token)
+2. Login (paste an access token)
+3. Pending Scans
+4. Sync Status
+5. Exit
+Choose an option: 4
+Sync status
+  Last sync: never
+  Circuit breaker: closed (the API is answering)
+  Sync in progress: no
+  Pending scans (live): 0
+  Recent failures: none
+
+=== ApexPost courier | not signed in | pending scans (live): 0 ===
+1. Login (request a development token)
+2. Login (paste an access token)
+3. Pending Scans
+4. Sync Status
+5. Exit
+Choose an option:
+=== [21:08:34 UTC] 2. Login: request a development token for COURIER-DEMO-07 ===
+1
+Courier ID: COURIER-DEMO-07
+Signed in as COURIER-DEMO-07.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 0 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option:
+=== [21:08:39 UTC] Token file check: %LOCALAPPDATA%\ApexPost\Courier\access-token.bin exists, 662 bytes; first 48 bytes: ===
+000000 01 00 00 00 d0 8c 9d df 01 15 d1 11 8c 7a 00 c0
+000010 4f c2 97 eb 01 00 00 00 bb c3 cc 11 77 79 70 4e
+000020 b8 92 ee f6 ce 6e db bf 00 00 00 00 02 00 00 00
+000030
+Occurrences of JWT text ("eyJ") in the file: 0
+
+=== [21:08:39 UTC] 3. New Scan APX-10000001 while online: saved Pending, then synced in the background ===
+1
+Tracking number: APX-10000001
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): 1
+Location: Pune Hub
+Notes (optional):
+
+=== [21:08:44 UTC] 4. New Scan APX-10000002 while online ===
+Saved scan::7127f1f9-abac-4eaf-b3a4-5012edb5f6fc on this device as Pending.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 1 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option: 1
+Tracking number: APX-10000002
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): 1
+Location: Pune Hub
+Notes (optional): Fragile
+Saved scan::8c79382e-3179-41f1-8db8-52671b87efe0 on this device as Pending.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 1 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option:
+=== [21:08:54 UTC] 5. Sync Status: the last run synced the scan ===
+3
+Sync status
+  Last sync: 2026-11-09 21:08:54Z
+  Last result: 1 attempted, 1 synced, 0 failed, 0 still pending.
+  Circuit breaker: closed (the API is answering)
+  Sync in progress: no
+  Pending scans (live): 0
+  Recent failures: none
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 0 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option:
+=== [21:09:00 UTC] 6. New Scan for unknown shipment APX-99999999: the API answers 404, the scan becomes Failed ===
+1
+Tracking number: APX-99999999
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): 1
+Location: Pune Hub
+Notes (optional):
+Saved scan::59438854-7d24-4b8e-8a21-0e48db65536e on this device as Pending.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 1 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option:
+=== [21:09:06 UTC] 7. Pending Scans and Sync Status ===
+[warn] ApiShipmentUploader: The API refused the 1 scans for APX-99999999 (HTTP 404): No shipment has tracking number APX-99999999.
+[warn] OutboxService: Scan scan::59438854-7d24-4b8e-8a21-0e48db65536e failed to sync: No shipment has tracking number APX-99999999.
+2
+Pending scans, oldest first: 0
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 0 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option: 3
+Sync status
+  Last sync: 2026-11-09 21:09:06Z
+  Last result: 1 attempted, 0 synced, 1 failed, 0 still pending.
+  Circuit breaker: closed (the API is answering)
+  Sync in progress: no
+  Pending scans (live): 0
+  Recent failures, newest first:
+    APX-99999999 scan::59438854-7d24-4b8e-8a21-0e48db65536e: No shipment has tracking number APX-99999999.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 0 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option:
+=== [21:09:13 UTC] 8. The API is stopped ===
+API stopped
+
+=== [21:09:15 UTC] 9. New Scan APX-10000003 with the API down: saved locally; the background sync tries 4 times (1 attempt + 3 retries) ===
+1
+Tracking number: APX-10000003
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): 1
+Location: Pune Hub
+Notes (optional):
+Saved scan::81cd2363-fdf5-4d01-8be6-dc99804cdaff on this device as Pending.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 1 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option:
+=== [21:09:20 UTC] 10. After that run ends, Sync Now starts a new run: its first failure is the 5th within 30 s, and the circuit breaker opens ===
+[warn] CourierResilience: Retry 1 of 3 for POST /api/v2/shipments/APX-10000003/scans in 935 ms after HttpRequestException.
+[warn] CourierResilience: Retry 2 of 3 for POST /api/v2/shipments/APX-10000003/scans in 1368 ms after HttpRequestException.
+[warn] CourierResilience: Retry 3 of 3 for POST /api/v2/shipments/APX-10000003/scans in 3109 ms after HttpRequestException.
+[warn] ApiShipmentUploader: No final answer for the 1 scans for APX-10000003; they stay Pending: The API could not be reached.
+[warn] OutboxService: Sync stopped; the scans without a final answer stay Pending: The API could not be reached.
+4
+Syncing...
+
+=== [21:09:44 UTC] 11. New Scan while the circuit is open: the banner is shown and the scan is still saved on the device ===
+*** Server unavailable – working offline. New scans are saved on this device. ***
+[warn] CourierResilience: Circuit breaker opened for 30 s after HttpRequestException: API calls fail at once and scans stay on the device.
+[warn] CourierResilience: Retry 1 of 3 for POST /api/v2/shipments/APX-10000003/scans in 926 ms after HttpRequestException.
+[warn] ApiShipmentUploader: No final answer for the 1 scans for APX-10000003; they stay Pending: Server unavailable – working offline.
+[warn] OutboxService: Sync stopped; the scans without a final answer stay Pending: Server unavailable – working offline.
+Sync finished: 1 attempted, 0 synced, 0 failed, 1 still pending. Stopped: Server unavailable – working offline.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 1 ===
+*** Server unavailable – working offline. New scans are saved on this device. ***
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option: 1
+Tracking number: APX-10000001
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): 2
+Location: Mumbai Gateway
+Notes (optional):
+Saved scan::ea7fddac-bb5d-42b2-a4d6-8cbcc68de8aa on this device as Pending.
+
+=== [21:09:56 UTC] 12. Pending Scans and Sync Status while offline ===
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 2 ===
+*** Server unavailable – working offline. New scans are saved on this device. ***
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option: [warn] ApiShipmentUploader: No final answer for the 1 scans for APX-10000003; they stay Pending: Server unavailable – working offline.
+[warn] OutboxService: Sync stopped; the scans without a final answer stay Pending: Server unavailable – working offline.
+2
+Pending scans, oldest first: 2
+  2026-11-09 21:09:20Z  APX-10000003  Pickup  Pune Hub  scan::81cd2363-fdf5-4d01-8be6-dc99804cdaff
+  2026-11-09 21:09:56Z  APX-10000001  InTransit  Mumbai Gateway  scan::ea7fddac-bb5d-42b2-a4d6-8cbcc68de8aa
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 2 ===
+*** Server unavailable – working offline. New scans are saved on this device. ***
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option: 3
+Sync status
+  Last sync: 2026-11-09 21:09:56Z
+  Last result: 2 attempted, 0 synced, 0 failed, 2 still pending. Stopped: Server unavailable – working offline.
+  Circuit breaker: open (server unavailable, working offline)
+  Sync in progress: no
+  Pending scans (live): 2
+  Recent failures, newest first:
+    Sync stopped, 2 scans still Pending: Server unavailable – working offline.
+    Sync stopped, 1 scans still Pending: Server unavailable – working offline.
+    Sync stopped, 1 scans still Pending: The API could not be reached.
+    APX-99999999 scan::59438854-7d24-4b8e-8a21-0e48db65536e: No shipment has tracking number APX-99999999.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 2 ===
+*** Server unavailable – working offline. New scans are saved on this device. ***
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option:
+=== [21:10:00 UTC] 13. The API is started again (same signing key) ===
+up
+
+=== [21:10:05 UTC] 14. After the 30 s break, Sync Now: the half-open probe succeeds, the circuit closes and the Pending scans sync ===
+4
+Syncing...
+
+=== [21:10:37 UTC] 15. Sync Status after recovery ===
+Server available again; Pending scans are being synced.
+Sync finished: 2 attempted, 2 synced, 0 failed, 0 still pending.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 0 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option: 3
+Sync status
+  Last sync: 2026-11-09 21:10:39Z
+  Last result: 2 attempted, 2 synced, 0 failed, 0 still pending.
+  Circuit breaker: closed (the API is answering)
+  Sync in progress: no
+  Pending scans (live): 0
+  Recent failures, newest first:
+    Sync stopped, 2 scans still Pending: Server unavailable – working offline.
+    Sync stopped, 1 scans still Pending: Server unavailable – working offline.
+    Sync stopped, 1 scans still Pending: The API could not be reached.
+    APX-99999999 scan::59438854-7d24-4b8e-8a21-0e48db65536e: No shipment has tracking number APX-99999999.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 0 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option:
+=== [21:10:45 UTC] 16. The API restarts with a new signing key, so the stored token is no longer valid ===
+API stopped
+up
+
+=== [21:10:49 UTC] 17. New Scan APX-10000002: the upload gets 401, the token is cleared, the Login menu is shown ===
+1
+Tracking number: APX-10000002
+Scan type (1 Pickup, 2 InTransit, 3 Delivered, 4 Failed): 2
+Location: Mumbai Gateway
+Notes (optional):
+Saved scan::815b1de9-f407-4274-bb80-cb26d2de100c on this device as Pending.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 1 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option: [warn] CourierSession: The API answered 401 Unauthorized; the access token was cleared and sign-in is required.
+Your sign-in was refused or has expired. Please log in again; scans stay on this device.
+[warn] ApiShipmentUploader: No final answer for the 1 scans for APX-10000002; they stay Pending: Your sign-in is missing, invalid or expired. Sign in again.
+[warn] OutboxService: Sync stopped; the scans without a final answer stay Pending: Your sign-in is missing, invalid or expired. Sign in again.
+
+=== [21:11:01 UTC] Token file check: access-token.bin does not exist ===
+
+=== [21:11:01 UTC] 18. (The signed-in menu was still on screen, so 3 shows Sync Status.) Then, signed out, Pending Scans: the scan is kept ===
+3
+Sync status
+  Last sync: 2026-11-09 21:10:55Z
+  Last result: 1 attempted, 0 synced, 0 failed, 1 still pending. Stopped: Your sign-in is missing, invalid or expired. Sign in again.
+  Circuit breaker: closed (the API is answering)
+  Sync in progress: no
+  Pending scans (live): 1
+  Recent failures, newest first:
+    Sync stopped, 1 scans still Pending: Your sign-in is missing, invalid or expired. Sign in again.
+    Sync stopped, 2 scans still Pending: Server unavailable – working offline.
+    Sync stopped, 1 scans still Pending: Server unavailable – working offline.
+    Sync stopped, 1 scans still Pending: The API could not be reached.
+    APX-99999999 scan::59438854-7d24-4b8e-8a21-0e48db65536e: No shipment has tracking number APX-99999999.
+
+=== ApexPost courier | not signed in | pending scans (live): 1 ===
+1. Login (request a development token)
+2. Login (paste an access token)
+3. Pending Scans
+4. Sync Status
+5. Exit
+Choose an option: 3
+Pending scans, oldest first: 1
+  2026-11-09 21:10:55Z  APX-10000002  InTransit  Mumbai Gateway  scan::815b1de9-f407-4274-bb80-cb26d2de100c
+
+=== ApexPost courier | not signed in | pending scans (live): 1 ===
+1. Login (request a development token)
+2. Login (paste an access token)
+3. Pending Scans
+4. Sync Status
+5. Exit
+Choose an option:
+=== [21:11:03 UTC] 19. Login again: the Pending scan syncs ===
+1
+Courier ID: COURIER-DEMO-07
+
+=== [21:11:06 UTC] 20. Sync Status, then Logout ===
+Signed in as COURIER-DEMO-07.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 1 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option: 3
+Sync status
+  Last sync: 2026-11-09 21:11:08Z
+  Last result: 1 attempted, 1 synced, 0 failed, 0 still pending.
+  Circuit breaker: closed (the API is answering)
+  Sync in progress: no
+  Pending scans (live): 0
+  Recent failures, newest first:
+    Sync stopped, 1 scans still Pending: Your sign-in is missing, invalid or expired. Sign in again.
+    Sync stopped, 2 scans still Pending: Server unavailable – working offline.
+    Sync stopped, 1 scans still Pending: Server unavailable – working offline.
+    Sync stopped, 1 scans still Pending: The API could not be reached.
+    APX-99999999 scan::59438854-7d24-4b8e-8a21-0e48db65536e: No shipment has tracking number APX-99999999.
+
+=== ApexPost courier | signed in as COURIER-DEMO-07 | pending scans (live): 0 ===
+1. New Scan
+2. Pending Scans
+3. Sync Status
+4. Sync Now
+5. Logout
+6. Exit
+Choose an option: 5
+Signed out.
+
+=== ApexPost courier | not signed in | pending scans (live): 0 ===
+1. Login (request a development token)
+2. Login (paste an access token)
+3. Pending Scans
+4. Sync Status
+5. Exit
+Choose an option:
+=== [21:11:17 UTC] Token file check: access-token.bin does not exist ===
+
+=== [21:11:17 UTC] 21. Exit ===
+5
+Goodbye.
+
+=== [21:11:18 UTC] Console exited ===

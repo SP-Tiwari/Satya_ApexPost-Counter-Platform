@@ -35,4 +35,4 @@ Week 4 Part A asks for a class library, `ApexPost.Courier.Offline`, and a consol
 - The courier library can be built, tested and later changed without the SQL Server stack.
 - The harness turns Couchbase Lite's own console logging down to errors, because that setting is process-wide.
 - Uploading and marking a scan `Synced` are two separate steps, so Part D's API must accept a repeated scan ID. See [OFFLINE-DESIGN.md](../../OFFLINE-DESIGN.md).
-- `Failed` scans are not retried automatically. That needs a retry rule, which belongs to Part D.
+- `Failed` scans are not retried automatically. Part D settled this: a scan becomes `Failed` only when the server refuses it for good, so it is never resent, while anything that may succeed later stays `Pending` and is resent. See [OFFLINE-DESIGN.md section 4](../../OFFLINE-DESIGN.md#4-synchronization-with-the-api-part-d-d9).
