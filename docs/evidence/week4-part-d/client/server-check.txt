@@ -1,0 +1,10 @@
+Server-side check, 2026-11-09T21:11:55Z UTC, right after the recorded console session (transcript.txt).
+Each shipment's v2 scan history (GET /api/v2/shipments/{trackingNumber}/scans) was read with an Admin token from POST /dev/token (redacted, not recorded).
+For every scan the console saved in the session, the entry the server stored under that scan ID is shown. The histories also hold scans from two earlier rehearsal runs of the same script against the same temporary database; they are not part of this record and are left out.
+
+scan::7127f1f9-abac-4eaf-b3a4-5012edb5f6fc  stored 1 time(s): {"scanId":"scan::7127f1f9-abac-4eaf-b3a4-5012edb5f6fc","scanType":0,"courierId":"COURIER-DEMO-07","location":"Pune Hub","scannedAtUtc":"2026-11-09T21:08:44.698+00:00","notes":null}
+scan::8c79382e-3179-41f1-8db8-52671b87efe0  stored 1 time(s): {"scanId":"scan::8c79382e-3179-41f1-8db8-52671b87efe0","scanType":0,"courierId":"COURIER-DEMO-07","location":"Pune Hub","scannedAtUtc":"2026-11-09T21:08:54.856+00:00","notes":"Fragile"}
+scan::59438854-7d24-4b8e-8a21-0e48db65536e  not stored (the scan for unknown shipment APX-99999999; GET /api/v2/shipments/APX-99999999/scans answers 404)
+scan::81cd2363-fdf5-4d01-8be6-dc99804cdaff  stored 1 time(s): {"scanId":"scan::81cd2363-fdf5-4d01-8be6-dc99804cdaff","scanType":0,"courierId":"COURIER-DEMO-07","location":"Pune Hub","scannedAtUtc":"2026-11-09T21:09:20.383+00:00","notes":null}
+scan::ea7fddac-bb5d-42b2-a4d6-8cbcc68de8aa  stored 1 time(s): {"scanId":"scan::ea7fddac-bb5d-42b2-a4d6-8cbcc68de8aa","scanType":1,"courierId":"COURIER-DEMO-07","location":"Mumbai Gateway","scannedAtUtc":"2026-11-09T21:09:56.621+00:00","notes":null}
+scan::815b1de9-f407-4274-bb80-cb26d2de100c  stored 1 time(s): {"scanId":"scan::815b1de9-f407-4274-bb80-cb26d2de100c","scanType":1,"courierId":"COURIER-DEMO-07","location":"Mumbai Gateway","scannedAtUtc":"2026-11-09T21:10:55.134+00:00","notes":null}

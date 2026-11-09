@@ -371,7 +371,7 @@ The assignment's courier app is built as a .NET console application instead of a
   - **On every screen:** the live pending count (the Part A change listener) and, while the circuit breaker is not closed, the banner `*** Server unavailable – working offline. New scans are saved on this device. ***`.
   - **New Scan:** saved on the device first, under the signed-in courier's `courierId`, then synced if online.
   - **After a 401:** the courier is told and the Login menu is shown.
-  - **Logging:** written under the menu's output lock, at Warning and above (`appsettings.json`). These are the retry and circuit-breaker messages; Polly's own duplicate telemetry is turned off.
+  - **Logging:** written under the menu's output lock (`appsettings.json`). General logging is at Warning and above, which includes the retry messages and the circuit opening. `ApexPost.Courier.Sync.CourierResilience` is at Information and above, so every circuit state change is visible: opened, half-open and closed. Polly's own duplicate telemetry is turned off.
 
 Run it with the API running in Development (see [API security](#api-security-week-4-part-d) for its signing key):
 
@@ -401,6 +401,8 @@ The token's storage, the 401 handling and the logging rules are in [SECURITY.md]
 | D10 Login: obtain or paste a development token; stored only with DPAPI; on a 401 the token is cleared and the Login menu is shown; no sync while signed out | `CourierSignIn.cs`, `CourierTokenReader.cs`, `CourierSession.cs` (`SignOut`, atomic `ClearToken(expectedValue)`), `SyncCoordinator.cs`; `src/ApexPost.Courier.Console/CourierConsole.cs` | `SignInTests`, `SyncCoordinatorTests.WhileSignInIsRequired_NoTriggerStartsARun`; `CourierConsoleTests` (`tests/ApexPost.Courier.Console.Tests`): `Login_*`, `Unauthorized_ClearsTheToken_ReturnsToLogin_AndKeepsTheScans` |
 | D11 screens: Login, New Scan, Pending Scans (with the count), Sync Status (last sync, circuit state, failures), plus Sync Now, Logout and Exit (console menus instead of MAUI pages) | `src/ApexPost.Courier.Console/CourierConsole.cs`, `Program.cs` (composition, change listener, `SyncCoordinator.Start()`), `LockedConsoleLoggerProvider.cs` | `CourierConsoleTests` (15) |
 | D7 banner "Server unavailable – working offline" while the circuit is open; new scans still saved; Sync Now to retry | `CourierConsole.OfflineBanner`, from `SyncState.Snapshot().CircuitState` | `CourierConsoleTests.CircuitOpen_ShowsTheBanner_ScansAreStillSaved_AndSyncNowRecovers` |
+
+**Live run:** one recorded console session against the running API is in [docs/evidence/week4-part-d](docs/evidence/week4-part-d/README.md#courier-console-client-live-run-d6d11). It covers login and the encrypted token file, saving and syncing scans, a 404 shown as `Failed`, retries, the circuit opening with the API stopped (banner, scans still saved) and recovering, and a 401 that clears the token and returns to Login.
 
 ## API documentation: OpenAPI and Swagger UI (Week 4 Part C)
 
