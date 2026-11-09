@@ -15,6 +15,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/ApexPost.Api.IntegrationTests/ApexPost.Api.IntegrationTests.csproj" />
     <Project Path="tests/ApexPost.Application.Tests/ApexPost.Application.Tests.csproj" />
+    <Project Path="tests/ApexPost.Courier.Console.Tests/ApexPost.Courier.Console.Tests.csproj" />
     <Project Path="tests/ApexPost.Courier.Offline.Tests/ApexPost.Courier.Offline.Tests.csproj" />
     <Project Path="tests/ApexPost.Courier.Sync.Tests/ApexPost.Courier.Sync.Tests.csproj" />
     <Project Path="tests/ApexPost.Domain.Tests/ApexPost.Domain.Tests.csproj" />

@@ -48,7 +48,10 @@ Couchbase Lite is a library inside the app's process, not a server. Its open dat
 1. **Trigger:**
    - `SyncCoordinator` (`src/ApexPost.Courier.Sync`) listens to `INetworkStatus`. Its implementation, `SystemNetworkStatus`, uses `NetworkChange.NetworkAvailabilityChanged` and `NetworkInterface.GetIsNetworkAvailable()`, the console substitute for MAUI `Connectivity.ConnectivityChanged`.
    - When a network becomes available and stays available for 3 seconds (`ReconnectDelay`), it runs the outbox. A change during the wait restarts it, and losing the network cancels it.
-   - `SyncNowAsync()` runs it on demand.
+   - `Start()` syncs once at application start when the network is available.
+   - After a new scan is saved, the console calls `SyncIfOnline()`.
+   - The console's **Sync Now** calls `SyncNowAsync()`. It is also how a courier retries after the circuit breaker has opened while the network stayed up.
+   - **No run while sign-in is required:** after a 401 the token is gone. Every trigger then starts nothing, instead of sending requests that would only get another 401, until the courier logs in again. The scans stay `Pending`.
 2. **Single flight:** at most one run at a time. A request during a run, from the network event or on demand, joins that run.
 3. **Batches:** `OutboxService.SyncPendingAsync` reads the `Pending` scans oldest first and passes them to the uploader in batches of at most 20 (`OutboxService.BatchSize`). The Part A change listener sees every status change, so the live pending count stays current.
 4. **Upload:**
@@ -78,17 +81,25 @@ Couchbase Lite is a library inside the app's process, not a server. Its open dat
 
 - **429:** "Too many requests" is not final, so it is treated like 408, although it is a 4xx.
 - **While the circuit is open:** scans are still saved locally. Saving never needs the network. Each sync run then fails at once and leaves them `Pending`.
+- **An unexpected failure** while one shipment is being sent leaves that shipment's scans, and those not yet sent, `Pending`. Answers already received for earlier shipments in the batch are kept.
+- **Known limitation: a device clock ahead of the server's.**
+  - The API refuses a scan time later than its own current time with a 400 for the whole request (`NotInFuture`, Part B). Under the approved rule "a final 4xx → `Failed`", every scan of that shipment in the batch then becomes `Failed`, and `Failed` scans are not resent.
+  - The server would accept the same scans once its clock had passed their times, so a device whose clock runs ahead can lose valid scans to `Failed`. They are kept and visible on the device, but not uploaded.
+  - The rule is unchanged; treating that particular 400 as temporary would be a business-rule change for the project owner to decide. Couriers' devices should keep their clocks synchronised automatically.
 
 ### Verification
 
 | Behaviour | Tests |
 |---|---|
 | Batches of 20, 20 and 5, oldest first; a result per scan; a temporary failure stops the run; a missing result stays `Pending`; cancellation | `OutboxServiceTests` (`tests/ApexPost.Courier.Offline.Tests`) |
-| Grouping by tracking number, field mapping, every row of the status table | `ApiShipmentUploaderTests` (`tests/ApexPost.Courier.Sync.Tests`) |
+| Grouping by tracking number, field mapping, every row of the status table, earlier answers kept when a later shipment gets no answer | `ApiShipmentUploaderTests` (`tests/ApexPost.Courier.Sync.Tests`) |
 | 45 scans over two shipments, 401 through the outbox, saving while the circuit is open, circuit state in `SyncState` | `OfflineSyncTests` |
-| Debounce, single flight, sync on reconnect, shutdown | `SyncCoordinatorTests` |
+| Sync at start and after a new scan when online, debounce, single flight, sync on reconnect, no run while sign-in is required, shutdown | `SyncCoordinatorTests` |
 | End to end: Couchbase Lite store, `SyncCoordinator` from `AddCourierSync`, the real API. Accepted, duplicate, rejected and unknown-shipment scans; a resent accepted scan stores nothing new | `CourierOfflineSyncTests` (`tests/ApexPost.Api.IntegrationTests`) |
 
 **Changed Part A rule:** in Part A an uploader exception marked the scan `Failed`. That would wrongly retire a scan the server never saw, so the exception now leaves it `Pending` and stops the run. The test is now `SyncPending_WhenTheUploaderThrows_LeavesTheScansPendingAndStops`.
 
-**Not implemented yet:** the console screens that show the pending count, start a sync and display `SyncState` (D11). Until then, the client's host must register the device's `IScanRepository` and call `SyncCoordinator.Start()`.
+**In the console client (D11):**
+- `src/ApexPost.Courier.Console/Program.cs` registers the device's Couchbase Lite store as `IScanRepository`, starts the Part A change listener and calls `SyncCoordinator.Start()`.
+- `CourierConsole` shows the live pending count, the Sync Status (`SyncState.Snapshot()`) and the offline banner, and offers Sync Now.
+- Tests: `CourierConsoleTests` (`tests/ApexPost.Courier.Console.Tests`).

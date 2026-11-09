@@ -47,11 +47,18 @@ internal sealed class ClientHost : IDisposable
 			.AddProvider(Logs));
 		services.AddSingleton<ITokenStore>(Tokens);
 		services.AddSingleton<TimeProvider>(Clock);
+		services.AddSingleton<INetworkStatus>(Connectivity);
+		services.AddSingleton<IScanRepository>(Scans);
 		services.AddCourierSync(configuration).ConfigurePrimaryHttpMessageHandler(() => Network);
 		_services = services.BuildServiceProvider();
 	}
 
 	public TestClock Clock { get; } = new();
+
+	// The device's network (INetworkStatus) and scan store (IScanRepository).
+	public FakeNetwork Connectivity { get; } = new();
+
+	public InMemoryScanRepository Scans { get; } = new();
 
 	public StubHandler Network { get; }
 
@@ -65,13 +72,16 @@ internal sealed class ClientHost : IDisposable
 
 	public SyncState State => _services.GetRequiredService<SyncState>();
 
+	public T Get<T>()
+		where T : notnull => _services.GetRequiredService<T>();
+
 	public ApiShipmentUploader Uploader() =>
 		new(Client, _services.GetRequiredService<ILogger<ApiShipmentUploader>>());
 
 	public OutboxService Outbox(IScanRepository scans) =>
 		new(scans, Uploader(), _services.GetRequiredService<ILogger<OutboxService>>());
 
-	public void Dispose() => _services.Dispose();
+	public void Dispose() => _services.DisposeAsync().AsTask().GetAwaiter().GetResult();
 }
 
 // Records each attempt (with its body, read before the request is disposed)
@@ -179,6 +189,15 @@ internal sealed class InMemoryTokenStore : ITokenStore
 	{
 		Token = null;
 		ClearCount++;
+	}
+
+	public bool ClearToken(string expectedValue)
+	{
+		if (Token?.Value != expectedValue)
+			return false;
+
+		ClearToken();
+		return true;
 	}
 }
 
@@ -297,4 +316,56 @@ internal static class TestScans
 			repository.Create(scan);
 		return [.. scans];
 	}
+}
+
+// INetworkStatus under the test's control. Change raises the event and sets
+// IsAvailable to match; AvailabilityChecks counts the reads of IsAvailable.
+internal sealed class FakeNetwork : INetworkStatus
+{
+	private int _checks;
+
+	public int AvailabilityChecks => Volatile.Read(ref _checks);
+
+	public bool IsAvailable
+	{
+		get
+		{
+			Interlocked.Increment(ref _checks);
+			return field;
+		}
+
+		set;
+	} = true;
+
+	public event EventHandler<bool>? AvailabilityChanged;
+
+	public void Change(bool available)
+	{
+		IsAvailable = available;
+		AvailabilityChanged?.Invoke(this, available);
+	}
+}
+
+// Unsigned JWT-shaped tokens with the claims the client reads (courierId,
+// role, exp). Fictional; the API would refuse them, the client cannot tell.
+internal static class TestJwt
+{
+	public static string Create(string? courierId, DateTimeOffset expiresAtUtc, params string[] roles)
+	{
+		var claims = new Dictionary<string, object?>
+		{
+			["sub"] = courierId ?? "admin",
+			["exp"] = expiresAtUtc.ToUnixTimeSeconds()
+		};
+		if (courierId is not null)
+			claims["courierId"] = courierId;
+		claims["role"] = roles.Length == 1 ? roles[0] : roles;
+		return $"{Part("""{"alg":"none","typ":"JWT"}""")}.{Part(System.Text.Json.JsonSerializer.Serialize(claims))}.c2lnbmF0dXJl";
+	}
+
+	public static string Courier(string courierId = TestValues.CourierId) =>
+		Create(courierId, TestValues.Now.AddHours(1), "Courier");
+
+	public static string Part(string json) =>
+		System.Buffers.Text.Base64Url.EncodeToString(Encoding.UTF8.GetBytes(json));
 }

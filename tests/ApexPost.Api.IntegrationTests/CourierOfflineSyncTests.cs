@@ -71,7 +71,7 @@ public sealed class CourierOfflineSyncTests : IDisposable
 			"The scan ID is already recorded for another shipment.",
 			result.Failures.Single(failure => failure.ScanId == otherShipment.Id).Reason);
 		Assert.Equal(B, result.Failures.Single(failure => failure.ScanId == unknownShipment.Id).TrackingNumber);
-		Assert.Same(result, provider.GetRequiredService<SyncState>().LastResult);
+		Assert.Same(result, provider.GetRequiredService<SyncState>().Snapshot().LastResult);
 		Assert.Equal(4, await ServerScanCountAsync(admin, A));
 		Assert.Equal(1, await ServerScanCountAsync(admin, C));
 

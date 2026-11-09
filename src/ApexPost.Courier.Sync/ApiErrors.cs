@@ -1,5 +1,7 @@
 using System.Net;
 using ApexPost.Courier.Sync.Contracts;
+using Polly.CircuitBreaker;
+using Polly.Timeout;
 
 namespace ApexPost.Courier.Sync;
 
@@ -46,6 +48,16 @@ internal static class ApiErrors
 
 		return new ApiError(kind, status, message, fieldErrors);
 	}
+
+	// Why no answer arrived, for the failures ApexApiClient throws when the
+	// server gave no usable answer (CourierResilience); null for anything else.
+	public static string? NoAnswer(Exception exception) => exception switch
+	{
+		BrokenCircuitException => "Server unavailable – working offline.",
+		TimeoutRejectedException or OperationCanceledException => "The API did not answer in time.",
+		HttpRequestException => "The API could not be reached.",
+		_ => null
+	};
 
 	public static ApiError Unexpected(HttpStatusCode statusCode) =>
 		new(

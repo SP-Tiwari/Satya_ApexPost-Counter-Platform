@@ -16,47 +16,16 @@ public sealed class SyncState(ILogger<SyncState> logger)
 	private readonly Lock _gate = new();
 	private readonly LinkedList<string> _recentFailures = new();
 
-	public DateTimeOffset? LastSyncUtc
+	private DateTimeOffset? _lastSyncUtc;
+	private OutboxRunResult? _lastResult;
+	private CircuitState _circuitState = CircuitState.Closed;
+
+	// All the values at one moment, read under one lock, so they always belong
+	// together (the last result is the one of the last sync time).
+	public SyncSnapshot Snapshot()
 	{
-		get
-		{
-			lock (_gate)
-				return field;
-		}
-
-		private set;
-	}
-
-	public OutboxRunResult? LastResult
-	{
-		get
-		{
-			lock (_gate)
-				return field;
-		}
-
-		private set;
-	}
-
-	public CircuitState CircuitState
-	{
-		get
-		{
-			lock (_gate)
-				return field;
-		}
-
-		private set;
-	} = CircuitState.Closed;
-
-	// Newest first.
-	public IReadOnlyList<string> RecentFailures
-	{
-		get
-		{
-			lock (_gate)
-				return [.. _recentFailures];
-		}
+		lock (_gate)
+			return new SyncSnapshot(_lastSyncUtc, _lastResult, _circuitState, [.. _recentFailures]);
 	}
 
 	public event EventHandler? Changed;
@@ -65,8 +34,8 @@ public sealed class SyncState(ILogger<SyncState> logger)
 	{
 		lock (_gate)
 		{
-			LastSyncUtc = finishedAtUtc;
-			LastResult = result;
+			_lastSyncUtc = finishedAtUtc;
+			_lastResult = result;
 			foreach (var failure in result.Failures)
 				AddFailure($"{failure.TrackingNumber} {failure.ScanId}: {failure.Reason}");
 			if (result.StoppedBecause is { } reason)
@@ -80,8 +49,8 @@ public sealed class SyncState(ILogger<SyncState> logger)
 	{
 		lock (_gate)
 		{
-			LastSyncUtc = finishedAtUtc;
-			LastResult = null;
+			_lastSyncUtc = finishedAtUtc;
+			_lastResult = null;
 			AddFailure(reason);
 		}
 
@@ -91,7 +60,7 @@ public sealed class SyncState(ILogger<SyncState> logger)
 	internal void SetCircuitState(CircuitState state)
 	{
 		lock (_gate)
-			CircuitState = state;
+			_circuitState = state;
 
 		RaiseChanged();
 	}
@@ -116,3 +85,12 @@ public sealed class SyncState(ILogger<SyncState> logger)
 			_recentFailures.RemoveLast();
 	}
 }
+
+// LastSyncUtc: when the last run ended (null before the first). LastResult:
+// its counts, or null if it failed unexpectedly. RecentFailures: newest first,
+// at most SyncState.MaxRecentFailures.
+public sealed record SyncSnapshot(
+	DateTimeOffset? LastSyncUtc,
+	OutboxRunResult? LastResult,
+	CircuitState CircuitState,
+	IReadOnlyList<string> RecentFailures);

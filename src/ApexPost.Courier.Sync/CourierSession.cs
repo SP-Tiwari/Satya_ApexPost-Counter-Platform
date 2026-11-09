@@ -5,24 +5,40 @@ namespace ApexPost.Courier.Sync;
 // The client's sign-in state. The token store is the single source of truth:
 // sign-in is required whenever it holds no usable token. When the API answers
 // 401, AuthHeaderHandler reports it here; the rejected token is cleared and
-// SignInRequired is raised, so the console can return to its Login menu.
-public sealed class CourierSession(ITokenStore tokens, ILogger<CourierSession> logger)
+// SignInRequired is raised, so the console returns to its Login menu.
+public sealed class CourierSession(
+	ITokenStore tokens,
+	TimeProvider timeProvider,
+	ILogger<CourierSession> logger)
 {
 	public bool IsSignInRequired => tokens.GetToken() is null;
+
+	// The signed-in courier, from the stored token's courierId claim; null when
+	// no usable token is stored.
+	public string? CourierId =>
+		tokens.GetToken() is { } token
+			? CourierTokenReader.Read(token.Value, timeProvider.GetUtcNow(), out _)?.CourierId
+			: null;
 
 	// Raised after a 401. It may be raised on any thread.
 	public event EventHandler? SignInRequired;
 
+	// Logout: deletes the stored token.
+	public void SignOut()
+	{
+		tokens.ClearToken();
+		logger.LogInformation("Signed out; the access token was deleted.");
+	}
+
 	// rejectedToken is the token the refused request carried, or null if it
-	// carried none. A newer token saved while the request was running is kept.
+	// carried none. The rejected token is deleted only if it is still the
+	// stored one (one atomic step), so a newer token saved while the request
+	// was running is kept, and then sign-in is not required.
 	internal void OnUnauthorized(string? rejectedToken)
 	{
-		var current = tokens.GetToken();
-		if (current is not null && current.Value != rejectedToken)
+		var cleared = rejectedToken is not null && tokens.ClearToken(rejectedToken);
+		if (!cleared && tokens.GetToken() is not null)
 			return;
-
-		if (current is not null)
-			tokens.ClearToken();
 
 		logger.LogWarning("The API answered 401 Unauthorized; the access token was cleared and sign-in is required.");
 		try

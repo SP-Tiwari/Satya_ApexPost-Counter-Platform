@@ -14,8 +14,9 @@ public static class CourierSyncRegistration
 	// and pools its HttpClient, whose BaseAddress is ApexPostApi:BaseUrl,
 	// AuthHeaderHandler adds the bearer token, and CourierResilience adds the
 	// retry, circuit breaker and timeouts (D7). Also registers the token store,
-	// the session and a TimeProvider, unless the host registered its own, and
-	// the offline sync (D9): ApiShipmentUploader as the IShipmentUploader, the
+	// the session, the sign-in service (D10) and a TimeProvider, unless the
+	// host registered its own, and the offline sync (D9): ApiShipmentUploader
+	// as the IShipmentUploader, the
 	// OutboxService, the network status, the sync state and the
 	// SyncCoordinator. The host registers the device's IScanRepository
 	// (ApexPost.Courier.Offline) and starts the coordinator.
@@ -33,12 +34,14 @@ public static class CourierSyncRegistration
 		services.TryAddSingleton<ITokenStore>(CreateTokenStore);
 		services.TryAddSingleton<CourierSession>();
 		services.TryAddTransient<AuthHeaderHandler>();
+		services.TryAddTransient<CourierSignIn>();
 		services.TryAddSingleton<SyncState>();
 		services.TryAddSingleton<INetworkStatus, SystemNetworkStatus>();
 		services.TryAddTransient<IShipmentUploader, ApiShipmentUploader>();
 		services.TryAddTransient<OutboxService>();
 		services.TryAddSingleton(provider => new SyncCoordinator(
 			provider.GetRequiredService<OutboxService>,
+			provider.GetRequiredService<CourierSession>(),
 			provider.GetRequiredService<SyncState>(),
 			provider.GetRequiredService<INetworkStatus>(),
 			provider.GetRequiredService<TimeProvider>(),
@@ -78,10 +81,7 @@ public static class CourierSyncRegistration
 	private static ITokenStore CreateTokenStore(IServiceProvider services)
 	{
 		if (!OperatingSystem.IsWindows())
-		{
-			throw new PlatformNotSupportedException(
-				"The courier client stores its access token with Windows DPAPI, which is available only on Windows.");
-		}
+			throw new PlatformNotSupportedException(DpapiTokenStore.UnsupportedPlatformMessage);
 
 		return new DpapiTokenStore(
 			DpapiTokenStore.DefaultDirectory,

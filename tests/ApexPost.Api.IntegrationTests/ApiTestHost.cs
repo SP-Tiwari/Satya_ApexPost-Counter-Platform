@@ -175,6 +175,8 @@ internal static class TestTokens
 		public void SaveToken(AccessToken newToken) => throw new NotSupportedException();
 
 		public void ClearToken() => throw new NotSupportedException();
+
+		public bool ClearToken(string expectedValue) => throw new NotSupportedException();
 	}
 }
 

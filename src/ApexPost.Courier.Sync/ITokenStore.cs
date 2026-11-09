@@ -12,4 +12,9 @@ public interface ITokenStore
 
 	// Signs out: deletes the stored token. Does nothing when none is stored.
 	void ClearToken();
+
+	// Deletes the stored token only if it is still this value, in one step, so
+	// a newer token saved in the meantime is never deleted by mistake. Returns
+	// true when it deleted the token.
+	bool ClearToken(string expectedValue);
 }
