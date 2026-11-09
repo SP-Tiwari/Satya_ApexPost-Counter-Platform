@@ -13,7 +13,8 @@ How the courier console client's calls to `ApexPost.Api` survive a weak network:
 | A per-attempt timeout plus an overall request timeout | Attempt timeout 10 s (innermost); overall timeout 30 s (outermost), retries and delays included | `AttemptTimeout_IsRetried_AndTheNextAttemptSucceeds`, `OverallTimeout_EndsTheCall_IncludingItsRetries`, `TokenRequest_IsNotRetried_AfterAnAttemptTimeout` |
 | Log every retry attempt and every circuit state change | `OnRetry`, `OnOpened`, `OnHalfOpened` and `OnClosed` write log messages; the overall timeout logs too | `Retries_AreLogged_WithoutTokenOrBody`, and the log assertions in the circuit-breaker and timeout tests |
 | Never log tokens, keys or request bodies | The messages name the method, the path and the failure (status code or exception type), never a header, body or exception message | `Retries_AreLogged_WithoutTokenOrBody`, `RepeatedFailures_OpenTheCircuit_AndCallsThenFailFast` (both read every log message of every category, at Trace level) |
-| The "Server unavailable – working offline" banner while the circuit is open, and saving scans locally meanwhile | **Not implemented yet.** The open circuit makes every call fail at once with `BrokenCircuitException`. The banner (D11) and keeping scans `Pending` (D9) are later milestones | — |
+| While the circuit is open, keep saving scans locally | The open circuit makes every call fail at once with `BrokenCircuitException`. `ApiShipmentUploader` turns that into `RetryLater`, so the outbox leaves the scans `Pending` and stops the run. Saving a scan never needs the network. The circuit-breaker callbacks publish the state to `SyncState` | `OfflineSyncTests.WhileTheCircuitIsOpen_ScansAreStillSavedLocally_AndStayPending`, `CircuitStateChanges_ArePublishedToTheSyncState`, `ApiShipmentUploaderTests.OpenCircuit_LeavesTheScansForLater_WithoutARequest` |
+| The "Server unavailable – working offline" banner while the circuit is open | **Not implemented yet.** The banner belongs to the console screens (D11). The state it will read is `SyncState.CircuitState` | — |
 
 The tests are in [tests/ApexPost.Courier.Sync.Tests/ResilienceTests.cs](tests/ApexPost.Courier.Sync.Tests/ResilienceTests.cs) and [tests/ApexPost.Api.IntegrationTests/CourierClientRetryTests.cs](tests/ApexPost.Api.IntegrationTests/CourierClientRetryTests.cs).
 
@@ -84,7 +85,7 @@ The retry sends the same body. `JsonContent` serializes the same request object 
 | Circuit open | `BrokenCircuitException`, at once, without a request |
 | The caller cancelled its `CancellationToken` | `OperationCanceledException` (or its subclass `TaskCanceledException`). The call stops: no further retry is made, it is not reported as a timeout, and the circuit breaker does not count it as a failure (`CallerCancellation_DuringAnAttempt_IsThrown_AndNotRetried`, `CallerCancellations_DoNotCountAsCircuitBreakerFailures`) |
 
-A thrown exception means the server gave no usable answer. The later sync milestone (D9) keeps those scans `Pending` for the next attempt.
+A thrown exception means the server gave no usable answer. The offline sync (D9) catches it in `ApiShipmentUploader` and keeps those scans `Pending` for the next run; see [OFFLINE-DESIGN.md](OFFLINE-DESIGN.md#4-synchronization-with-the-api-part-d-d9).
 
 ## Logging
 

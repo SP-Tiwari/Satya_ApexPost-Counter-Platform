@@ -31,7 +31,7 @@ public sealed class CourierClientRetryTests : IDisposable
 
 		var services = new ServiceCollection().AddLogging();
 		services.AddSingleton<ITokenStore>(
-			new CourierToken(new AccessToken(TestTokens.Courier(), DateTimeOffset.UtcNow.AddHours(1))));
+			TestTokens.CourierTokenStore());
 		services
 			.AddCourierSync(new ConfigurationBuilder()
 				.AddInMemoryCollection(new Dictionary<string, string?>
@@ -80,14 +80,5 @@ public sealed class CourierClientRetryTests : IDisposable
 			response.Dispose();
 			throw new HttpRequestException("The connection was reset before the response arrived.");
 		}
-	}
-
-	private sealed class CourierToken(AccessToken token) : ITokenStore
-	{
-		public AccessToken? GetToken() => token;
-
-		public void SaveToken(AccessToken newToken) => throw new NotSupportedException();
-
-		public void ClearToken() => throw new NotSupportedException();
 	}
 }

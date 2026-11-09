@@ -33,6 +33,9 @@
   <ItemGroup>
     <Compile Include="..\Shared\DisposableSqlDatabase.cs" Link="DisposableSqlDatabase.cs" />
     <Compile Include="..\Shared\SqlTestSettings.cs" Link="SqlTestSettings.cs" />
+    <!-- The courier device's database folders for the end-to-end sync test (D9),
+         chosen as in the Part A tests. -->
+    <Compile Include="..\ApexPost.Courier.Offline.Tests\TestSupport.cs" Link="CourierOfflineTestSupport.cs" />
   </ItemGroup>
 
 </Project>

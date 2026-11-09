@@ -1,3 +1,4 @@
+using ApexPost.Courier.Offline.Application;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -13,7 +14,11 @@ public static class CourierSyncRegistration
 	// and pools its HttpClient, whose BaseAddress is ApexPostApi:BaseUrl,
 	// AuthHeaderHandler adds the bearer token, and CourierResilience adds the
 	// retry, circuit breaker and timeouts (D7). Also registers the token store,
-	// the session and a TimeProvider, unless the host registered its own.
+	// the session and a TimeProvider, unless the host registered its own, and
+	// the offline sync (D9): ApiShipmentUploader as the IShipmentUploader, the
+	// OutboxService, the network status, the sync state and the
+	// SyncCoordinator. The host registers the device's IScanRepository
+	// (ApexPost.Courier.Offline) and starts the coordinator.
 	// Returns the client builder so the host can extend the pipeline.
 	public static IHttpClientBuilder AddCourierSync(
 		this IServiceCollection services,
@@ -28,6 +33,16 @@ public static class CourierSyncRegistration
 		services.TryAddSingleton<ITokenStore>(CreateTokenStore);
 		services.TryAddSingleton<CourierSession>();
 		services.TryAddTransient<AuthHeaderHandler>();
+		services.TryAddSingleton<SyncState>();
+		services.TryAddSingleton<INetworkStatus, SystemNetworkStatus>();
+		services.TryAddTransient<IShipmentUploader, ApiShipmentUploader>();
+		services.TryAddTransient<OutboxService>();
+		services.TryAddSingleton(provider => new SyncCoordinator(
+			provider.GetRequiredService<OutboxService>,
+			provider.GetRequiredService<SyncState>(),
+			provider.GetRequiredService<INetworkStatus>(),
+			provider.GetRequiredService<TimeProvider>(),
+			provider.GetRequiredService<ILogger<SyncCoordinator>>()));
 
 		// AuthHeaderHandler is outside the resilience handler, so every attempt
 		// carries the same token and a 401 (never retried) is handled once.

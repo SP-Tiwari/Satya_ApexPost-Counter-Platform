@@ -49,6 +49,7 @@ public static class CourierResilience
 			var logger = context.ServiceProvider
 				.GetRequiredService<ILoggerFactory>()
 				.CreateLogger(typeof(CourierResilience));
+			var syncState = context.ServiceProvider.GetRequiredService<SyncState>();
 
 			pipeline
 				.AddTimeout(new TimeoutStrategyOptions
@@ -64,7 +65,7 @@ public static class CourierResilience
 					}
 				})
 				.AddRetry(CreateRetryOptions(logger))
-				.AddCircuitBreaker(CreateCircuitBreakerOptions(logger))
+				.AddCircuitBreaker(CreateCircuitBreakerOptions(logger, syncState))
 				.AddTimeout(new TimeoutStrategyOptions
 				{
 					Name = "Attempt",
@@ -98,7 +99,11 @@ public static class CourierResilience
 		}
 	};
 
-	private static CircuitBreakerStrategyOptions<HttpResponseMessage> CreateCircuitBreakerOptions(ILogger logger) => new()
+	// Each state change is also published to SyncState, for the Sync Status
+	// screen and the offline banner (D11).
+	private static CircuitBreakerStrategyOptions<HttpResponseMessage> CreateCircuitBreakerOptions(
+		ILogger logger,
+		SyncState syncState) => new()
 	{
 		FailureRatio = FailureRatio,
 		MinimumThroughput = MinimumThroughput,
@@ -107,6 +112,7 @@ public static class CourierResilience
 		ShouldHandle = args => ValueTask.FromResult(IsTransient(args.Outcome)),
 		OnOpened = args =>
 		{
+			syncState.SetCircuitState(CircuitState.Open);
 			logger.LogWarning(
 				"Circuit breaker opened for {BreakSeconds} s after {Failure}: API calls fail at once and scans stay on the device.",
 				args.BreakDuration.TotalSeconds,
@@ -115,11 +121,13 @@ public static class CourierResilience
 		},
 		OnHalfOpened = _ =>
 		{
+			syncState.SetCircuitState(CircuitState.HalfOpen);
 			logger.LogInformation("Circuit breaker half-open: the next API call tests whether the server has recovered.");
 			return default;
 		},
 		OnClosed = _ =>
 		{
+			syncState.SetCircuitState(CircuitState.Closed);
 			logger.LogInformation("Circuit breaker closed: the API is answering again.");
 			return default;
 		}
