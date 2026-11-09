@@ -5,16 +5,19 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace ApexPost.Courier.Sync.Tests;
 
-// D9: sync when connectivity returns, debounced, one run at a time, and a
-// clean shutdown. The network is a fake, the clock is a FakeTimeProvider that
-// moves only when a test advances it, and the uploader waits at a gate the
-// test opens, so a run stays "in progress" exactly as long as the test needs.
+// D9: sync at start, when connectivity returns (debounced), after a new scan
+// and on demand; one run at a time; none while sign-in is required; a clean
+// shutdown. The network is a fake (offline unless a test says otherwise), the
+// clock is a FakeTimeProvider that moves only when a test advances it, and the
+// uploader waits at a gate the test opens, so a run stays "in progress"
+// exactly as long as the test needs.
 public sealed class SyncCoordinatorTests : IAsyncLifetime
 {
 	private const string A = "APX-00000301";
 
 	private readonly FakeTimeProvider _time = new(TestValues.Now);
-	private readonly FakeNetwork _network = new();
+	private readonly FakeNetwork _network = new() { IsAvailable = false };
+	private readonly InMemoryTokenStore _tokens = new() { Token = TestValues.ValidToken() };
 	private readonly InMemoryScanRepository _repository = new();
 	private readonly GatedUploader _uploader = new();
 	private readonly SyncState _state = new(NullLogger<SyncState>.Instance);
@@ -22,18 +25,46 @@ public sealed class SyncCoordinatorTests : IAsyncLifetime
 
 	public SyncCoordinatorTests()
 	{
-		_coordinator = new SyncCoordinator(
-			() => new OutboxService(_repository, _uploader, NullLogger<OutboxService>.Instance),
-			_state,
-			_network,
-			_time,
-			NullLogger<SyncCoordinator>.Instance);
+		_coordinator = Coordinator(() => new OutboxService(_repository, _uploader, NullLogger<OutboxService>.Instance));
 		TestScans.Store(_repository, TestScans.For(A, 1), TestScans.For(A, 2));
 	}
 
 	public Task InitializeAsync() => Task.CompletedTask;
 
 	public async Task DisposeAsync() => await _coordinator.DisposeAsync();
+
+	[Fact]
+	public async Task Start_WhenOnline_SyncsAtOnce()
+	{
+		_network.IsAvailable = true;
+
+		_coordinator.Start();
+
+		Assert.True(_coordinator.IsSyncing);
+		_uploader.Open();
+		var result = await _coordinator.SyncNowAsync();
+		Assert.Equal(2, result!.Synced);
+		Assert.Equal(1, _uploader.Calls);
+	}
+
+	[Fact]
+	public void Start_WhenOffline_StartsNoSync()
+	{
+		_coordinator.Start();
+
+		Assert.False(_coordinator.IsSyncing);
+	}
+
+	[Fact]
+	public void SyncIfOnline_SyncsOnlyWhenTheNetworkIsAvailable()
+	{
+		_coordinator.SyncIfOnline();
+		Assert.False(_coordinator.IsSyncing);
+
+		_network.IsAvailable = true;
+		_coordinator.SyncIfOnline();
+		Assert.True(_coordinator.IsSyncing);
+	}
 
 	[Fact]
 	public async Task NetworkRestored_StartsASync_AfterTheReconnectDelay()
@@ -51,8 +82,9 @@ public sealed class SyncCoordinatorTests : IAsyncLifetime
 		var result = await _coordinator.SyncNowAsync();
 		Assert.Equal((2, 2, 0, 0), (result!.Attempted, result.Synced, result.Failed, result.Pending));
 		Assert.Empty(_repository.ListPending());
-		Assert.Equal(_time.GetUtcNow(), _state.LastSyncUtc);
-		Assert.Same(result, _state.LastResult);
+		var status = _state.Snapshot();
+		Assert.Equal(_time.GetUtcNow(), status.LastSyncUtc);
+		Assert.Same(result, status.LastResult);
 		Assert.Equal(1, _uploader.Calls);
 	}
 
@@ -60,6 +92,7 @@ public sealed class SyncCoordinatorTests : IAsyncLifetime
 	public void RepeatedOrFlappingEvents_AreDebounced()
 	{
 		_coordinator.Start();
+		var checksAfterStart = _network.AvailabilityChecks;
 
 		// Flapping: each event restarts the wait, and a loss cancels it.
 		_network.Change(available: true);
@@ -69,14 +102,14 @@ public sealed class SyncCoordinatorTests : IAsyncLifetime
 		_network.Change(available: false);
 		_time.Advance(SyncCoordinator.ReconnectDelay * 2);
 		Assert.False(_coordinator.IsSyncing);
-		Assert.Equal(0, _network.AvailabilityChecks);
+		Assert.Equal(checksAfterStart, _network.AvailabilityChecks);
 
 		// Several events in a row lead to one check and one run.
 		_network.Change(available: true);
 		_network.Change(available: true);
 		_network.Change(available: true);
 		_time.Advance(SyncCoordinator.ReconnectDelay);
-		Assert.Equal(1, _network.AvailabilityChecks);
+		Assert.Equal(checksAfterStart + 1, _network.AvailabilityChecks);
 		Assert.True(_coordinator.IsSyncing);
 	}
 
@@ -89,7 +122,6 @@ public sealed class SyncCoordinatorTests : IAsyncLifetime
 		_network.IsAvailable = false;
 		_time.Advance(SyncCoordinator.ReconnectDelay);
 
-		Assert.Equal(1, _network.AvailabilityChecks);
 		Assert.False(_coordinator.IsSyncing);
 	}
 
@@ -102,6 +134,7 @@ public sealed class SyncCoordinatorTests : IAsyncLifetime
 		var second = _coordinator.SyncNowAsync();
 		_network.Change(available: true);
 		_time.Advance(SyncCoordinator.ReconnectDelay);
+		_coordinator.SyncIfOnline();
 		var third = _coordinator.SyncNowAsync();
 
 		Assert.Same(first, second);
@@ -129,6 +162,29 @@ public sealed class SyncCoordinatorTests : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task WhileSignInIsRequired_NoTriggerStartsARun()
+	{
+		_tokens.Token = null;
+		_network.IsAvailable = true;
+
+		_coordinator.Start();
+		_coordinator.SyncIfOnline();
+		_network.Change(available: true);
+		_time.Advance(SyncCoordinator.ReconnectDelay);
+		var manual = await _coordinator.SyncNowAsync();
+
+		Assert.Null(manual);
+		Assert.False(_coordinator.IsSyncing);
+		Assert.Equal(0, _uploader.Calls);
+		Assert.Equal(2, _repository.ListPending().Count);
+
+		// After signing in again, the next trigger syncs.
+		_tokens.Token = TestValues.ValidToken();
+		_uploader.Open();
+		Assert.Equal(2, (await _coordinator.SyncNowAsync())!.Synced);
+	}
+
+	[Fact]
 	public async Task Shutdown_CancelsTheRunInProgress_LeavesScansPending_AndIgnoresLaterEvents()
 	{
 		_coordinator.Start();
@@ -139,10 +195,11 @@ public sealed class SyncCoordinatorTests : IAsyncLifetime
 
 		Assert.Null(await running);
 		Assert.Equal(2, _repository.ListPending().Count);
-		Assert.Null(_state.LastSyncUtc);
+		Assert.Null(_state.Snapshot().LastSyncUtc);
+		var checks = _network.AvailabilityChecks;
 		_network.Change(available: true);
 		_time.Advance(SyncCoordinator.ReconnectDelay);
-		Assert.Equal(0, _network.AvailabilityChecks);
+		Assert.Equal(checks, _network.AvailabilityChecks);
 		Assert.Null(await _coordinator.SyncNowAsync());
 		Assert.Equal(1, _uploader.Calls);
 	}
@@ -152,29 +209,25 @@ public sealed class SyncCoordinatorTests : IAsyncLifetime
 	{
 		_coordinator.Start();
 		_network.Change(available: true);
+		var checks = _network.AvailabilityChecks;
 
 		await _coordinator.DisposeAsync();
 		_time.Advance(SyncCoordinator.ReconnectDelay);
 
-		Assert.Equal(0, _network.AvailabilityChecks);
+		Assert.Equal(checks, _network.AvailabilityChecks);
 		Assert.Equal(0, _uploader.Calls);
 	}
 
 	[Fact]
 	public async Task AnUnexpectedFailure_IsRecorded_AndDoesNotThrow()
 	{
-		var coordinator = new SyncCoordinator(
-			() => throw new InvalidOperationException("The database is closed."),
-			_state,
-			_network,
-			_time,
-			NullLogger<SyncCoordinator>.Instance);
-		await using var _ = coordinator;
+		await using var coordinator = Coordinator(() => throw new InvalidOperationException("The database is closed."));
 
 		Assert.Null(await coordinator.SyncNowAsync());
 
-		Assert.Equal(_time.GetUtcNow(), _state.LastSyncUtc);
-		Assert.Equal(["The sync run failed unexpectedly; scans stay Pending."], _state.RecentFailures);
+		var status = _state.Snapshot();
+		Assert.Equal(_time.GetUtcNow(), status.LastSyncUtc);
+		Assert.Equal(["The sync run failed unexpectedly; scans stay Pending."], status.RecentFailures);
 	}
 
 	[Fact]
@@ -185,27 +238,14 @@ public sealed class SyncCoordinatorTests : IAsyncLifetime
 		Assert.Throws<InvalidOperationException>(_coordinator.Start);
 	}
 
-	private sealed class FakeNetwork : INetworkStatus
-	{
-		private int _checks;
-
-		public int AvailabilityChecks => Volatile.Read(ref _checks);
-
-		public bool IsAvailable
-		{
-			get
-			{
-				Interlocked.Increment(ref _checks);
-				return field;
-			}
-
-			set;
-		} = true;
-
-		public event EventHandler<bool>? AvailabilityChanged;
-
-		public void Change(bool available) => AvailabilityChanged?.Invoke(this, available);
-	}
+	private SyncCoordinator Coordinator(Func<OutboxService> createOutbox) =>
+		new(
+			createOutbox,
+			new CourierSession(_tokens, _time, NullLogger<CourierSession>.Instance),
+			_state,
+			_network,
+			_time,
+			NullLogger<SyncCoordinator>.Instance);
 
 	// Accepts every scan, but only after the test opens the gate; a cancelled
 	// run stops waiting.

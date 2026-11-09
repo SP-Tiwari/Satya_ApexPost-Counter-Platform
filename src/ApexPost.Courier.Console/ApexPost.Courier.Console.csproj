@@ -8,10 +8,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- Every JSON body uses the source-generated CourierJsonContext (D8);
-         reflection-based System.Text.Json serialization is switched off, so a
-         type missing from the context fails instead of silently using it. -->
-    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- The client's own JSON goes only through the source-generated
+         CourierJsonContext (D8). Reflection-based System.Text.Json is not
+         switched off for the whole app: with it off, the console failed at
+         startup right after Couchbase Lite 4.1.2 started. The exact cause was
+         not established; see ADR 0030. -->
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +25,10 @@
 
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ApexPost.Courier.Console.Tests" />
   </ItemGroup>
 
 </Project>

@@ -29,13 +29,15 @@ public sealed class DpapiTokenStore : ITokenStore
 	private readonly TimeProvider _timeProvider;
 	private readonly ILogger<DpapiTokenStore> _logger;
 
+	// Also used by AddCourierSync, which checks the platform before creating
+	// the store.
+	internal const string UnsupportedPlatformMessage =
+		"The courier client stores its access token with Windows DPAPI, which is available only on Windows.";
+
 	public DpapiTokenStore(string directory, TimeProvider timeProvider, ILogger<DpapiTokenStore> logger)
 	{
 		if (!OperatingSystem.IsWindows())
-		{
-			throw new PlatformNotSupportedException(
-				"The courier client stores its access token with Windows DPAPI, which is available only on Windows.");
-		}
+			throw new PlatformNotSupportedException(UnsupportedPlatformMessage);
 
 		ArgumentException.ThrowIfNullOrWhiteSpace(directory);
 		_directory = Path.GetFullPath(directory);
@@ -71,14 +73,14 @@ public sealed class DpapiTokenStore : ITokenStore
 			if (token is null)
 			{
 				_logger.LogWarning("The stored access token was unreadable and has been deleted; sign-in is required.");
-				DeleteFile();
+				DeleteFile(_path);
 				return null;
 			}
 
 			if (token.IsExpired(_timeProvider.GetUtcNow()))
 			{
 				_logger.LogInformation("The stored access token has expired and has been deleted; sign-in is required.");
-				DeleteFile();
+				DeleteFile(_path);
 				return null;
 			}
 
@@ -102,9 +104,17 @@ public sealed class DpapiTokenStore : ITokenStore
 
 				// Written beside the target and then moved over it, so a crash
 				// leaves either the old file or the new one, never half of one.
-				var temporaryPath = _path + ".tmp";
-				File.WriteAllBytes(temporaryPath, encrypted);
-				File.Move(temporaryPath, _path, overwrite: true);
+				// A failed write or move removes the temporary file.
+				try
+				{
+					File.WriteAllBytes(TemporaryPath, encrypted);
+					File.Move(TemporaryPath, _path, overwrite: true);
+				}
+				catch
+				{
+					DeleteFile(TemporaryPath);
+					throw;
+				}
 			}
 		}
 		finally
@@ -117,9 +127,24 @@ public sealed class DpapiTokenStore : ITokenStore
 	{
 		lock (_gate)
 		{
-			DeleteFile();
+			DeleteFile(_path);
+			DeleteFile(TemporaryPath);
 		}
 	}
+
+	public bool ClearToken(string expectedValue)
+	{
+		lock (_gate)
+		{
+			if (GetToken()?.Value != expectedValue)
+				return false;
+
+			DeleteFile(_path);
+			return true;
+		}
+	}
+
+	private string TemporaryPath => _path + ".tmp";
 
 	// Null when the data is not a DPAPI blob of this user with this entropy, or
 	// does not hold a complete token.
@@ -146,11 +171,11 @@ public sealed class DpapiTokenStore : ITokenStore
 		}
 	}
 
-	private void DeleteFile()
+	private void DeleteFile(string path)
 	{
 		try
 		{
-			File.Delete(_path);
+			File.Delete(path);
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{

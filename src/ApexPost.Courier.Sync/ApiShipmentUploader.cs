@@ -2,8 +2,6 @@ using ApexPost.Courier.Offline.Application;
 using ApexPost.Courier.Offline.Domain;
 using ApexPost.Courier.Sync.Contracts;
 using Microsoft.Extensions.Logging;
-using Polly.CircuitBreaker;
-using Polly.Timeout;
 
 namespace ApexPost.Courier.Sync;
 
@@ -19,8 +17,8 @@ namespace ApexPost.Courier.Sync;
 // - listed in the response's rejections                  -> Rejected (reason)
 // - 400, 403, 404 or another final 4xx for the group     -> Rejected (reason)
 // - 401, 408, 429, 5xx after retries, an unreadable or
-//   inconsistent response, no network, a timeout or an
-//   open circuit                                         -> RetryLater
+//   inconsistent response, no network, a timeout, an
+//   open circuit or an unexpected failure                -> RetryLater
 // After a RetryLater group, the remaining groups are not sent: they are
 // RetryLater too, so the outbox leaves them Pending and stops the run. A 401
 // has already cleared the stored token (AuthHeaderHandler, CourierSession).
@@ -76,8 +74,18 @@ public sealed class ApiShipmentUploader(ApexApiClient api, ILogger<ApiShipmentUp
 		{
 			throw;
 		}
-		catch (Exception exception) when (NoAnswer(exception) is { } reason)
+		catch (Exception exception)
 		{
+			// No answer: the expected failures (network, timeout, open circuit)
+			// and anything unexpected. Either way the scans stay Pending, and
+			// the answers already received for earlier shipments are kept.
+			var reason = ApiErrors.NoAnswer(exception);
+			if (reason is null)
+			{
+				logger.LogError(exception, "The upload of the scans for {TrackingNumber} failed unexpectedly.", trackingNumber);
+				reason = "The upload failed unexpectedly before the server answered.";
+			}
+
 			return RetryLater(trackingNumber, scans, reason);
 		}
 
@@ -148,16 +156,6 @@ public sealed class ApiShipmentUploader(ApexApiClient api, ILogger<ApiShipmentUp
 		error.FieldErrors.Count == 0
 			? error.Message
 			: $"{error.Message} {string.Join(" ", error.FieldErrors.Values.SelectMany(messages => messages))}";
-
-	// Why no answer arrived, for the failures the client throws on
-	// (ApexApiClient, CourierResilience); null for anything else.
-	private static string? NoAnswer(Exception exception) => exception switch
-	{
-		BrokenCircuitException => "Server unavailable – working offline.",
-		TimeoutRejectedException or OperationCanceledException => "The API did not answer in time.",
-		HttpRequestException => "The API could not be reached.",
-		_ => null
-	};
 
 	private static ScanUploadItem ToUploadItem(ShipmentScan scan) =>
 		new(

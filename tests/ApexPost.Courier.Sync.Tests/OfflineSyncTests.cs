@@ -66,7 +66,7 @@ public sealed class OfflineSyncTests
 		// Two runs: four failed attempts, then the fifth failure opens the circuit.
 		await outbox.SyncPendingAsync();
 		var opening = await outbox.SyncPendingAsync();
-		Assert.Equal(CircuitState.Open, host.State.CircuitState);
+		Assert.Equal(CircuitState.Open, host.State.Snapshot().CircuitState);
 		Assert.Equal("Server unavailable – working offline.", opening.StoppedBecause);
 		var requests = host.Network.Requests.Count;
 
@@ -90,8 +90,8 @@ public sealed class OfflineSyncTests
 		TestScans.Store(repository, TestScans.For(A, 1));
 		var outbox = host.Outbox(repository);
 		var states = new List<CircuitState>();
-		host.State.Changed += (_, _) => states.Add(host.State.CircuitState);
-		Assert.Equal(CircuitState.Closed, host.State.CircuitState);
+		host.State.Changed += (_, _) => states.Add(host.State.Snapshot().CircuitState);
+		Assert.Equal(CircuitState.Closed, host.State.Snapshot().CircuitState);
 
 		await outbox.SyncPendingAsync();
 		await outbox.SyncPendingAsync();
@@ -101,7 +101,7 @@ public sealed class OfflineSyncTests
 
 		Assert.Equal([CircuitState.Open, CircuitState.HalfOpen, CircuitState.Closed], states);
 		Assert.Equal(1, recovered.Synced);
-		Assert.Equal(CircuitState.Closed, host.State.CircuitState);
+		Assert.Equal(CircuitState.Closed, host.State.Snapshot().CircuitState);
 	}
 
 	private static HttpResponseMessage Accept(HttpRequestMessage request)

@@ -191,7 +191,7 @@ public sealed class ApiShipmentUploaderTests
 			("Server unavailable – working offline.", ShipmentUploadOutcome.RetryLater),
 			(result.FailureReason!, result.Outcome)));
 		Assert.Equal(requestsWhenOpened, host.Network.Requests.Count);
-		Assert.Equal(CircuitState.Open, host.State.CircuitState);
+		Assert.Equal(CircuitState.Open, host.State.Snapshot().CircuitState);
 	}
 
 	[Fact]
@@ -206,6 +206,44 @@ public sealed class ApiShipmentUploaderTests
 		await cancellation.CancelAsync();
 
 		await Assert.ThrowsAnyAsync<OperationCanceledException>(() => upload);
+	}
+
+	[Fact]
+	public async Task AnsweredShipments_KeepTheirResult_WhenALaterShipmentGetsNoAnswer()
+	{
+		using var host = new ClientHost(request => request.RequestUri!.AbsolutePath.Contains(B)
+			? throw new HttpRequestException("Connection reset.")
+			: Accept(request));
+		var a1 = TestScans.For(A, 1);
+		var b1 = TestScans.For(B, 2);
+		var c1 = TestScans.For(C, 3);
+
+		var results = await host.Uploader().UploadAsync([a1, b1, c1]);
+
+		Assert.Equal(ShipmentUploadResult.Success(a1.Id), results[0]);
+		Assert.Equal(ShipmentUploadResult.RetryLater(b1.Id, "The API could not be reached."), results[1]);
+		Assert.Equal(ShipmentUploadResult.RetryLater(c1.Id, "The API could not be reached."), results[2]);
+		Assert.DoesNotContain(host.Network.Requests, request => request.Uri.AbsolutePath.Contains(C));
+	}
+
+	[Fact]
+	public async Task AnUnexpectedFailure_KeepsEarlierAnswers_AndLeavesTheRestForLater()
+	{
+		using var host = new ClientHost(request => request.RequestUri!.AbsolutePath.Contains(B)
+			? throw new InvalidOperationException("Something unforeseen.")
+			: Accept(request));
+		var a1 = TestScans.For(A, 1);
+		var b1 = TestScans.For(B, 2);
+		var c1 = TestScans.For(C, 3);
+
+		var results = await host.Uploader().UploadAsync([a1, b1, c1]);
+
+		Assert.Equal(ShipmentUploadOutcome.Synced, results[0].Outcome);
+		Assert.All(results.Skip(1), result => Assert.Equal(
+			("The upload failed unexpectedly before the server answered.", ShipmentUploadOutcome.RetryLater),
+			(result.FailureReason!, result.Outcome)));
+		Assert.Single(host.Network.Requests, request => request.Uri.AbsolutePath.Contains(B));
+		Assert.DoesNotContain(host.Network.Requests, request => request.Uri.AbsolutePath.Contains(C));
 	}
 
 	[Fact]

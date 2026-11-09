@@ -142,6 +142,47 @@ public sealed class DpapiTokenStoreTests : IDisposable
 	}
 
 	[Fact]
+	public void ClearIfUnchanged_DeletesOnlyTheExpectedToken()
+	{
+		var store = Store();
+		store.SaveToken(TestValues.ValidToken("newer-token"));
+
+		Assert.False(store.ClearToken("older-token"));
+		Assert.Equal("newer-token", store.GetToken()!.Value);
+
+		Assert.True(store.ClearToken("newer-token"));
+		Assert.False(File.Exists(TokenFile));
+		Assert.False(store.ClearToken("newer-token"));
+	}
+
+	[Fact]
+	public void Clear_AlsoRemovesALeftoverTemporaryFile()
+	{
+		var store = Store();
+		store.SaveToken(TestValues.ValidToken());
+		File.WriteAllBytes(TokenFile + ".tmp", [1, 2, 3]);
+
+		store.ClearToken();
+
+		Assert.Empty(Directory.GetFiles(_directory));
+	}
+
+	[Fact]
+	public void AFailedSave_LeavesNoTemporaryFile_AndKeepsTheOldToken()
+	{
+		var store = Store();
+		store.SaveToken(TestValues.ValidToken("old-token"));
+
+		// While the token file is held open, it cannot be replaced (Windows
+		// reports an UnauthorizedAccessException or an IOException).
+		using (new FileStream(TokenFile, FileMode.Open, FileAccess.Read, FileShare.None))
+			Assert.ThrowsAny<SystemException>(() => store.SaveToken(TestValues.ValidToken("new-token")));
+
+		Assert.Equal([TokenFile], Directory.GetFiles(_directory));
+		Assert.Equal("old-token", store.GetToken()!.Value);
+	}
+
+	[Fact]
 	public void Clear_DeletesTheToken_AndDoesNothingWhenNoneIsStored()
 	{
 		var store = Store();

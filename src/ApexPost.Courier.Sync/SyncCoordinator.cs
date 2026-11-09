@@ -3,7 +3,13 @@ using Microsoft.Extensions.Logging;
 
 namespace ApexPost.Courier.Sync;
 
-// D9: runs the outbox when connectivity returns, and on demand.
+// D9: runs the outbox. Triggers:
+// - start: Start() syncs at once when the network is available;
+// - connectivity: when the network returns (debounced, below);
+// - on demand: SyncNowAsync() (the console's Sync Now), and SyncIfOnline()
+//   after a new scan is saved.
+// No run starts while sign-in is required (CourierSession): it would only meet
+// another 401. The scans stay Pending until the courier signs in again.
 // - Debounce: a network that comes back starts a sync only after it has stayed
 //   available for ReconnectDelay; flapping restarts the wait, and losing the
 //   network cancels it.
@@ -15,6 +21,7 @@ namespace ApexPost.Courier.Sync;
 // for each run, so its typed HttpClient is never held for the app's lifetime.
 public sealed class SyncCoordinator(
 	Func<OutboxService> createOutbox,
+	CourierSession session,
 	SyncState state,
 	INetworkStatus network,
 	TimeProvider timeProvider,
@@ -39,7 +46,8 @@ public sealed class SyncCoordinator(
 		}
 	}
 
-	// Starts listening for connectivity changes.
+	// Starts listening for connectivity changes and syncs once if the network is
+	// available.
 	public void Start()
 	{
 		lock (_gate)
@@ -51,13 +59,29 @@ public sealed class SyncCoordinator(
 			network.AvailabilityChanged += OnAvailabilityChanged;
 			_started = true;
 		}
+
+		SyncIfOnline();
+	}
+
+	// Starts a sync in the background when the network is available.
+	public void SyncIfOnline()
+	{
+		if (network.IsAvailable)
+			_ = SyncNowAsync();
 	}
 
 	// Runs the outbox now, or joins the run in progress. Returns the run's
-	// result, or null when it was cancelled by shutdown or failed unexpectedly
-	// (then SyncState holds the reason). Never throws.
+	// result, or null when no run started because sign-in is required, or the
+	// run was cancelled by shutdown or failed unexpectedly (then SyncState holds
+	// the reason). Never throws.
 	public Task<OutboxRunResult?> SyncNowAsync()
 	{
+		if (session.IsSignInRequired)
+		{
+			logger.LogInformation("Sync not started: sign-in is required; the scans stay Pending.");
+			return Task.FromResult<OutboxRunResult?>(null);
+		}
+
 		lock (_gate)
 		{
 			if (_disposed)
@@ -67,7 +91,8 @@ public sealed class SyncCoordinator(
 				return running;
 
 			// Task.Run: the run starts outside this lock.
-			_running = Task.Run(() => RunAsync(_shutdown.Token));
+			var cancellationToken = _shutdown.Token;
+			_running = Task.Run(() => RunAsync(cancellationToken));
 			return _running;
 		}
 	}
@@ -124,8 +149,7 @@ public sealed class SyncCoordinator(
 			_reconnectTimer = null;
 		}
 
-		if (network.IsAvailable)
-			_ = SyncNowAsync();
+		SyncIfOnline();
 	}
 
 	private async Task<OutboxRunResult?> RunAsync(CancellationToken cancellationToken)
