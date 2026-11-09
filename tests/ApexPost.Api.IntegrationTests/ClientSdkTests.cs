@@ -217,7 +217,9 @@ public sealed class ClientSdkTests : IDisposable
 		var configuration = new ConfigurationBuilder()
 			.AddInMemoryCollection(new Dictionary<string, string?>
 			{
-				[ApexPostApiClientRegistration.BaseUrlKey] = "http://localhost/"
+				[ApexPostApiClientRegistration.BaseUrlKey] = "http://localhost/",
+				// The demo creates a shipment (Admin) and uploads scans (Courier).
+				[ApexPostApiClientRegistration.AccessTokenKey] = TestTokens.CourierAndAdmin
 			})
 			.Build();
 		services.AddApexPostApiClient(configuration)

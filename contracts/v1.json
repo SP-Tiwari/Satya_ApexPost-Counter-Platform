@@ -12,7 +12,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:5280/"
+      "url": "https://localhost:7280/"
     }
   ],
   "paths": {
@@ -22,7 +22,7 @@
           "Scans"
         ],
         "summary": "Upload offline courier scans",
-        "description": "Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or\r\nrepeated in the batch, is counted in `duplicatesSkipped` and not\r\nstored again. A scan with a malformed ID, another shipment's tracking\r\nnumber or an ID recorded for another shipment is counted in\r\n`rejected`, with its reason, and the rest of the batch is still\r\nprocessed. Scans never change the shipment's status.",
+        "description": "Requires a bearer token with the Courier role, and every scan must carry\r\nthe token's own courierId; otherwise the whole batch is refused with 403.\r\nUploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or\r\nrepeated in the batch, is counted in `duplicatesSkipped` and not\r\nstored again. A scan with a malformed ID, another shipment's tracking\r\nnumber or an ID recorded for another shipment is counted in\r\n`rejected`, with its reason, and the rest of the batch is still\r\nprocessed. Scans never change the shipment's status.",
         "operationId": "UploadShipmentScans",
         "parameters": [
           {
@@ -93,6 +93,26 @@
               }
             }
           },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Courier role, or a scan's courierId is not the token's courierId; no scan is stored.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "409": {
             "description": "A simultaneous upload stored the same scans and the retry could not resolve it.",
             "content": {
@@ -114,7 +134,12 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "get": {
         "tags": [
@@ -156,6 +181,16 @@
               }
             }
           },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "The scan history.",
             "content": {
@@ -170,7 +205,12 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/shipments": {
@@ -241,6 +281,26 @@
               }
             }
           },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Admin role.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "The page of shipments.",
             "content": {
@@ -262,7 +322,12 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -290,6 +355,26 @@
         "responses": {
           "500": {
             "description": "An unexpected error occurred.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Admin role.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -339,7 +424,12 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/shipments/{trackingNumber}": {
@@ -373,6 +463,16 @@
               }
             }
           },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "The shipment.",
             "content": {
@@ -394,7 +494,12 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -434,6 +539,26 @@
         "responses": {
           "500": {
             "description": "An unexpected error occurred.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Admin role.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -493,7 +618,12 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -517,6 +647,26 @@
         "responses": {
           "500": {
             "description": "An unexpected error occurred.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Admin role.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -549,7 +699,12 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v1/shipments/{trackingNumber}/status": {
@@ -591,6 +746,26 @@
         "responses": {
           "500": {
             "description": "An unexpected error occurred.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Courier role.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -650,7 +825,12 @@
             }
           }
         },
-        "deprecated": true
+        "deprecated": true,
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     }
   },
@@ -876,7 +1056,7 @@
                 "type": "null"
               },
               {
-                "description": "The scan type. Required: 0 Pickup, 1 InTransit, 2 Delivered or 3 Failed.",
+                "description": "The scan type. Required: 0 Pickup, 1 InTransit, 2 Delivered or 3 Failed,\r\nas the number or as the name. Responses always return the number.",
                 "examples": [
                   0
                 ],
@@ -1265,6 +1445,14 @@
             }
           }
         }
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "A JWT access token with a Courier or Admin role claim and, for couriers, a courierId claim. In Development, issue one with dotnet user-jwts or POST /dev/token.",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
       }
     }
   },

@@ -12,7 +12,7 @@ This document describes the platform as implemented on the `master` branch. Wher
 | `ApexPost.Application` | Use cases (application services), persistence/security/audit/courier/verification abstractions, the domain-event publisher, the reference-data cache and request validation. | Domain |
 | `ApexPost.Infrastructure` | `ApexPostDbContext`, EF Core mappings and migrations, SQL Server repositories and stores, demo seed, and the simulated courier and identity-verification services. | Application, Domain |
 | `ApexPost.Web` | MVC controllers and views, middleware, filters, authentication, authorization policies, the partner API and the composition root (`Program.cs`). | Application, Infrastructure |
-| `ApexPost.Api` | Week 4 REST API for tracked shipments and courier scans: thin `[ApiController]` controllers, request and response DTOs, Problem Details, the global exception handler and a minimal-hosting composition root. It reuses `ApexPostDbContext`, the repositories and the unit of work. See [API-NOTES.md](API-NOTES.md) and [ADR 0028](docs/adr/0028-tracked-shipments-storage.md). | Application, Infrastructure |
+| `ApexPost.Api` | Week 4 REST API for tracked shipments and courier scans: thin `[ApiController]` controllers, request and response DTOs, Problem Details, the global exception handler and a minimal-hosting composition root. Since Part D it authenticates JWT bearer tokens, authorizes by role and courier ownership, and protects the partner route with an API key (see [SECURITY.md](SECURITY.md)). It reuses `ApexPostDbContext`, the repositories and the unit of work. See [API-NOTES.md](API-NOTES.md) and [ADR 0028](docs/adr/0028-tracked-shipments-storage.md). | Application, Infrastructure |
 
 ```mermaid
 flowchart LR
@@ -899,6 +899,8 @@ flowchart TD
 
 ## 7. Security
 
+This section covers the MVC counter application (`ApexPost.Web`). The Week 4 API (`ApexPost.Api`) has its own security model: JWT bearer tokens with Courier and Admin roles, the courier ownership rule, partner API keys, and HTTPS with HSTS. It is described in [SECURITY.md](SECURITY.md) and [ADR 0029](docs/adr/0029-api-authentication-and-partner-keys.md).
+
 ### Authentication and authorization
 
 - **Sign-in:** cookie authentication with claims `StaffId`, `Role` and `BranchCode`. The cookie is HttpOnly, always Secure and SameSite=Lax, with an 8-hour sliding lifetime.
@@ -1095,3 +1097,4 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 | [0025](docs/adr/0025-domain-errors-and-http-status.md) | State conflicts stay 409, a deliberate deviation |
 | [0027](docs/adr/0027-couchbase-lite-courier-offline-store.md) | Couchbase Lite courier offline store (Week 4 Part A; see [OFFLINE-DESIGN.md](OFFLINE-DESIGN.md)) |
 | [0028](docs/adr/0028-tracked-shipments-storage.md) | Tracked shipments storage for the Week 4 API: two new tables, added without changing Week 3 (Week 4 Part B) |
+| [0029](docs/adr/0029-api-authentication-and-partner-keys.md) | API authentication, role authorization and partner keys: JWT bearer, courier ownership filter, `X-Api-Key` middleware, HTTPS/HSTS (Week 4 Part D; see [SECURITY.md](SECURITY.md)) |

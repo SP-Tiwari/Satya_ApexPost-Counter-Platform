@@ -1,12 +1,13 @@
 using ApexPost.Api.Errors;
 using ApexPost.Api.OpenApi;
 using ApexPost.Api.Persistence;
+using ApexPost.Api.Security;
 using ApexPost.Api.Versioning;
 using ApexPost.Application.Persistence;
 using ApexPost.Application.Services;
 using ApexPost.Infrastructure.Persistence.Sql;
 using Asp.Versioning;
-using Asp.Versioning.ApiExplorer;
+using Microsoft.AspNetCore.Authorization;
 
 // Minimal hosting: this file is the composition root; there is no Startup class.
 var builder = WebApplication.CreateBuilder(args);
@@ -31,6 +32,18 @@ builder.Services.AddControllers(options =>
 	options.Filters.Add<ReportApiVersionsOnEveryResponse>());
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+
+// Week 4 Part D, D1 and D2: JWT bearer tokens, validated against the issuer,
+// audience and signing key in configuration, and role-based authorization on
+// the actions. A missing or invalid token is a 401 and a token without the
+// required role a 403; UseStatusCodePages below writes both as Problem Details.
+// The fallback policy requires a signed-in user for every endpoint and request
+// that states no rule of its own, so a new endpoint is protected by default.
+// Only the partner route (its API key), the Development token endpoint and the
+// Development OpenAPI documents opt out with AllowAnonymous.
+builder.Services.AddApexPostJwtAuthentication();
+builder.Services.AddAuthorizationBuilder()
+	.SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
 // URL-segment versioning: /api/v1/... (deprecated) and /api/v2/.... Every
 // response reports the supported and deprecated versions in the
@@ -60,6 +73,10 @@ foreach (var documentName in new[] { "v1", "v2" })
 	{
 		options.AddDocumentTransformer<ApiDocumentTransformer>();
 		options.AddSchemaTransformer<ContractSchemaTransformer>();
+		// D5: each document declares the security schemes its operations use:
+		// Bearer in both, and the partner key in version 2.
+		options.AddDocumentTransformer<SecuritySchemeTransformer>();
+		options.AddOperationTransformer<SecuritySchemeTransformer>();
 	});
 }
 
@@ -67,27 +84,47 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 // Writes Problem Details for an error status that has no body, such as a 404
-// for a route that does not match.
+// for a route that does not match, or the 401 and 403 of the bearer scheme.
 app.UseStatusCodePages();
+
+// D5: plain HTTP is redirected to HTTPS in every environment, so a token or an
+// API key is never accepted over an unencrypted connection by design. HSTS
+// tells browsers to use HTTPS only; it is left out of Development, where it
+// would pin localhost to HTTPS for every local site.
+if (!app.Environment.IsDevelopment())
+	app.UseHsts();
+app.UseHttpsRedirection();
 
 // The document and the UI exist in Development only. Hiding them elsewhere is
 // not a security control: the endpoints are protected or not on their own.
+// They are anonymous, so Swagger UI can load and its Authorize button can be
+// used; Swagger UI is middleware, so it is placed before authorization, whose
+// fallback policy would otherwise apply to it.
 if (app.Environment.IsDevelopment())
 {
-	app.MapOpenApi();
+	app.MapOpenApi().AllowAnonymous();
 	// One dropdown entry per API version, newest first, so Swagger UI opens
 	// on version 2: "v2" and "v1 (deprecated)".
-	var apiVersions = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
+	var apiVersions = app.DescribeApiVersions();
 	app.UseSwaggerUI(options =>
 	{
-		foreach (var version in apiVersions.ApiVersionDescriptions.OrderByDescending(version => version.ApiVersion))
+		foreach (var version in apiVersions.OrderByDescending(version => version.ApiVersion))
 		{
 			options.SwaggerEndpoint(
 				$"/openapi/{version.GroupName}.json",
 				version.IsDeprecated ? $"{version.GroupName} (deprecated)" : version.GroupName);
 		}
 	});
+
+	// D1: development access tokens; this route does not exist elsewhere.
+	app.MapDevelopmentTokenEndpoint().AllowAnonymous();
 }
+
+app.UseAuthentication();
+// D3: the partner route authenticates with its API key, after routing has
+// selected the endpoint and before authorization runs.
+app.UseMiddleware<PartnerApiKeyMiddleware>();
+app.UseAuthorization();
 
 app.MapControllers();
 

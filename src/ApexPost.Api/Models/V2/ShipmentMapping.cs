@@ -18,9 +18,20 @@ internal static class ShipmentMapping
 				shipment.RecipientCity),
 			shipment.Weight.Kilograms,
 			shipment.Status,
-			shipment.LatestScan is { } scan
-				? new LatestScanResponse(scan.ScanType, scan.Location, scan.ScannedAtUtc)
-				: null);
+			shipment.ToLatestScanResponse());
+
+	// The partner view leaves out the recipient's name, phone and address.
+	public static PartnerShipmentResponse ToPartnerResponse(this TrackedShipment shipment) =>
+		new(
+			shipment.TrackingNumber,
+			shipment.Status,
+			shipment.RecipientCity,
+			shipment.ToLatestScanResponse());
+
+	private static LatestScanResponse? ToLatestScanResponse(this TrackedShipment shipment) =>
+		shipment.LatestScan is { } scan
+			? new LatestScanResponse(scan.ScanType, scan.Location, scan.ScannedAtUtc)
+			: null;
 
 	public static ShipmentPageResponse ToV2Response(
 		this TrackedShipmentPage page,

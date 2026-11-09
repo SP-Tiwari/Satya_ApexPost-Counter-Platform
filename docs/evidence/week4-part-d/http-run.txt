@@ -1,0 +1,1092 @@
+Run: 2026-11-09T15:56:09.552Z
+File: src/ApexPost.Api/ApexPost.Api.http
+
+Summary (id, status, expected status from the request title):
+0a  200 expected 200 OK  POST /dev/token: 200, a Courier token for COURIER-DEMO-07 (Development only)
+0b  200 expected 200 OK  POST /dev/token: 200, an Admin token (Development only)
+1   201 expected 201 OK  POST /api/v1/shipments: 201 Created with a Location header
+2   409 expected 409 OK  POST /api/v1/shipments: 409, the tracking number already exists
+3   400 expected 400 OK  POST /api/v1/shipments: 400 ValidationProblemDetails (tracking number, phone, weight, missing city)
+4   415 expected 415 OK  POST /api/v1/shipments: 415, not JSON
+5   201 expected 201 OK  POST /api/v1/shipments: 201, a second shipment for the filters and the scan rules
+6   200 expected 200 OK  GET /api/v1/shipments: 200, the first page (pageSize defaults to 20)
+7   200 expected 200 OK  GET /api/v1/shipments: 200, filtered by status and city
+8   400 expected 400 OK  GET /api/v1/shipments: 400, pageSize above the maximum of 50
+9   200 expected 200 OK  GET /api/v1/shipments/{trackingNumber}: 200
+10  404 expected 404 OK  GET /api/v1/shipments/{trackingNumber}: 404, unknown tracking number
+11  200 expected 200 OK  PUT /api/v1/shipments/{trackingNumber}: 200, details replaced
+12  400 expected 400 OK  PUT /api/v1/shipments/{trackingNumber}: 400, the weight is outside 0.1 to 70 kg
+13  200 expected 200 OK  PATCH /api/v1/shipments/{trackingNumber}/status: 200, Created to PickedUp (status 1)
+14  409 expected 409 OK  PATCH /api/v1/shipments/{trackingNumber}/status: 409, PickedUp cannot go straight to Delivered
+15  400 expected 400 OK  PATCH /api/v1/shipments/{trackingNumber}/status: 400, not a defined status
+16  409 expected 409 OK  DELETE /api/v1/shipments/{trackingNumber}: 409, the shipment is no longer Created
+17  200 expected 200 OK  POST /api/v1/shipments/{trackingNumber}/scans: 200, accepted 2
+18  200 expected 200 OK  POST /api/v1/shipments/{trackingNumber}/scans: 200, the same scan again is a duplicate, plus two rejections
+19  400 expected 400 OK  POST /api/v1/shipments/{trackingNumber}/scans: 400, a scan time in the future
+20  404 expected 404 OK  POST /api/v1/shipments/{trackingNumber}/scans: 404, unknown tracking number
+21  200 expected 200 OK  GET /api/v1/shipments/{trackingNumber}/scans: 200, the history oldest first
+22  404 expected 404 OK  GET /api/v1/shipments/{trackingNumber}/scans: 404, unknown tracking number
+23  204 expected 204 OK  DELETE /api/v1/shipments/{trackingNumber}: 204, the second shipment is still Created
+24  404 expected 404 OK  DELETE /api/v1/shipments/{trackingNumber}: 404, it is gone
+25  201 expected 201 OK  POST /api/v2/shipments: 201 Created, a v2 Location and a v2 body
+26  400 expected 400 OK  POST /api/v2/shipments: 400 ValidationProblemDetails, invalid tracking number
+27  201 expected 201 OK  POST /api/v2/shipments: 201, a second shipment to delete later
+28  200 expected 200 OK  GET /api/v2/shipments: 200, v2 items filtered by city
+29  400 expected 400 OK  GET /api/v2/shipments: 400, pageSize above the maximum of 50
+30  200 expected 200 OK  GET /api/v2/shipments/{trackingNumber}: 200, the version 1 shipment with its latestScan
+31  404 expected 404 OK  GET /api/v2/shipments/{trackingNumber}: 404, unknown tracking number
+32  200 expected 200 OK  PUT /api/v2/shipments/{trackingNumber}: 200, details replaced
+33  404 expected 404 OK  PUT /api/v2/shipments/{trackingNumber}: 404, unknown tracking number
+34  200 expected 200 OK  PATCH /api/v2/shipments/{trackingNumber}/status: 200, Created to PickedUp, by name
+35  409 expected 409 OK  PATCH /api/v2/shipments/{trackingNumber}/status: 409, PickedUp cannot go straight to Delivered
+36  400 expected 400 OK  PATCH /api/v2/shipments/{trackingNumber}/status: 400, not a status name
+37  200 expected 200 OK  POST /api/v2/shipments/{trackingNumber}/scans: 200, accepted 1
+38  404 expected 404 OK  POST /api/v2/shipments/{trackingNumber}/scans: 404, unknown tracking number
+39  200 expected 200 OK  GET /api/v2/shipments/{trackingNumber}/scans: 200, the history oldest first
+40  404 expected 404 OK  GET /api/v2/shipments/{trackingNumber}/scans: 404, unknown tracking number
+41  409 expected 409 OK  DELETE /api/v2/shipments/{trackingNumber}: 409, the shipment is no longer Created
+42  204 expected 204 OK  DELETE /api/v2/shipments/{trackingNumber}: 204, the second shipment is still Created
+43  401 expected 401 OK  GET /api/v2/shipments/{trackingNumber}: 401, no bearer token
+44  401 expected 401 OK  GET /api/v2/shipments/{trackingNumber}: 401, a token that is not a valid signed JWT
+45  200 expected 200 OK  GET /api/v2/shipments/{trackingNumber}: 200, a valid token of any role (here Admin)
+46  403 expected 403 OK  PATCH /api/v2/shipments/{trackingNumber}/status: 403, an Admin token is not a Courier token
+47  403 expected 403 OK  DELETE /api/v2/shipments/{trackingNumber}: 403, a Courier token is not an Admin token
+48  401 expected 401 OK  POST /api/v2/shipments/{trackingNumber}/scans: 401, no bearer token
+49  403 expected 403 OK  POST /api/v2/shipments/{trackingNumber}/scans: 403, a scan under another courierId refuses the whole batch
+50  200 expected 200 OK  POST /api/v2/shipments/{trackingNumber}/scans: 200, the courier's own scan, with the scan type as its name
+51  200 expected 200 OK  GET /api/v2/partner/shipments/{trackingNumber}: 200, a valid partner key; no recipient name, phone or address
+52  401 expected 401 OK  GET /api/v2/partner/shipments/{trackingNumber}: 401, no X-Api-Key header
+53  401 expected 401 OK  GET /api/v2/partner/shipments/{trackingNumber}: 401, an invalid partner key
+54  404 expected 404 OK  GET /api/v2/partner/shipments/{trackingNumber}: 404, a valid key and an unknown tracking number
+55  400 expected 400 OK  POST /dev/token: 400, a role that does not exist
+56  401 expected 401 OK  GET /api/v1/shipments: 401, version 1 needs a token too
+57  403 expected 403 OK  GET /api/v1/shipments: 403, the list needs the Admin role
+58  403 expected 403 OK  PATCH /api/v1/shipments/{trackingNumber}/status: 403, version 1 cannot bypass the Courier rule
+59  403 expected 403 OK  DELETE /api/v1/shipments/{trackingNumber}: 403, version 1 cannot bypass the Admin rule
+60  403 expected 403 OK  POST /api/v2/shipments: 403, creating a shipment needs the Admin role
+61  401 expected 401 OK  GET /api/v2/shipments/{trackingNumber}/scans: 401, the scan history needs a token
+
+
+### 0a. POST /dev/token: 200, a Courier token for COURIER-DEMO-07 (Development only)
+POST {{baseUrl}}/dev/token
+Content-Type: application/json
+
+{ "courierId": "COURIER-DEMO-07", "role": "Courier" }
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+
+{"accessToken":"<redacted>","tokenType":"Bearer","expiresAtUtc":"2026-11-09T16:56:05.5341207+00:00"}
+
+
+### 0b. POST /dev/token: 200, an Admin token (Development only)
+POST {{baseUrl}}/dev/token
+Content-Type: application/json
+
+{ "role": "Admin" }
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+
+{"accessToken":"<redacted>","tokenType":"Bearer","expiresAtUtc":"2026-11-09T16:56:05.5829855+00:00"}
+
+
+### 1. POST /api/v1/shipments: 201 Created with a Location header
+POST {{baseUrl}}/api/v1/shipments
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "trackingNumber": "{{trackingNumber}}",
+  "recipientName": "DEMO Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "1 Demo Street",
+  "recipientCity": "Pune",
+  "weightKg": 2.5
+}
+
+HTTP 201 Created
+content-type: application/json; charset=utf-8
+location: https://localhost:7280/api/v1/shipments/APX-00000001
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"1 Demo Street","recipientCity":"Pune","weightKg":2.5,"status":0}
+
+
+### 2. POST /api/v1/shipments: 409, the tracking number already exists
+POST {{baseUrl}}/api/v1/shipments
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "trackingNumber": "{{trackingNumber}}",
+  "recipientName": "DEMO Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "1 Demo Street",
+  "recipientCity": "Pune",
+  "weightKg": 2.5
+}
+
+HTTP 409 Conflict
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"The shipment's current state refuses this request.","status":409,"detail":"Shipment APX-00000001 already exists.","traceId":"00-2d762dd826375aac78122689df30e995-f533e94dbf32a4dd-00"}
+
+
+### 3. POST /api/v1/shipments: 400 ValidationProblemDetails (tracking number, phone, weight, missing city)
+POST {{baseUrl}}/api/v1/shipments
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "trackingNumber": "APX-123",
+  "recipientName": "DEMO Recipient",
+  "recipientPhone": "98765",
+  "recipientAddress": "1 Demo Street",
+  "weightKg": 75
+}
+
+HTTP 400 Bad Request
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"WeightKg":["The weight must be between 0.1 and 70 kg."],"RecipientCity":["The RecipientCity field is required."],"RecipientPhone":["The recipient phone must be in E.164 format, such as +919876543210."],"TrackingNumber":["The tracking number must be APX- followed by eight digits."]},"traceId":"00-7658f75846d0fe20a44269b979424f60-29f8a0e2360680fb-00"}
+
+
+### 4. POST /api/v1/shipments: 415, not JSON
+POST {{baseUrl}}/api/v1/shipments
+Authorization: Bearer <adminToken: redacted>
+Content-Type: text/plain
+
+trackingNumber=APX-00000003
+
+HTTP 415 Unsupported Media Type
+content-type: application/problem+json
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.16","title":"Unsupported Media Type","status":415,"traceId":"00-90dc7524b5580fdd19f0fa0c3855ded6-5b004aa73ce1d632-00"}
+
+
+### 5. POST /api/v1/shipments: 201, a second shipment for the filters and the scan rules
+POST {{baseUrl}}/api/v1/shipments
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "trackingNumber": "{{otherTrackingNumber}}",
+  "recipientName": "DEMO Second Recipient",
+  "recipientPhone": "+919812345678",
+  "recipientAddress": "2 Demo Road",
+  "recipientCity": "Mumbai",
+  "weightKg": 0.1
+}
+
+HTTP 201 Created
+content-type: application/json; charset=utf-8
+location: https://localhost:7280/api/v1/shipments/APX-00000002
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000002","recipientName":"DEMO Second Recipient","recipientPhone":"+919812345678","recipientAddress":"2 Demo Road","recipientCity":"Mumbai","weightKg":0.1,"status":0}
+
+
+### 6. GET /api/v1/shipments: 200, the first page (pageSize defaults to 20)
+GET {{baseUrl}}/api/v1/shipments
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"items":[{"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"1 Demo Street","recipientCity":"Pune","weightKg":2.5,"status":0},{"trackingNumber":"APX-00000002","recipientName":"DEMO Second Recipient","recipientPhone":"+919812345678","recipientAddress":"2 Demo Road","recipientCity":"Mumbai","weightKg":0.1,"status":0}],"page":1,"pageSize":20,"totalCount":2}
+
+
+### 7. GET /api/v1/shipments: 200, filtered by status and city
+GET {{baseUrl}}/api/v1/shipments?page=1&pageSize=50&status=Created&city=Pune
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"items":[{"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"1 Demo Street","recipientCity":"Pune","weightKg":2.5,"status":0}],"page":1,"pageSize":50,"totalCount":1}
+
+
+### 8. GET /api/v1/shipments: 400, pageSize above the maximum of 50
+GET {{baseUrl}}/api/v1/shipments?pageSize=51
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 400 Bad Request
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"PageSize":["The field PageSize must be between 1 and 50."]},"traceId":"00-b8e66993ba2ede295a963a9599ad7532-50af7cf2f8817924-00"}
+
+
+### 9. GET /api/v1/shipments/{trackingNumber}: 200
+GET {{baseUrl}}/api/v1/shipments/{{trackingNumber}}
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"1 Demo Street","recipientCity":"Pune","weightKg":2.5,"status":0}
+
+
+### 10. GET /api/v1/shipments/{trackingNumber}: 404, unknown tracking number
+GET {{baseUrl}}/api/v1/shipments/APX-99999999
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 404 Not Found
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-04bd388b9a7996f6f18d862444aba7f3-d8dfe236c476149c-00"}
+
+
+### 11. PUT /api/v1/shipments/{trackingNumber}: 200, details replaced
+PUT {{baseUrl}}/api/v1/shipments/{{trackingNumber}}
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "recipientName": "DEMO Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "10 Demo Avenue",
+  "recipientCity": "Pune",
+  "weightKg": 3
+}
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"10 Demo Avenue","recipientCity":"Pune","weightKg":3,"status":0}
+
+
+### 12. PUT /api/v1/shipments/{trackingNumber}: 400, the weight is outside 0.1 to 70 kg
+PUT {{baseUrl}}/api/v1/shipments/{{trackingNumber}}
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "recipientName": "DEMO Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "10 Demo Avenue",
+  "recipientCity": "Pune",
+  "weightKg": 0.05
+}
+
+HTTP 400 Bad Request
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"WeightKg":["The weight must be between 0.1 and 70 kg."]},"traceId":"00-a8cc641ece8083025f9451857b94d92c-6ae107fca4dafbbb-00"}
+
+
+### 13. PATCH /api/v1/shipments/{trackingNumber}/status: 200, Created to PickedUp (status 1)
+PATCH {{baseUrl}}/api/v1/shipments/{{trackingNumber}}/status
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{ "status": 1 }
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000001","recipientName":"DEMO Recipient","recipientPhone":"+919876543210","recipientAddress":"10 Demo Avenue","recipientCity":"Pune","weightKg":3,"status":1}
+
+
+### 14. PATCH /api/v1/shipments/{trackingNumber}/status: 409, PickedUp cannot go straight to Delivered
+PATCH {{baseUrl}}/api/v1/shipments/{{trackingNumber}}/status
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{ "status": 4 }
+
+HTTP 409 Conflict
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"The shipment's current state refuses this request.","status":409,"detail":"A shipment cannot move from PickedUp to Delivered.","traceId":"00-bf51fe82a6b265dd27722993c1b04fcc-905e387f6c8d0836-00"}
+
+
+### 15. PATCH /api/v1/shipments/{trackingNumber}/status: 400, not a defined status
+PATCH {{baseUrl}}/api/v1/shipments/{{trackingNumber}}/status
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{ "status": 42 }
+
+HTTP 400 Bad Request
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"Status":["The field Status is invalid."]},"traceId":"00-a761d224da720827a716da8826cb90f5-3d57d3e7301c8bb0-00"}
+
+
+### 16. DELETE /api/v1/shipments/{trackingNumber}: 409, the shipment is no longer Created
+DELETE {{baseUrl}}/api/v1/shipments/{{trackingNumber}}
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 409 Conflict
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"The shipment's current state refuses this request.","status":409,"detail":"Shipment APX-00000001 is PickedUp; only a Created shipment can be deleted.","traceId":"00-d9efe6fc3a023ea827f0a4407b6f97c3-984b72e415cd074c-00"}
+
+
+### 17. POST /api/v1/shipments/{trackingNumber}/scans: 200, accepted 2
+POST {{baseUrl}}/api/v1/shipments/{{trackingNumber}}/scans
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "{{scanId}}",
+      "trackingNumber": "{{trackingNumber}}",
+      "scanType": 0,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2026-11-07T08:00:00Z",
+      "notes": "Collected from DEMO sender"
+    },
+    {
+      "scanId": "scan::7d1e9a42-3b6c-4e8f-b2a5-9c0d1f3e5a77",
+      "trackingNumber": "{{trackingNumber}}",
+      "scanType": 1,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune sorting centre",
+      "scannedAtUtc": "2026-11-07T09:30:00Z"
+    }
+  ]
+}
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"accepted":2,"duplicatesSkipped":0,"rejected":0,"rejections":[]}
+
+
+### 18. POST /api/v1/shipments/{trackingNumber}/scans: 200, the same scan again is a duplicate, plus two rejections
+POST {{baseUrl}}/api/v1/shipments/{{trackingNumber}}/scans
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "{{scanId}}",
+      "trackingNumber": "{{trackingNumber}}",
+      "scanType": 0,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2026-11-07T08:00:00Z"
+    },
+    {
+      "scanId": "not-a-scan-id",
+      "trackingNumber": "{{trackingNumber}}",
+      "scanType": 1,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2026-11-07T08:10:00Z"
+    },
+    {
+      "scanId": "scan::4a8c2e6f-1b3d-4f5a-8c7e-0d2f4b6a8c91",
+      "trackingNumber": "{{otherTrackingNumber}}",
+      "scanType": 1,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2026-11-07T08:20:00Z"
+    }
+  ]
+}
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"accepted":0,"duplicatesSkipped":1,"rejected":2,"rejections":[{"scanId":"not-a-scan-id","reason":"The scan ID must have the format scan::{Guid}."},{"scanId":"scan::4a8c2e6f-1b3d-4f5a-8c7e-0d2f4b6a8c91","reason":"The scan is for APX-00000002, not APX-00000001."}]}
+
+
+### 19. POST /api/v1/shipments/{trackingNumber}/scans: 400, a scan time in the future
+POST {{baseUrl}}/api/v1/shipments/{{trackingNumber}}/scans
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "scan::9e3b5d7f-2a4c-4e6b-8d0f-1a3c5e7b9d24",
+      "trackingNumber": "{{trackingNumber}}",
+      "scanType": 1,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2099-01-01T00:00:00Z"
+    }
+  ]
+}
+
+HTTP 400 Bad Request
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"Scans[0].ScannedAtUtc":["ScannedAtUtc cannot be in the future."]},"traceId":"00-f77c623de307d92b39b2472b0eec4cf9-40c48112e6887ebb-00"}
+
+
+### 20. POST /api/v1/shipments/{trackingNumber}/scans: 404, unknown tracking number
+POST {{baseUrl}}/api/v1/shipments/APX-99999999/scans
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "scan::5c7e9a1b-3d5f-4b7d-9f1a-2b4d6f8a0c35",
+      "trackingNumber": "APX-99999999",
+      "scanType": 0,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Pune hub",
+      "scannedAtUtc": "2026-11-07T08:00:00Z"
+    }
+  ]
+}
+
+HTTP 404 Not Found
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-699c07e15ab832314b6d78820da31713-220d35558c14998b-00"}
+
+
+### 21. GET /api/v1/shipments/{trackingNumber}/scans: 200, the history oldest first
+GET {{baseUrl}}/api/v1/shipments/{{trackingNumber}}/scans
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+[{"scanId":"scan::0b6f3c1a-5d2e-4f8b-9a71-2c4e6d8f0a13","scanType":0,"courierId":"COURIER-DEMO-07","location":"Pune hub","scannedAtUtc":"2026-11-07T08:00:00+00:00","notes":"Collected from DEMO sender"},{"scanId":"scan::7d1e9a42-3b6c-4e8f-b2a5-9c0d1f3e5a77","scanType":1,"courierId":"COURIER-DEMO-07","location":"Pune sorting centre","scannedAtUtc":"2026-11-07T09:30:00+00:00","notes":null}]
+
+
+### 22. GET /api/v1/shipments/{trackingNumber}/scans: 404, unknown tracking number
+GET {{baseUrl}}/api/v1/shipments/APX-99999999/scans
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 404 Not Found
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-af5c6a931813c62305840bd88ffb0092-4315f74c13b40157-00"}
+
+
+### 23. DELETE /api/v1/shipments/{trackingNumber}: 204, the second shipment is still Created
+DELETE {{baseUrl}}/api/v1/shipments/{{otherTrackingNumber}}
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 204 No Content
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+
+### 24. DELETE /api/v1/shipments/{trackingNumber}: 404, it is gone
+DELETE {{baseUrl}}/api/v1/shipments/{{otherTrackingNumber}}
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 404 Not Found
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-00000002.","traceId":"00-bdb9cd324e63c6756bb6714821482f1f-73e0e478bde0c741-00"}
+
+
+### 25. POST /api/v2/shipments: 201 Created, a v2 Location and a v2 body
+POST {{baseUrl}}/api/v2/shipments
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "trackingNumber": "{{v2TrackingNumber}}",
+  "recipientName": "DEMO V2 Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "11 Demo Lane",
+  "recipientCity": "Nagpur",
+  "weightKg": 1.2
+}
+
+HTTP 201 Created
+content-type: application/json; charset=utf-8
+location: https://localhost:7280/api/v2/shipments/APX-00000011
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000011","recipient":{"name":"DEMO V2 Recipient","phone":"+919876543210","address":"11 Demo Lane","city":"Nagpur"},"weightKg":1.2,"status":"Created","latestScan":null}
+
+
+### 26. POST /api/v2/shipments: 400 ValidationProblemDetails, invalid tracking number
+POST {{baseUrl}}/api/v2/shipments
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "trackingNumber": "APX-11",
+  "recipientName": "DEMO V2 Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "11 Demo Lane",
+  "recipientCity": "Nagpur",
+  "weightKg": 1.2
+}
+
+HTTP 400 Bad Request
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"TrackingNumber":["The tracking number must be APX- followed by eight digits."]},"traceId":"00-210aa04cd9726c6e9829b84cdc0f43e0-6e661cd26ea2d970-00"}
+
+
+### 27. POST /api/v2/shipments: 201, a second shipment to delete later
+POST {{baseUrl}}/api/v2/shipments
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "trackingNumber": "{{v2OtherTrackingNumber}}",
+  "recipientName": "DEMO V2 Second Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "11 Demo Lane",
+  "recipientCity": "Nagpur",
+  "weightKg": 4
+}
+
+HTTP 201 Created
+content-type: application/json; charset=utf-8
+location: https://localhost:7280/api/v2/shipments/APX-00000012
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000012","recipient":{"name":"DEMO V2 Second Recipient","phone":"+919876543210","address":"11 Demo Lane","city":"Nagpur"},"weightKg":4,"status":"Created","latestScan":null}
+
+
+### 28. GET /api/v2/shipments: 200, v2 items filtered by city
+GET {{baseUrl}}/api/v2/shipments?city=Nagpur
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"items":[{"trackingNumber":"APX-00000011","recipient":{"name":"DEMO V2 Recipient","phone":"+919876543210","address":"11 Demo Lane","city":"Nagpur"},"weightKg":1.2,"status":"Created","latestScan":null},{"trackingNumber":"APX-00000012","recipient":{"name":"DEMO V2 Second Recipient","phone":"+919876543210","address":"11 Demo Lane","city":"Nagpur"},"weightKg":4,"status":"Created","latestScan":null}],"page":1,"pageSize":20,"totalCount":2}
+
+
+### 29. GET /api/v2/shipments: 400, pageSize above the maximum of 50
+GET {{baseUrl}}/api/v2/shipments?pageSize=51
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 400 Bad Request
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"PageSize":["The field PageSize must be between 1 and 50."]},"traceId":"00-1a0d090e32bdc71cfe6ec2ae6a85a041-1a97b0abf7620a72-00"}
+
+
+### 30. GET /api/v2/shipments/{trackingNumber}: 200, the version 1 shipment with its latestScan
+GET {{baseUrl}}/api/v2/shipments/{{trackingNumber}}
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000001","recipient":{"name":"DEMO Recipient","phone":"+919876543210","address":"10 Demo Avenue","city":"Pune"},"weightKg":3,"status":"PickedUp","latestScan":{"scanType":1,"location":"Pune sorting centre","scannedAtUtc":"2026-11-07T09:30:00+00:00"}}
+
+
+### 31. GET /api/v2/shipments/{trackingNumber}: 404, unknown tracking number
+GET {{baseUrl}}/api/v2/shipments/APX-99999999
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 404 Not Found
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-a38f29684a5e8eb386bb53badcb80ed6-6881b37ee4dedb93-00"}
+
+
+### 32. PUT /api/v2/shipments/{trackingNumber}: 200, details replaced
+PUT {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "recipientName": "DEMO V2 Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "12 Demo Lane",
+  "recipientCity": "Nagpur",
+  "weightKg": 1.5
+}
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000011","recipient":{"name":"DEMO V2 Recipient","phone":"+919876543210","address":"12 Demo Lane","city":"Nagpur"},"weightKg":1.5,"status":"Created","latestScan":null}
+
+
+### 33. PUT /api/v2/shipments/{trackingNumber}: 404, unknown tracking number
+PUT {{baseUrl}}/api/v2/shipments/APX-99999999
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{
+  "recipientName": "DEMO V2 Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "12 Demo Lane",
+  "recipientCity": "Nagpur",
+  "weightKg": 1.5
+}
+
+HTTP 404 Not Found
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-df5042406dd3d66f20d85d848e89bb0d-afa6138d93e97330-00"}
+
+
+### 34. PATCH /api/v2/shipments/{trackingNumber}/status: 200, Created to PickedUp, by name
+PATCH {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/status
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{ "status": "PickedUp" }
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000011","recipient":{"name":"DEMO V2 Recipient","phone":"+919876543210","address":"12 Demo Lane","city":"Nagpur"},"weightKg":1.5,"status":"PickedUp","latestScan":null}
+
+
+### 35. PATCH /api/v2/shipments/{trackingNumber}/status: 409, PickedUp cannot go straight to Delivered
+PATCH {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/status
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{ "status": "Delivered" }
+
+HTTP 409 Conflict
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"The shipment's current state refuses this request.","status":409,"detail":"A shipment cannot move from PickedUp to Delivered.","traceId":"00-7d174481dd4f1b548e859ade422a46b1-d9c76d989251bdfe-00"}
+
+
+### 36. PATCH /api/v2/shipments/{trackingNumber}/status: 400, not a status name
+PATCH {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/status
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{ "status": "Teleported" }
+
+HTTP 400 Bad Request
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"request":["The request field is required."],"$.status":["The JSON value could not be converted to System.Nullable`1[ApexPost.Domain.Enums.ShipmentStatus]. Path: $.status | LineNumber: 0 | BytePositionInLine: 24."]},"traceId":"00-02aeb6711ae8a751a9dd364c1d553c34-baf484db5f24339b-00"}
+
+
+### 37. POST /api/v2/shipments/{trackingNumber}/scans: 200, accepted 1
+POST {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/scans
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "scan::2e4a6c8e-0b1d-4f3a-9c5e-7a9b1d3f5e60",
+      "trackingNumber": "{{v2TrackingNumber}}",
+      "scanType": 0,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Nagpur hub",
+      "scannedAtUtc": "2026-11-07T10:15:00Z"
+    }
+  ]
+}
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"accepted":1,"duplicatesSkipped":0,"rejected":0,"rejections":[]}
+
+
+### 38. POST /api/v2/shipments/{trackingNumber}/scans: 404, unknown tracking number
+POST {{baseUrl}}/api/v2/shipments/APX-99999999/scans
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "scan::6f8a0c2e-4b6d-4f8a-8c0e-2b4d6f8a0c13",
+      "trackingNumber": "APX-99999999",
+      "scanType": 0,
+      "courierId": "COURIER-DEMO-07",
+      "location": "Nagpur hub",
+      "scannedAtUtc": "2026-11-07T10:15:00Z"
+    }
+  ]
+}
+
+HTTP 404 Not Found
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-efdd87670b473eb2d7ac4b55c3338e88-d5067a2b638b5dd7-00"}
+
+
+### 39. GET /api/v2/shipments/{trackingNumber}/scans: 200, the history oldest first
+GET {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/scans
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+[{"scanId":"scan::2e4a6c8e-0b1d-4f3a-9c5e-7a9b1d3f5e60","scanType":0,"courierId":"COURIER-DEMO-07","location":"Nagpur hub","scannedAtUtc":"2026-11-07T10:15:00+00:00","notes":null}]
+
+
+### 40. GET /api/v2/shipments/{trackingNumber}/scans: 404, unknown tracking number
+GET {{baseUrl}}/api/v2/shipments/APX-99999999/scans
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 404 Not Found
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-3834fc58c57cea1d8968594fc82bab62-007a8b87725201be-00"}
+
+
+### 41. DELETE /api/v2/shipments/{trackingNumber}: 409, the shipment is no longer Created
+DELETE {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 409 Conflict
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"The shipment's current state refuses this request.","status":409,"detail":"Shipment APX-00000011 is PickedUp; only a Created shipment can be deleted.","traceId":"00-0154b65f549690ba457cbdbf5fc9571e-df3fedb3b0d3264e-00"}
+
+
+### 42. DELETE /api/v2/shipments/{trackingNumber}: 204, the second shipment is still Created
+DELETE {{baseUrl}}/api/v2/shipments/{{v2OtherTrackingNumber}}
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 204 No Content
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+
+### 43. GET /api/v2/shipments/{trackingNumber}: 401, no bearer token
+GET {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}
+
+HTTP 401 Unauthorized
+content-type: application/problem+json; charset=utf-8
+www-authenticate: Bearer
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.2","title":"Unauthorized","status":401,"traceId":"00-de583cf95d77f31a973ebda3cd535f5d-f9f6994b4c86cfb4-00"}
+
+
+### 44. GET /api/v2/shipments/{trackingNumber}: 401, a token that is not a valid signed JWT
+GET {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}
+Authorization: Bearer not-a-valid-token
+
+HTTP 401 Unauthorized
+content-type: application/problem+json; charset=utf-8
+www-authenticate: Bearer error="invalid_token"
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.2","title":"Unauthorized","status":401,"traceId":"00-3a65701b009be70be085159cea026814-e8baf5098419983b-00"}
+
+
+### 45. GET /api/v2/shipments/{trackingNumber}: 200, a valid token of any role (here Admin)
+GET {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}
+Authorization: Bearer <adminToken: redacted>
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"trackingNumber":"APX-00000011","recipient":{"name":"DEMO V2 Recipient","phone":"+919876543210","address":"12 Demo Lane","city":"Nagpur"},"weightKg":1.5,"status":"PickedUp","latestScan":{"scanType":0,"location":"Nagpur hub","scannedAtUtc":"2026-11-07T10:15:00+00:00"}}
+
+
+### 46. PATCH /api/v2/shipments/{trackingNumber}/status: 403, an Admin token is not a Courier token
+PATCH {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/status
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{ "status": "InTransit" }
+
+HTTP 403 Forbidden
+content-type: application/problem+json; charset=utf-8
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.4","title":"Forbidden","status":403,"traceId":"00-bfa9075342e504f3ebcda1bfc1459bc0-7cb002c9bb13e00c-00"}
+
+
+### 47. DELETE /api/v2/shipments/{trackingNumber}: 403, a Courier token is not an Admin token
+DELETE {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 403 Forbidden
+content-type: application/problem+json; charset=utf-8
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.4","title":"Forbidden","status":403,"traceId":"00-205b66857eaebbe7154a3db0379adb04-47104f4f0b5f6b90-00"}
+
+
+### 48. POST /api/v2/shipments/{trackingNumber}/scans: 401, no bearer token
+POST {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/scans
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "scan::8b0d2f4a-6c8e-4a1c-9e3a-5c7e9a1b3d46",
+      "trackingNumber": "{{v2TrackingNumber}}",
+      "scanType": "InTransit",
+      "courierId": "COURIER-DEMO-07",
+      "location": "Nagpur hub",
+      "scannedAtUtc": "2026-11-07T11:00:00Z"
+    }
+  ]
+}
+
+HTTP 401 Unauthorized
+content-type: application/problem+json; charset=utf-8
+www-authenticate: Bearer
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.2","title":"Unauthorized","status":401,"traceId":"00-15e032411d618e1e21ecef3a80f8a2e1-4c041e2d031b78ee-00"}
+
+
+### 49. POST /api/v2/shipments/{trackingNumber}/scans: 403, a scan under another courierId refuses the whole batch
+POST {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/scans
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "scan::8b0d2f4a-6c8e-4a1c-9e3a-5c7e9a1b3d46",
+      "trackingNumber": "{{v2TrackingNumber}}",
+      "scanType": "InTransit",
+      "courierId": "COURIER-DEMO-07",
+      "location": "Nagpur hub",
+      "scannedAtUtc": "2026-11-07T11:00:00Z"
+    },
+    {
+      "scanId": "scan::1c3e5a7c-9e1a-4c3e-8a5c-7e9a1c3e5a78",
+      "trackingNumber": "{{v2TrackingNumber}}",
+      "scanType": "InTransit",
+      "courierId": "COURIER-DEMO-99",
+      "location": "Nagpur hub",
+      "scannedAtUtc": "2026-11-07T11:05:00Z"
+    }
+  ]
+}
+
+HTTP 403 Forbidden
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.4","title":"This courier may not upload these scans.","status":403,"detail":"Every scan must be recorded under your own courierId, COURIER-DEMO-07. No scan in the batch was stored.","traceId":"00-e0b349d2e23a9b92f657d8dc44e1ace9-f15d4fb17fcf445f-00"}
+
+
+### 50. POST /api/v2/shipments/{trackingNumber}/scans: 200, the courier's own scan, with the scan type as its name
+POST {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/scans
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{
+  "scans": [
+    {
+      "scanId": "scan::8b0d2f4a-6c8e-4a1c-9e3a-5c7e9a1b3d46",
+      "trackingNumber": "{{v2TrackingNumber}}",
+      "scanType": "InTransit",
+      "courierId": "COURIER-DEMO-07",
+      "location": "Nagpur hub",
+      "scannedAtUtc": "2026-11-07T11:00:00Z"
+    }
+  ]
+}
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+api-deprecated-versions: 1.0
+
+{"accepted":1,"duplicatesSkipped":0,"rejected":0,"rejections":[]}
+
+
+### 51. GET /api/v2/partner/shipments/{trackingNumber}: 200, a valid partner key; no recipient name, phone or address
+GET {{baseUrl}}/api/v2/partner/shipments/{{v2TrackingNumber}}
+X-Api-Key: <partner key from APEXPOST_PARTNER_API_KEY: redacted>
+
+HTTP 200 OK
+content-type: application/json; charset=utf-8
+api-supported-versions: 2.0
+
+{"trackingNumber":"APX-00000011","status":"PickedUp","destinationCity":"Nagpur","latestScan":{"scanType":1,"location":"Nagpur hub","scannedAtUtc":"2026-11-07T11:00:00+00:00"}}
+
+
+### 52. GET /api/v2/partner/shipments/{trackingNumber}: 401, no X-Api-Key header
+GET {{baseUrl}}/api/v2/partner/shipments/{{v2TrackingNumber}}
+
+HTTP 401 Unauthorized
+content-type: application/problem+json; charset=utf-8
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.2","title":"A valid partner API key is required.","status":401,"detail":"Send the partner's key in the X-Api-Key header.","traceId":"00-e66a72b6b25eab36f99b6d74040923df-ebffb2cb1ae6eb63-00"}
+
+
+### 53. GET /api/v2/partner/shipments/{trackingNumber}: 401, an invalid partner key
+GET {{baseUrl}}/api/v2/partner/shipments/{{v2TrackingNumber}}
+X-Api-Key: not-a-partner-key
+
+HTTP 401 Unauthorized
+content-type: application/problem+json; charset=utf-8
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.2","title":"A valid partner API key is required.","status":401,"detail":"Send the partner's key in the X-Api-Key header.","traceId":"00-87605fb8b3737f20a29bb6ca35b1852d-2787dbfd916c7359-00"}
+
+
+### 54. GET /api/v2/partner/shipments/{trackingNumber}: 404, a valid key and an unknown tracking number
+GET {{baseUrl}}/api/v2/partner/shipments/APX-99999999
+X-Api-Key: <partner key from APEXPOST_PARTNER_API_KEY: redacted>
+
+HTTP 404 Not Found
+content-type: application/problem+json; charset=utf-8
+api-supported-versions: 2.0
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Shipment not found.","status":404,"detail":"No shipment has tracking number APX-99999999.","traceId":"00-df6bf1b8824a784b10260cae022d0db9-d9db0f839fcbd4ef-00"}
+
+
+### 55. POST /dev/token: 400, a role that does not exist
+POST {{baseUrl}}/dev/token
+Content-Type: application/json
+
+{ "courierId": "COURIER-DEMO-07", "role": "Manager" }
+
+HTTP 400 Bad Request
+content-type: application/problem+json
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"role":["The role must be Courier or Admin."]},"traceId":"00-d94ab5c7e1bc6f54f28958c4358b560c-27a84412cc4a9566-00"}
+
+
+### 56. GET /api/v1/shipments: 401, version 1 needs a token too
+GET {{baseUrl}}/api/v1/shipments
+
+HTTP 401 Unauthorized
+content-type: application/problem+json; charset=utf-8
+www-authenticate: Bearer
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.2","title":"Unauthorized","status":401,"traceId":"00-a19bc94dcc247ec881106fa1ef235a02-a319b2274f6617df-00"}
+
+
+### 57. GET /api/v1/shipments: 403, the list needs the Admin role
+GET {{baseUrl}}/api/v1/shipments
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 403 Forbidden
+content-type: application/problem+json; charset=utf-8
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.4","title":"Forbidden","status":403,"traceId":"00-8611d0bba1a3d31a118684483223b080-e90144da2f730c51-00"}
+
+
+### 58. PATCH /api/v1/shipments/{trackingNumber}/status: 403, version 1 cannot bypass the Courier rule
+PATCH {{baseUrl}}/api/v1/shipments/{{trackingNumber}}/status
+Authorization: Bearer <adminToken: redacted>
+Content-Type: application/json
+
+{ "status": 2 }
+
+HTTP 403 Forbidden
+content-type: application/problem+json; charset=utf-8
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.4","title":"Forbidden","status":403,"traceId":"00-05d912352fc0fd966a06f0d0d3160800-4ad35d58a7f98144-00"}
+
+
+### 59. DELETE /api/v1/shipments/{trackingNumber}: 403, version 1 cannot bypass the Admin rule
+DELETE {{baseUrl}}/api/v1/shipments/{{trackingNumber}}
+Authorization: Bearer <courierToken: redacted>
+
+HTTP 403 Forbidden
+content-type: application/problem+json; charset=utf-8
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.4","title":"Forbidden","status":403,"traceId":"00-2a64cd8a279d9d86ef5deba12cf696a5-e23339c805dc7a0a-00"}
+
+
+### 60. POST /api/v2/shipments: 403, creating a shipment needs the Admin role
+POST {{baseUrl}}/api/v2/shipments
+Authorization: Bearer <courierToken: redacted>
+Content-Type: application/json
+
+{
+  "trackingNumber": "APX-00000013",
+  "recipientName": "DEMO V2 Recipient",
+  "recipientPhone": "+919876543210",
+  "recipientAddress": "11 Demo Lane",
+  "recipientCity": "Nagpur",
+  "weightKg": 1.2
+}
+
+HTTP 403 Forbidden
+content-type: application/problem+json; charset=utf-8
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.4","title":"Forbidden","status":403,"traceId":"00-4e1a35b61a9e105e217c64117807c13f-dd3196ca7113dbe8-00"}
+
+
+### 61. GET /api/v2/shipments/{trackingNumber}/scans: 401, the scan history needs a token
+GET {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/scans
+
+HTTP 401 Unauthorized
+content-type: application/problem+json; charset=utf-8
+www-authenticate: Bearer
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.2","title":"Unauthorized","status":401,"traceId":"00-b19653fb56e317346d15b02026eb85cd-2acca9f46a735ee0-00"}

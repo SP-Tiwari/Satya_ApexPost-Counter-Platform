@@ -12,7 +12,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:5280/"
+      "url": "https://localhost:7280/"
     }
   ],
   "paths": {
@@ -22,7 +22,7 @@
           "Scans"
         ],
         "summary": "Upload offline courier scans",
-        "description": "Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or\r\nrepeated in the batch, is counted in `duplicatesSkipped` and not\r\nstored again. A scan with a malformed ID, another shipment's tracking\r\nnumber or an ID recorded for another shipment is counted in\r\n`rejected`, with its reason, and the rest of the batch is still\r\nprocessed. Scans never change the shipment's status.",
+        "description": "Requires a bearer token with the Courier role, and every scan must carry\r\nthe token's own courierId; otherwise the whole batch is refused with 403.\r\nUploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or\r\nrepeated in the batch, is counted in `duplicatesSkipped` and not\r\nstored again. A scan with a malformed ID, another shipment's tracking\r\nnumber or an ID recorded for another shipment is counted in\r\n`rejected`, with its reason, and the rest of the batch is still\r\nprocessed. Scans never change the shipment's status.",
         "operationId": "UploadShipmentScans",
         "parameters": [
           {
@@ -93,6 +93,26 @@
               }
             }
           },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Courier role, or a scan's courierId is not the token's courierId; no scan is stored.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "409": {
             "description": "A simultaneous upload stored the same scans and the retry could not resolve it.",
             "content": {
@@ -113,7 +133,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "get": {
         "tags": [
@@ -155,6 +180,16 @@
               }
             }
           },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "The scan history.",
             "content": {
@@ -168,7 +203,81 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v2/partner/shipments/{trackingNumber}": {
+      "get": {
+        "tags": [
+          "Partner"
+        ],
+        "summary": "Track a shipment as a partner",
+        "description": "Returns a shipment's status, destination city and latest scan for a\r\npartner system. The recipient's name, phone number and address are not\r\nincluded. Requires a valid partner API key in the `X-Api-Key`\r\nheader.",
+        "operationId": "GetPartnerShipment",
+        "parameters": [
+          {
+            "name": "trackingNumber",
+            "in": "path",
+            "description": "The tracking number: APX- followed by eight digits, such as APX-00000001.",
+            "required": true,
+            "schema": {
+              "pattern": "^APX-\\d{8}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "The X-Api-Key header is missing, or its key is not a partner key.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error occurred, or no partner key is configured.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The shipment's tracking status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerShipmentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No shipment has the tracking number, or it is not APX- followed by eight digits.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "PartnerApiKey": [ ]
+          }
+        ]
       }
     },
     "/api/v2/shipments": {
@@ -239,6 +348,26 @@
               }
             }
           },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Admin role.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "200": {
             "description": "The page of shipments.",
             "content": {
@@ -259,7 +388,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -287,6 +421,26 @@
         "responses": {
           "500": {
             "description": "An unexpected error occurred.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Admin role.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -335,7 +489,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v2/shipments/{trackingNumber}": {
@@ -379,6 +538,16 @@
               }
             }
           },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No shipment has the tracking number, or it is not APX- followed by eight digits.",
             "content": {
@@ -389,7 +558,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -429,6 +603,26 @@
         "responses": {
           "500": {
             "description": "An unexpected error occurred.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Admin role.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -487,7 +681,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -522,6 +721,26 @@
           "204": {
             "description": "The shipment was deleted."
           },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Admin role.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No shipment has the tracking number, or it is not APX- followed by eight digits.",
             "content": {
@@ -542,7 +761,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     },
     "/api/v2/shipments/{trackingNumber}/status": {
@@ -612,6 +836,26 @@
               }
             }
           },
+          "401": {
+            "description": "The bearer token is missing, invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token does not have the Courier role.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No shipment has the tracking number, or it is not APX- followed by eight digits.",
             "content": {
@@ -642,7 +886,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
       }
     }
   },
@@ -756,6 +1005,41 @@
           }
         },
         "description": "A summary of a shipment's most recent scan."
+      },
+      "PartnerShipmentResponse": {
+        "required": [
+          "trackingNumber",
+          "status",
+          "destinationCity",
+          "latestScan"
+        ],
+        "type": "object",
+        "properties": {
+          "trackingNumber": {
+            "type": "string",
+            "description": "The tracking number: APX- followed by eight digits."
+          },
+          "status": {
+            "description": "The current status, as its name: Created, PickedUp, InTransit,\r\nOutForDelivery, Delivered or Failed.",
+            "$ref": "#/components/schemas/ShipmentStatus"
+          },
+          "destinationCity": {
+            "type": "string",
+            "description": "The city the shipment is going to."
+          },
+          "latestScan": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The shipment's most recent scan, or null when it has none.",
+                "$ref": "#/components/schemas/LatestScanResponse"
+              }
+            ]
+          }
+        },
+        "description": "A shipment's tracking status as a partner sees it (version 2). Only what a\r\npartner needs to track the shipment: no recipient name, phone number or\r\naddress."
       },
       "ProblemDetails": {
         "type": "object",
@@ -920,7 +1204,7 @@
                 "type": "null"
               },
               {
-                "description": "The scan type. Required: 0 Pickup, 1 InTransit, 2 Delivered or 3 Failed.",
+                "description": "The scan type. Required: 0 Pickup, 1 InTransit, 2 Delivered or 3 Failed,\r\nas the number or as the name. Responses always return the number.",
                 "examples": [
                   0
                 ],
@@ -1299,11 +1583,28 @@
           }
         }
       }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "A JWT access token with a Courier or Admin role claim and, for couriers, a courierId claim. In Development, issue one with dotnet user-jwts or POST /dev/token.",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "PartnerApiKey": {
+        "type": "apiKey",
+        "description": "An approved partner's API key, for the partner operations only.",
+        "name": "X-Api-Key",
+        "in": "header"
+      }
     }
   },
   "tags": [
     {
       "name": "Scans"
+    },
+    {
+      "name": "Partner"
     },
     {
       "name": "Shipments"
