@@ -1,7 +1,11 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text.Json;
 using ApexPost.Api.Models;
+using ApexPost.Api.Security;
 using ApexPost.Domain.Enums;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -10,6 +14,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 
 // Tests share one database and reset it, so they run one at a time.
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
@@ -38,10 +44,15 @@ internal sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
 
 // The API host on the disposable database, starting empty. User Secrets are
 // removed, and UseSetting replaces the connection string before Program reads
-// it, so a developer's own database is never used.
+// it, so a developer's own database is never used. The bearer scheme validates
+// TestTokens (a key made for this run), and one partner key is configured;
+// settings can replace either. Every client it creates is signed in with
+// TestTokens.CourierAndAdmin, so the behaviour tests exercise the endpoints as
+// a caller with every role. SecurityTests sends no token, or a narrower one.
 internal sealed class ApiFactory(
 	string environment = "Development",
-	Action<IServiceCollection>? configureServices = null)
+	Action<IServiceCollection>? configureServices = null,
+	IReadOnlyDictionary<string, string?>? settings = null)
 	: WebApplicationFactory<Program>
 {
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -58,14 +69,98 @@ internal sealed class ApiFactory(
 			{
 				configuration.Sources.Remove(source);
 			}
+
+			// Added last, so it replaces appsettings.Development.json.
+			var values = new Dictionary<string, string?>(TestTokens.Settings);
+			values[$"PartnerApiKeys:{TestTokens.PartnerName}"] = TestTokens.PartnerApiKey;
+			foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
+				values[key] = value;
+			configuration.AddInMemoryCollection(values);
 		});
 		if (configureServices is not null)
 			builder.ConfigureTestServices(configureServices);
 	}
 
+	protected override void ConfigureClient(HttpClient client)
+	{
+		base.ConfigureClient(client);
+		client.WithToken(TestTokens.CourierAndAdmin);
+	}
+
 	public static ApiFactory WithClock(DateTimeOffset now) =>
 		new(configureServices: services =>
 			services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new FixedTimeProvider(now))));
+}
+
+// Access tokens for the API under test, signed with a key generated for this
+// test run, so no key is stored anywhere. The claims are the ones dotnet
+// user-jwts and /dev/token issue: sub, role (one or more) and courierId.
+internal static class TestTokens
+{
+	public const string Issuer = "apexpost-tests";
+	public const string Audience = "https://api.apexpost.test";
+	public const string CourierId = "COURIER-DEMO-07";
+	public const string PartnerName = "TestPartner";
+
+	private static readonly byte[] SigningKey = RandomNumberGenerator.GetBytes(32);
+
+	public static readonly string PartnerApiKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+
+	// Valid from long before any test clock (ScanUploadTests fixes the clock
+	// in 2026) until an hour from now.
+	private static readonly DateTime ValidFrom = new(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+	public static IReadOnlyDictionary<string, string?> Settings { get; } = new Dictionary<string, string?>
+	{
+		["Authentication:Schemes:Bearer:ValidIssuer"] = Issuer,
+		["Authentication:Schemes:Bearer:ValidAudiences:0"] = Audience,
+		["Authentication:Schemes:Bearer:SigningKeys:0:Issuer"] = Issuer,
+		["Authentication:Schemes:Bearer:SigningKeys:0:Value"] = Convert.ToBase64String(SigningKey)
+	};
+
+	public static string CourierAndAdmin { get; } = Create(CourierId, ApexPostClaims.CourierRole, ApexPostClaims.AdminRole);
+
+	public static string Courier() => Create(CourierId,ApexPostClaims.CourierRole);
+
+	public static string Admin() => Create(null, ApexPostClaims.AdminRole);
+
+	public static string Create(string? courierId, params string[] roles) =>
+		Create(courierId, roles, ValidFrom, DateTime.UtcNow.AddHours(1));
+
+	public static string Create(
+		string? courierId,
+		string[] roles,
+		DateTime notBefore,
+		DateTime expires,
+		string issuer = Issuer,
+		string audience = Audience,
+		byte[]? signingKey = null)
+	{
+		var claims = new List<Claim> { new(ApexPostClaims.Subject, courierId ?? "admin") };
+		claims.AddRange(roles.Select(role => new Claim(ApexPostClaims.Role, role)));
+		if (courierId is not null)
+			claims.Add(new Claim(ApexPostClaims.CourierId, courierId));
+
+		return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+		{
+			Issuer = issuer,
+			Audience = audience,
+			Subject = new ClaimsIdentity(claims),
+			IssuedAt = notBefore,
+			NotBefore = notBefore,
+			Expires = expires,
+			SigningCredentials = new SigningCredentials(
+				new SymmetricSecurityKey(signingKey ?? SigningKey), SecurityAlgorithms.HmacSha256)
+		});
+	}
+
+	// Sends the token on every request, or no token when it is null.
+	public static HttpClient WithToken(this HttpClient client, string? token)
+	{
+		client.DefaultRequestHeaders.Authorization =
+			token is null ? null : new AuthenticationHeaderValue("Bearer", token);
+		return client;
+	}
 }
 
 internal static class Api

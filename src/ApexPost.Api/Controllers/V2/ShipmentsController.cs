@@ -1,8 +1,10 @@
 using System.Net.Mime;
 using ApexPost.Api.Models;
 using ApexPost.Api.Models.V2;
+using ApexPost.Api.Security;
 using ApexPost.Application.Services;
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShipmentPageResponse = ApexPost.Api.Models.V2.ShipmentPageResponse;
 using ShipmentResponse = ApexPost.Api.Models.V2.ShipmentResponse;
@@ -13,6 +15,9 @@ namespace ApexPost.Api.Controllers.V2;
 // The same actions, routes, route names, status codes and service calls as
 // the version 1 controller, and the same XML comment conventions. Only the
 // response DTOs, their mapping and the status request differ.
+// Week 4 Part D, D2: GET one shipment needs any signed-in user, the status
+// change the Courier role, and the list, create, replace and delete the Admin
+// role. Version 1 has the same rules.
 
 /// <summary>
 /// Version 2 of tracked shipments: the paged list, one shipment, and creating,
@@ -40,9 +45,14 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 	/// <returns>The requested page and the total number of matching shipments.</returns>
 	/// <response code="200">The page of shipments.</response>
 	/// <response code="400">A query value is invalid, such as a page size above 50 or an unknown status.</response>
+	/// <response code="401">The bearer token is missing, invalid or expired.</response>
+	/// <response code="403">The token does not have the Admin role.</response>
 	/// <response code="500">An unexpected error occurred.</response>
 	[HttpGet(Name = "ListShipments")]
 	[EndpointSummary("List shipments by page, status and city")]
+	[Authorize(Roles = ApexPostClaims.AdminRole)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ShipmentPageResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ValidationProblemDetails>(
 		StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
@@ -61,11 +71,14 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 	/// <param name="cancellationToken">Cancels the request.</param>
 	/// <returns>The shipment.</returns>
 	/// <response code="200">The shipment.</response>
+	/// <response code="401">The bearer token is missing, invalid or expired.</response>
 	/// <response code="404">No shipment has the tracking number, or it is not APX- followed by eight digits.</response>
 	/// <response code="500">An unexpected error occurred.</response>
 	[HttpGet(ShipmentRoutes.TrackingNumber, Name = "GetShipment")]
 	[EndpointSummary("Get a shipment by tracking number")]
+	[Authorize]
 	[ProducesResponseType<ShipmentResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)]
 	public async Task<ActionResult<ShipmentResponse>> Get(
 		string trackingNumber,
@@ -87,11 +100,16 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 	/// <returns>The created shipment.</returns>
 	/// <response code="201">The shipment was created.</response>
 	/// <response code="400">The request failed validation or its JSON is malformed.</response>
+	/// <response code="401">The bearer token is missing, invalid or expired.</response>
+	/// <response code="403">The token does not have the Admin role.</response>
 	/// <response code="409">A shipment with this tracking number already exists.</response>
 	/// <response code="415">The body is not application/json.</response>
 	/// <response code="500">An unexpected error occurred.</response>
 	[HttpPost(Name = "CreateShipment")]
 	[EndpointSummary("Create a shipment")]
+	[Authorize(Roles = ApexPostClaims.AdminRole)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)]
 	[Consumes(MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ShipmentResponse>(StatusCodes.Status201Created, MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ValidationProblemDetails>(
@@ -123,12 +141,17 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 	/// <returns>The shipment with its new details.</returns>
 	/// <response code="200">The details were replaced.</response>
 	/// <response code="400">The request failed validation or its JSON is malformed.</response>
+	/// <response code="401">The bearer token is missing, invalid or expired.</response>
+	/// <response code="403">The token does not have the Admin role.</response>
 	/// <response code="404">No shipment has the tracking number, or it is not APX- followed by eight digits.</response>
 	/// <response code="409">Another change was made to the shipment at the same time.</response>
 	/// <response code="415">The body is not application/json.</response>
 	/// <response code="500">An unexpected error occurred.</response>
 	[HttpPut(ShipmentRoutes.TrackingNumber, Name = "ReplaceShipment")]
 	[EndpointSummary("Replace a shipment's editable details")]
+	[Authorize(Roles = ApexPostClaims.AdminRole)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)]
 	[Consumes(MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ShipmentResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ValidationProblemDetails>(
@@ -162,16 +185,21 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 	/// <returns>The shipment with its new status.</returns>
 	/// <response code="200">The status was changed.</response>
 	/// <response code="400">The status is missing or not a defined status, or the JSON is malformed.</response>
+	/// <response code="401">The bearer token is missing, invalid or expired.</response>
+	/// <response code="403">The token does not have the Courier role.</response>
 	/// <response code="404">No shipment has the tracking number, or it is not APX- followed by eight digits.</response>
 	/// <response code="409">The transition is not allowed, or another change was made to the shipment at the same time.</response>
 	/// <response code="415">The body is not application/json.</response>
 	/// <response code="500">An unexpected error occurred.</response>
 	[HttpPatch(ShipmentRoutes.TrackingNumber + "/status", Name = "ChangeShipmentStatus")]
 	[EndpointSummary("Change a shipment's status")]
+	[Authorize(Roles = ApexPostClaims.CourierRole)]
 	[Consumes(MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ShipmentResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ValidationProblemDetails>(
 		StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ProblemDetails>(
@@ -196,12 +224,17 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 	/// <param name="trackingNumber">The tracking number: APX- followed by eight digits, such as APX-00000001.</param>
 	/// <param name="cancellationToken">Cancels the request.</param>
 	/// <response code="204">The shipment was deleted.</response>
+	/// <response code="401">The bearer token is missing, invalid or expired.</response>
+	/// <response code="403">The token does not have the Admin role.</response>
 	/// <response code="404">No shipment has the tracking number, or it is not APX- followed by eight digits.</response>
 	/// <response code="409">The shipment's status is not Created, or another change was made to it at the same time.</response>
 	/// <response code="500">An unexpected error occurred.</response>
 	[HttpDelete(ShipmentRoutes.TrackingNumber, Name = "DeleteShipment")]
 	[EndpointSummary("Delete a shipment in Created status")]
+	[Authorize(Roles = ApexPostClaims.AdminRole)]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
 	public async Task<IActionResult> Delete(

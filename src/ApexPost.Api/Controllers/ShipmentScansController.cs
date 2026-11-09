@@ -1,7 +1,9 @@
 using System.Net.Mime;
 using ApexPost.Api.Models;
+using ApexPost.Api.Security;
 using ApexPost.Application.Services;
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApexPost.Api.Controllers;
@@ -32,6 +34,8 @@ public sealed class ShipmentScansController(TrackedShipmentApplicationService sh
 {
 	/// <summary>Upload offline courier scans</summary>
 	/// <remarks>
+	/// Requires a bearer token with the Courier role, and every scan must carry
+	/// the token's own courierId; otherwise the whole batch is refused with 403.
 	/// Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or
 	/// repeated in the batch, is counted in <c>duplicatesSkipped</c> and not
 	/// stored again. A scan with a malformed ID, another shipment's tracking
@@ -45,16 +49,24 @@ public sealed class ShipmentScansController(TrackedShipmentApplicationService sh
 	/// <returns>The accepted, skipped and rejected counts, and the reason for each rejection.</returns>
 	/// <response code="200">The batch was processed; the counts say what happened to each scan.</response>
 	/// <response code="400">The batch failed validation, such as a scan time in the future, or its JSON is malformed.</response>
+	/// <response code="401">The bearer token is missing, invalid or expired.</response>
+	/// <response code="403">The token does not have the Courier role, or a scan's courierId is not the token's courierId; no scan is stored.</response>
 	/// <response code="404">No shipment has the tracking number, or it is not APX- followed by eight digits.</response>
 	/// <response code="409">A simultaneous upload stored the same scans and the retry could not resolve it.</response>
 	/// <response code="415">The body is not application/json.</response>
 	/// <response code="500">An unexpected error occurred.</response>
 	[HttpPost(Name = "UploadShipmentScans")]
 	[EndpointSummary("Upload offline courier scans")]
+	[Authorize(Roles = ApexPostClaims.CourierRole)]
+	[RequireOwnScans]
 	[Consumes(MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ScanUploadResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ValidationProblemDetails>(
 		StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(
+		StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
+	[ProducesResponseType<ProblemDetails>(
+		StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ProblemDetails>(
 		StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ProblemDetails>(
@@ -77,10 +89,14 @@ public sealed class ShipmentScansController(TrackedShipmentApplicationService sh
 	/// <param name="cancellationToken">Cancels the request.</param>
 	/// <returns>The shipment's scans, oldest first; empty when it has none.</returns>
 	/// <response code="200">The scan history.</response>
+	/// <response code="401">The bearer token is missing, invalid or expired.</response>
 	/// <response code="404">No shipment has the tracking number, or it is not APX- followed by eight digits.</response>
 	/// <response code="500">An unexpected error occurred.</response>
 	[HttpGet(Name = "GetShipmentScans")]
 	[EndpointSummary("Get a shipment's scan history")]
+	[Authorize]
+	[ProducesResponseType<ProblemDetails>(
+		StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<IReadOnlyList<ScanResponse>>(
 		StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
 	public async Task<ActionResult<IReadOnlyList<ScanResponse>>> History(
