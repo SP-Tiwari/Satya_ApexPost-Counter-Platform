@@ -1098,3 +1098,4 @@ The dummy-hash timing test compares the fastest of three runs and accepts a rati
 | [0027](docs/adr/0027-couchbase-lite-courier-offline-store.md) | Couchbase Lite courier offline store (Week 4 Part A; see [OFFLINE-DESIGN.md](OFFLINE-DESIGN.md)) |
 | [0028](docs/adr/0028-tracked-shipments-storage.md) | Tracked shipments storage for the Week 4 API: two new tables, added without changing Week 3 (Week 4 Part B) |
 | [0029](docs/adr/0029-api-authentication-and-partner-keys.md) | API authentication, role authorization and partner keys: JWT bearer, courier ownership filter, `X-Api-Key` middleware, HTTPS/HSTS (Week 4 Part D; see [SECURITY.md](SECURITY.md)) |
+| [0030](docs/adr/0030-courier-console-client.md) | Courier console client instead of a .NET MAUI app: `ApexPost.Courier.Sync` and `ApexPost.Courier.Console`, a hand-written typed `ApexApiClient` with source-generated JSON, and a DPAPI token store in place of `SecureStorage` (Week 4 Part D) |

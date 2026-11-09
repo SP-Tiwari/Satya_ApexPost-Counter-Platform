@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Week 4 Part D: the courier client's connection to ApexPost.Api, reusable
+       by any .NET host: the typed ApexApiClient, its client DTOs and
+       source-generated JSON, the bearer-token handler and the token store.
+       A plain net10.0 library; no MAUI. See ADR 0030. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.14" />
+    <!-- Windows DPAPI for the stored access token (FileTokenStore). -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reused for ScanType, whose names are the API's scanType values. -->
+    <ProjectReference Include="..\ApexPost.Courier.Offline\ApexPost.Courier.Offline.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ApexPost.Courier.Sync.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,6 +1,6 @@
 # ApexPost API security (Week 4 Part D)
 
-How `src/ApexPost.Api` authenticates couriers, administrators and partner systems, how it authorizes them, how keys and tokens are kept out of the repository, and why it accepts credentials only over HTTPS. All names, keys, tokens and URLs are fictional or local. The decision record is [ADR 0029](docs/adr/0029-api-authentication-and-partner-keys.md).
+How `src/ApexPost.Api` authenticates couriers, administrators and partner systems, how it authorizes them, how keys and tokens are kept out of the repository, and why it accepts credentials only over HTTPS. It also covers how the courier console client sends and stores its token ([Courier console client](#courier-console-client-d6-d10)). All names, keys, tokens and URLs are fictional or local. The decision records are [ADR 0029](docs/adr/0029-api-authentication-and-partner-keys.md) for the API and [ADR 0030](docs/adr/0030-courier-console-client.md) for the client.
 
 ## Requirement traceability
 
@@ -15,6 +15,10 @@ How `src/ApexPost.Api` authenticates couriers, administrators and partner system
 | D4 OAuth2 concepts | This file: [OAuth2 for ApexPost](#oauth2-for-apexpost-d4) | Documentation |
 | D5 `UseHttpsRedirection()` everywhere, `UseHsts()` outside Development | `Program.cs` | `PlainHttp_IsRedirectedToHttps_InEveryEnvironment` (2), `Hsts_IsSentOutsideDevelopmentOnly` (2) |
 | D5 Bearer scheme in the v2 OpenAPI document (also in v1, whose operations need it too); Swagger UI Authorize | [SecuritySchemeTransformer.cs](src/ApexPost.Api/OpenApi/SecuritySchemeTransformer.cs), registered for both documents | `OpenApiDocument_DeclaresTheSchemes_AndEachOperationRequiresOne` (v1, v2), `DevelopmentDocumentation_NeedsNoToken` (3), `PublishedContractTests` |
+| D6 `AuthHeaderHandler` attaches the bearer token from secure storage (console client) | [AuthHeaderHandler.cs](src/ApexPost.Courier.Sync/AuthHeaderHandler.cs), added to the typed `ApexApiClient` in [CourierSyncRegistration.cs](src/ApexPost.Courier.Sync/CourierSyncRegistration.cs) | `AuthHeaderHandlerTests.WithAStoredToken_SendsItAsABearerHeader`, `WithoutAToken_SendsNoAuthorizationHeader`, `EachRequest_ReadsTheCurrentToken` |
+| D10 Token stored securely, never in plaintext; `DpapiTokenStore` replaces MAUI `SecureStorage` | [DpapiTokenStore.cs](src/ApexPost.Courier.Sync/DpapiTokenStore.cs) | `DpapiTokenStoreTests` (16 cases, including `TheFile_HoldsNoPlaintextToken`, `ExpiredToken_ReturnsNull_AndIsDeleted`, `CorruptFile_ReturnsNull_AndIsDeleted`) |
+| D10 On a 401, clear the token and require sign-in | `AuthHeaderHandler` and [CourierSession.cs](src/ApexPost.Courier.Sync/CourierSession.cs) (`SignInRequired`) | `Unauthorized_ClearsTheToken_AndRaisesSignInRequired`, `OtherStatuses_KeepTheToken` (7), `Unauthorized_ForAnOlderToken_KeepsTheNewerOne` |
+| D10 Never log tokens | Header values redacted in `AddCourierSync`; `AccessToken.ToString()` redacts the value; the client's own log messages contain no token | `AuthHeaderHandlerTests.NoLogMessage_ContainsTheToken_EvenAtTraceLevel` (2), `DpapiTokenStoreTests.NoLogMessage_ContainsTheToken`, `CourierJsonTests.AccessToken_ToString_NeverShowsTheToken` |
 
 The tests are in [tests/ApexPost.Api.IntegrationTests/SecurityTests.cs](tests/ApexPost.Api.IntegrationTests/SecurityTests.cs) and run against the real API host (`WebApplicationFactory`) on a disposable SQL Server test database. The live run against the running API is in [docs/evidence/week4-part-d](docs/evidence/week4-part-d/README.md):
 - all 63 `.http` requests with their responses,
@@ -180,7 +184,7 @@ ApexPost still uses a key here because the assignment asks for one and the route
   - Plain HTTP also lets an attacker change requests and responses on the way.
   - TLS encrypts the headers and authenticates the server, so the client knows it is giving its token to the real API.
   - A redirect alone does not protect the first request, because a client that sends a token to `http://` has already exposed it. So the clients are configured with `https://` base URLs, and HSTS stops browsers from ever trying `http://`.
-- **Certificates:** in Development the API uses the ASP.NET Core development certificate (`dotnet dev-certs https --trust`). The repository contains no code that disables certificate validation. If the Part D courier console client ever needs a development-only exception, it must be limited to `#if DEBUG` and `localhost` and be documented here.
+- **Certificates:** in Development the API uses the ASP.NET Core development certificate (`dotnet dev-certs https --trust`). The repository contains no code that disables certificate validation. The courier console client runs on the same Windows machine, which trusts that certificate, so it validates the API's certificate normally and needs no development-only exception in any build.
 
 ### Swagger UI Authorize button
 
@@ -189,6 +193,37 @@ The v2 document declares two security schemes, and each operation lists the one 
 - `PartnerApiKey` (`type: apiKey`, `in: header`, `name: X-Api-Key`) on the partner operation.
 
 The assignment asks for the Bearer scheme in the v2 document. The v1 document declares it too, and only it, because every v1 operation now needs a token as well. Without it, the v1 document would describe its operations as open, and "Try it out" on v1 could never succeed. A document declares only the schemes its own operations use. In Swagger UI (`https://localhost:7280/swagger`, Development only), choose **v2** (or **v1 (deprecated)**) and select **Authorize**. Paste an access token from `dotnet user-jwts` or `/dev/token` under Bearer (without the word "Bearer"), or a partner key under PartnerApiKey. "Try it out" then sends the matching header. The document only describes the protection; hiding an operation from it would protect nothing.
+
+## Courier console client (D6, D10)
+
+The courier client is a .NET console application instead of the .NET MAUI app in the assignment ([ADR 0030](docs/adr/0030-courier-console-client.md)). Its connection to the API is in `src/ApexPost.Courier.Sync`, and `src/ApexPost.Courier.Console` is its composition root.
+
+**Authentication flow:**
+1. **Base URL:** the API root is `ApexPostApi:BaseUrl`. It comes from `src/ApexPost.Courier.Console/appsettings.json` (`https://localhost:7280/`, the API's Development address), and can be overridden by the `ApexPostApi__BaseUrl` environment variable or `--ApexPostApi:BaseUrl=...` on the command line. `AddCourierSync` refuses a missing, relative or `http` URL, so the token is never sent over plain HTTP.
+2. **Obtaining a token:** `ApexApiClient.RequestCourierTokenAsync(courierId)` calls `POST /dev/token` with `{ "courierId": "...", "role": "Courier" }` (Development only). It returns the token and its expiry once the response is complete and its `tokenType` is `Bearer`. A token from `dotnet user-jwts` can be used instead.
+3. **Storing the token:** `ITokenStore.SaveToken` (below).
+4. **Sending the token:** `AuthHeaderHandler` is the typed client's `DelegatingHandler`. For each request it reads the current token from the store and sets `Authorization: Bearer <token>`. With no usable token, the request goes out without the header and the API answers 401. The handler sends no requests of its own.
+5. **401:** the handler tells `CourierSession`. The session deletes the stored token, unless a newer one was saved while the request was running, and raises `SignInRequired`. `CourierSession.IsSignInRequired` is true whenever the store holds no usable token. No other status (400, 403, 404, 408, 5xx) touches the token.
+
+The interactive Login screen that uses these steps is part of a later milestone (D11). For now, the console reports the configured API and whether a usable token is stored.
+
+**Token storage (substitute for MAUI `SecureStorage`):** `DpapiTokenStore` encrypts the token and its expiry with Windows DPAPI (`ProtectedData.Protect`, `DataProtectionScope.CurrentUser`, with purpose-specific entropy).
+- **Where:** one file, `%LOCALAPPDATA%\ApexPost\Courier\access-token.bin`, in the user's own profile. The folder is created when the first token is saved.
+- **Who can read it:**
+  - DPAPI `CurrentUser` protects the data with keys tied to the current Windows user's context.
+  - Other Windows users of the machine cannot decrypt it. A copy of the file is in general not decryptable on another machine or under another account.
+  - DPAPI does not isolate applications running under the same user account. Another process running as the same Windows user may also be able to decrypt the file. The entropy only stops other DPAPI data being mistaken for the token file, since it is a constant in the source and not a secret.
+  - So the protection is against other users and against a file copied off the machine, not against malware running as the courier's own account.
+- **No plaintext on disk:** the plaintext token is never written to disk. The decrypted bytes are zeroed after use. The file is written to a temporary name and then moved over the old one, so it is never half written.
+- **Bad or old data:** an expired token, a file that does not decrypt, or decrypted data that is not a complete token is deleted, and the client asks for sign-in. A file that cannot be read at the moment, for example because it is locked, is left alone.
+- **Windows-only limitation:** DPAPI exists only on Windows. On other systems, the default token store throws `PlatformNotSupportedException` with a clear message. It never falls back to a plaintext file. Supporting another OS means adding an `ITokenStore` for that OS's secure store.
+
+**Logging:**
+- The typed client's `IHttpClientFactory` logs redact every header value (`RedactLoggedHeaders`), so `Authorization` appears only as `*`, even at Trace level.
+- `AccessToken.ToString()` shows `<redacted>` instead of the token.
+- The handler, the session and the store log what happened ("the stored access token has expired"), never the token, the file contents or request bodies.
+
+**Errors shown to the courier:** `ApiError.Message` comes from the API's Problem Details (`detail`, else `title`), with control characters removed and at most 300 characters. Validation errors list their field messages. A 5xx always gets a fixed sentence, so server internals are never shown. A missing or malformed body is reported as an unreadable response, not as an exception.
 
 ## Secrets and configuration checklist
 
@@ -201,5 +236,8 @@ The assignment asks for the Bearer scheme in the v2 document. The v1 document de
 | Test signing key and partner key | Generated with `RandomNumberGenerator` for each test run (`TestTokens` in `ApiTestHost.cs`) | No |
 | `.http` file credentials | Tokens from `POST /dev/token` at run time; partner key from the `APEXPOST_PARTNER_API_KEY` environment variable | No |
 | Console consumer token | `ApexPostApi:AccessToken`, for example the `ApexPostApi__AccessToken` environment variable | No |
+| Courier console client token | DPAPI-encrypted in `%LOCALAPPDATA%\ApexPost\Courier\access-token.bin`, outside the repository | No |
+| Courier console client API root | `src/ApexPost.Courier.Console/appsettings.json` (`https://localhost:7280/`) | Yes, a local address, no secret |
+| Test tokens of the courier client | Fictional strings in `tests/ApexPost.Courier.Sync.Tests/TestSupport.cs`; the token-store tests use a temporary folder | Yes, not credentials |
 
-Tokens, API keys and request bodies are never logged by the API's own code.
+Tokens, API keys and request bodies are never logged by the API's own code or by the courier client.
