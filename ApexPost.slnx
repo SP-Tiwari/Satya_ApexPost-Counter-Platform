@@ -4,8 +4,10 @@
     <Project Path="src/ApexPost.Application/ApexPost.Application.csproj" />
     <Project Path="src/ApexPost.Client.Consumer/ApexPost.Client.Consumer.csproj" />
     <Project Path="src/ApexPost.Client/ApexPost.Client.csproj" />
+    <Project Path="src/ApexPost.Courier.Console/ApexPost.Courier.Console.csproj" />
     <Project Path="src/ApexPost.Courier.Harness/ApexPost.Courier.Harness.csproj" />
     <Project Path="src/ApexPost.Courier.Offline/ApexPost.Courier.Offline.csproj" />
+    <Project Path="src/ApexPost.Courier.Sync/ApexPost.Courier.Sync.csproj" />
     <Project Path="src/ApexPost.Domain/ApexPost.Domain.csproj" />
     <Project Path="src/ApexPost.Infrastructure/ApexPost.Infrastructure.csproj" />
     <Project Path="src/ApexPost.Web/ApexPost.Web.csproj" />
@@ -14,6 +16,7 @@
     <Project Path="tests/ApexPost.Api.IntegrationTests/ApexPost.Api.IntegrationTests.csproj" />
     <Project Path="tests/ApexPost.Application.Tests/ApexPost.Application.Tests.csproj" />
     <Project Path="tests/ApexPost.Courier.Offline.Tests/ApexPost.Courier.Offline.Tests.csproj" />
+    <Project Path="tests/ApexPost.Courier.Sync.Tests/ApexPost.Courier.Sync.Tests.csproj" />
     <Project Path="tests/ApexPost.Domain.Tests/ApexPost.Domain.Tests.csproj" />
     <Project Path="tests/ApexPost.Infrastructure.Tests/ApexPost.Infrastructure.Tests.csproj" />
     <Project Path="tests/ApexPost.Web.IntegrationTests/ApexPost.Web.IntegrationTests.csproj" />

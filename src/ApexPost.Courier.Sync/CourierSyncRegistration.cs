@@ -1,0 +1,70 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+
+namespace ApexPost.Courier.Sync;
+
+public static class CourierSyncRegistration
+{
+	public const string BaseUrlKey = "ApexPostApi:BaseUrl";
+
+	// Registers ApexApiClient as a typed client (D6): IHttpClientFactory creates
+	// and pools its HttpClient, whose BaseAddress is ApexPostApi:BaseUrl, and
+	// AuthHeaderHandler adds the bearer token. Also registers the token store,
+	// the session and a TimeProvider, unless the host registered its own.
+	// Returns the client builder so the host can extend the pipeline.
+	public static IHttpClientBuilder AddCourierSync(
+		this IServiceCollection services,
+		IConfiguration configuration)
+	{
+		ArgumentNullException.ThrowIfNull(services);
+		ArgumentNullException.ThrowIfNull(configuration);
+
+		var baseAddress = ReadBaseAddress(configuration);
+
+		services.TryAddSingleton(TimeProvider.System);
+		services.TryAddSingleton<ITokenStore>(CreateTokenStore);
+		services.TryAddSingleton<CourierSession>();
+		services.TryAddTransient<AuthHeaderHandler>();
+
+		return services
+			.AddHttpClient<ApexApiClient>(client => client.BaseAddress = baseAddress)
+			.AddHttpMessageHandler<AuthHeaderHandler>()
+			// IHttpClientFactory's request logs never show a header value, so the
+			// Authorization header cannot reach a log.
+			.RedactLoggedHeaders(_ => true);
+	}
+
+	// Bearer tokens must never travel over plain HTTP (SECURITY.md, D5), so the
+	// base URL must be https. A missing trailing slash is added, so relative
+	// paths such as api/v2/... keep any path in the base URL.
+	private static Uri ReadBaseAddress(IConfiguration configuration)
+	{
+		var configured = configuration[BaseUrlKey];
+		if (!Uri.TryCreate(configured, UriKind.Absolute, out var baseAddress)
+			|| baseAddress.Scheme != Uri.UriSchemeHttps)
+		{
+			throw new InvalidOperationException(
+				$"{BaseUrlKey} must be an absolute https URL, such as https://localhost:7280/.");
+		}
+
+		return baseAddress.AbsoluteUri.EndsWith('/')
+			? baseAddress
+			: new Uri(baseAddress.AbsoluteUri + "/");
+	}
+
+	private static ITokenStore CreateTokenStore(IServiceProvider services)
+	{
+		if (!OperatingSystem.IsWindows())
+		{
+			throw new PlatformNotSupportedException(
+				"The courier client stores its access token with Windows DPAPI, which is available only on Windows.");
+		}
+
+		return new DpapiTokenStore(
+			DpapiTokenStore.DefaultDirectory,
+			services.GetRequiredService<TimeProvider>(),
+			services.GetRequiredService<ILogger<DpapiTokenStore>>());
+	}
+}
