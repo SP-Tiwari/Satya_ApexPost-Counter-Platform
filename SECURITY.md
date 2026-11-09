@@ -220,6 +220,7 @@ The interactive Login screen that uses these steps is part of a later milestone 
 
 **Logging:**
 - The typed client's `IHttpClientFactory` logs redact every header value (`RedactLoggedHeaders`), so `Authorization` appears only as `*`, even at Trace level.
+- The resilience pipeline's retry and circuit-breaker messages name the method, the path and the failure, never a header, a body or an exception message ([RESILIENCE.md](RESILIENCE.md#logging)).
 - `AccessToken.ToString()` shows `<redacted>` instead of the token.
 - The handler, the session and the store log what happened ("the stored access token has expired"), never the token, the file contents or request bodies.
 

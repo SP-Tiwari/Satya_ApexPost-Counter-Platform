@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 
 namespace ApexPost.Courier.Sync.Tests;
 
@@ -20,7 +21,8 @@ internal static class TestValues
 }
 
 // The client's HTTP pipeline, as AddCourierSync registers it, with the network
-// replaced by StubHandler and the token store by an in-memory one.
+// replaced by StubHandler, the token store by an in-memory one and the clock
+// by TestClock, which also drives the resilience pipeline.
 internal sealed class ClientHost : IDisposable
 {
 	private readonly ServiceProvider _services;
@@ -42,9 +44,12 @@ internal sealed class ClientHost : IDisposable
 			.SetMinimumLevel(LogLevel.Trace)
 			.AddProvider(Logs));
 		services.AddSingleton<ITokenStore>(Tokens);
+		services.AddSingleton<TimeProvider>(Clock);
 		services.AddCourierSync(configuration).ConfigurePrimaryHttpMessageHandler(() => Network);
 		_services = services.BuildServiceProvider();
 	}
+
+	public TestClock Clock { get; } = new();
 
 	public StubHandler Network { get; }
 
@@ -59,14 +64,23 @@ internal sealed class ClientHost : IDisposable
 	public void Dispose() => _services.Dispose();
 }
 
-// Records each request (with its body, read before the request is disposed)
-// and answers with the supplied function.
+// Records each attempt (with its body, read before the request is disposed)
+// and answers with the supplied function. Throw fails every attempt with that
+// exception, as a lost connection would. An attempt for which Hang returns true
+// (given its 1-based number) waits until it is cancelled, as an unresponsive
+// server would. AttemptStarted is released as each attempt arrives.
 internal sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond)
 	: HttpMessageHandler
 {
-	public List<RecordedRequest> Requests { get; } = [];
+	private readonly ConcurrentQueue<RecordedRequest> _requests = new();
+
+	public IReadOnlyList<RecordedRequest> Requests => [.. _requests];
 
 	public Exception? Throw { get; set; }
+
+	public Func<int, bool>? Hang { get; set; }
+
+	public SemaphoreSlim AttemptStarted { get; } = new(0);
 
 	protected override async Task<HttpResponseMessage> SendAsync(
 		HttpRequestMessage request,
@@ -75,12 +89,17 @@ internal sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> 
 		var body = request.Content is null
 			? null
 			: await request.Content.ReadAsStringAsync(cancellationToken);
-		Requests.Add(new RecordedRequest(
+		_requests.Enqueue(new RecordedRequest(
 			request.Method,
 			request.RequestUri!,
 			request.Headers.Authorization?.ToString(),
 			request.Content?.Headers.ContentType?.MediaType,
 			body));
+		var attempt = _requests.Count;
+		AttemptStarted.Release();
+
+		if (Hang?.Invoke(attempt) == true)
+			await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
 
 		if (Throw is not null)
 			throw Throw;
@@ -88,6 +107,33 @@ internal sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> 
 		var response = respond(request);
 		response.RequestMessage = request;
 		return response;
+	}
+}
+
+// Fake time for the resilience pipeline. A one-shot timer of at most
+// CourierResilience.MaxRetryDelay is a retry delay: it elapses at once, by
+// moving the clock forward by its due time, and its length is recorded. Longer
+// timers (the attempt and overall timeouts) fire only when a test calls
+// Advance. So retry delays never slow a test down, and a timeout fires exactly
+// when the test decides; no outcome depends on the real clock.
+internal sealed class TestClock() : FakeTimeProvider(TestValues.Now)
+{
+	private readonly ConcurrentQueue<TimeSpan> _delays = new();
+
+	public IReadOnlyList<TimeSpan> Delays => [.. _delays];
+
+	public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+	{
+		var timer = base.CreateTimer(callback, state, dueTime, period);
+		if (dueTime > TimeSpan.Zero
+			&& dueTime <= CourierResilience.MaxRetryDelay
+			&& period == Timeout.InfiniteTimeSpan)
+		{
+			_delays.Enqueue(dueTime);
+			ThreadPool.QueueUserWorkItem(_ => Advance(dueTime));
+		}
+
+		return timer;
 	}
 }
 
@@ -124,13 +170,6 @@ internal sealed class InMemoryTokenStore : ITokenStore
 		Token = null;
 		ClearCount++;
 	}
-}
-
-internal sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-{
-	public DateTimeOffset Now { get; set; } = now;
-
-	public override DateTimeOffset GetUtcNow() => Now;
 }
 
 // Captures every log message of every category, including IHttpClientFactory's

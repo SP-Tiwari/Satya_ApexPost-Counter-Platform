@@ -29,9 +29,9 @@ Following the trainer's guidance, the project owner decided that the client is a
 | Token storage (`SecureStorage` substitute, D10) | `DpapiTokenStore`: the token and its expiry are encrypted with Windows DPAPI (`ProtectedData`, `DataProtectionScope.CurrentUser`, purpose-specific entropy) into `%LOCALAPPDATA%\ApexPost\Courier\access-token.bin`. Like `SecureStorage`, it keeps the token encrypted for the current user rather than in plain text. DPAPI `CurrentUser` does not isolate applications from each other: another process running as the same Windows user may be able to decrypt the file (see [SECURITY.md](../../SECURITY.md#courier-console-client-d6-d10)) |
 | Unsupported platforms | DPAPI exists only on Windows. On any other OS, `AddCourierSync`'s token store throws `PlatformNotSupportedException` with a clear message. It never falls back to a plaintext file or to memory |
 | 401 handling (D10) | `AuthHeaderHandler` reports a 401 to `CourierSession`, which clears the rejected token and raises `SignInRequired`, the console's equivalent of navigating to the Login page |
+| Resilience (D7) | `CourierResilience` adds a `Microsoft.Extensions.Http.Resilience` (Polly) pipeline to the typed client, exactly as a MAUI app would: overall timeout, retry (3, exponential with jitter, transient failures only, retry-safe requests only), circuit breaker and attempt timeout. No substitution was needed. The values and reasons are in [RESILIENCE.md](../../RESILIENCE.md) |
 
 **Decided, not implemented yet:** the later Part D milestones will add the following.
-- Resilience (D7).
 - Batch uploads in the Part A outbox. Temporary failures will leave scans `Pending`; only an answer from the server will make a scan `Failed`.
 - Detecting connectivity with `System.Net.NetworkInformation.NetworkChange` instead of MAUI `Connectivity`.
 - The console menus and the offline banner (D11).
