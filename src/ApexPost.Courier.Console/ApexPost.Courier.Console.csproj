@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Week 4 Part D: the courier client, a .NET console application used
+       instead of a .NET MAUI app (ADR 0030). It connects to ApexPost.Api
+       through ApexPost.Courier.Sync. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- The client's own JSON goes only through the source-generated
+         CourierJsonContext (D8). Reflection-based System.Text.Json is not
+         switched off for the whole app: with it off, the console failed at
+         startup right after Couchbase Lite 4.1.2 started. The exact cause was
+         not established; see ADR 0030. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ApexPost.Courier.Sync\ApexPost.Courier.Sync.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ApexPost.Courier.Console.Tests" />
+  </ItemGroup>
+
+</Project>

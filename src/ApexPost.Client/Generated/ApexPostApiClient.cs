@@ -33,7 +33,9 @@ namespace ApexPost.Client
         /// Upload offline courier scans
         /// </summary>
         /// <remarks>
-        /// Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or
+        /// Requires a bearer token with the Courier role, and every scan must carry
+        /// <br/>the token's own courierId; otherwise the whole batch is refused with 403.
+        /// <br/>Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or
         /// <br/>repeated in the batch, is counted in `duplicatesSkipped` and not
         /// <br/>stored again. A scan with a malformed ID, another shipment's tracking
         /// <br/>number or an ID recorded for another shipment is counted in
@@ -51,7 +53,9 @@ namespace ApexPost.Client
         /// Upload offline courier scans
         /// </summary>
         /// <remarks>
-        /// Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or
+        /// Requires a bearer token with the Courier role, and every scan must carry
+        /// <br/>the token's own courierId; otherwise the whole batch is refused with 403.
+        /// <br/>Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or
         /// <br/>repeated in the batch, is counted in `duplicatesSkipped` and not
         /// <br/>stored again. A scan with a malformed ID, another shipment's tracking
         /// <br/>number or an ID recorded for another shipment is counted in
@@ -86,6 +90,35 @@ namespace ApexPost.Client
         /// <returns>The scan history.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<System.Collections.Generic.ICollection<ScanResponse>> GetShipmentScansAsync(string trackingNumber, System.Threading.CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Track a shipment as a partner
+        /// </summary>
+        /// <remarks>
+        /// Returns a shipment's status, destination city and latest scan for a
+        /// <br/>partner system. The recipient's name, phone number and address are not
+        /// <br/>included. Requires a valid partner API key in the `X-Api-Key`
+        /// <br/>header.
+        /// </remarks>
+        /// <param name="trackingNumber">The tracking number: APX- followed by eight digits, such as APX-00000001.</param>
+        /// <returns>The shipment's tracking status.</returns>
+        /// <exception cref="ApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<PartnerShipmentResponse> GetPartnerShipmentAsync(string trackingNumber);
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Track a shipment as a partner
+        /// </summary>
+        /// <remarks>
+        /// Returns a shipment's status, destination city and latest scan for a
+        /// <br/>partner system. The recipient's name, phone number and address are not
+        /// <br/>included. Requires a valid partner API key in the `X-Api-Key`
+        /// <br/>header.
+        /// </remarks>
+        /// <param name="trackingNumber">The tracking number: APX- followed by eight digits, such as APX-00000001.</param>
+        /// <returns>The shipment's tracking status.</returns>
+        /// <exception cref="ApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<PartnerShipmentResponse> GetPartnerShipmentAsync(string trackingNumber, System.Threading.CancellationToken cancellationToken);
 
         /// <summary>
         /// List shipments by page, status and city
@@ -289,7 +322,9 @@ namespace ApexPost.Client
         /// Upload offline courier scans
         /// </summary>
         /// <remarks>
-        /// Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or
+        /// Requires a bearer token with the Courier role, and every scan must carry
+        /// <br/>the token's own courierId; otherwise the whole batch is refused with 403.
+        /// <br/>Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or
         /// <br/>repeated in the batch, is counted in `duplicatesSkipped` and not
         /// <br/>stored again. A scan with a malformed ID, another shipment's tracking
         /// <br/>number or an ID recorded for another shipment is counted in
@@ -310,7 +345,9 @@ namespace ApexPost.Client
         /// Upload offline courier scans
         /// </summary>
         /// <remarks>
-        /// Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or
+        /// Requires a bearer token with the Courier role, and every scan must carry
+        /// <br/>the token's own courierId; otherwise the whole batch is refused with 403.
+        /// <br/>Uploads a batch of scans recorded offline on a courier device. Idempotent by scan ID: a scan already recorded for the shipment, or
         /// <br/>repeated in the batch, is counted in `duplicatesSkipped` and not
         /// <br/>stored again. A scan with a malformed ID, another shipment's tracking
         /// <br/>number or an ID recorded for another shipment is counted in
@@ -390,6 +427,26 @@ namespace ApexPost.Client
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
                             throw new ApiException<ValidationProblemDetails>("The batch failed validation, such as a scan time in the future, or its JSON is malformed.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 401)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The bearer token is missing, invalid or expired.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 403)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The token does not have the Courier role, or a scan\'s courierId is not the token\'s courierId; no scan is stored.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 404)
@@ -529,6 +586,16 @@ namespace ApexPost.Client
                             return objectResponse_.Object;
                         }
                         else
+                        if (status_ == 401)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The bearer token is missing, invalid or expired.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
                         if (status_ == 404)
                         {
                             var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
@@ -547,6 +614,138 @@ namespace ApexPost.Client
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
                             throw new ApiException<ProblemDetails>("An unexpected error occurred.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new ApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Track a shipment as a partner
+        /// </summary>
+        /// <remarks>
+        /// Returns a shipment's status, destination city and latest scan for a
+        /// <br/>partner system. The recipient's name, phone number and address are not
+        /// <br/>included. Requires a valid partner API key in the `X-Api-Key`
+        /// <br/>header.
+        /// </remarks>
+        /// <param name="trackingNumber">The tracking number: APX- followed by eight digits, such as APX-00000001.</param>
+        /// <returns>The shipment's tracking status.</returns>
+        /// <exception cref="ApiException">A server side error occurred.</exception>
+        public virtual System.Threading.Tasks.Task<PartnerShipmentResponse> GetPartnerShipmentAsync(string trackingNumber)
+        {
+            return GetPartnerShipmentAsync(trackingNumber, System.Threading.CancellationToken.None);
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// Track a shipment as a partner
+        /// </summary>
+        /// <remarks>
+        /// Returns a shipment's status, destination city and latest scan for a
+        /// <br/>partner system. The recipient's name, phone number and address are not
+        /// <br/>included. Requires a valid partner API key in the `X-Api-Key`
+        /// <br/>header.
+        /// </remarks>
+        /// <param name="trackingNumber">The tracking number: APX- followed by eight digits, such as APX-00000001.</param>
+        /// <returns>The shipment's tracking status.</returns>
+        /// <exception cref="ApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<PartnerShipmentResponse> GetPartnerShipmentAsync(string trackingNumber, System.Threading.CancellationToken cancellationToken)
+        {
+            if (trackingNumber == null)
+                throw new System.ArgumentNullException("trackingNumber");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/v2/partner/shipments/{trackingNumber}"
+                    urlBuilder_.Append("api/v2/partner/shipments/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(trackingNumber, System.Globalization.CultureInfo.InvariantCulture)));
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<PartnerShipmentResponse>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        if (status_ == 401)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The X-Api-Key header is missing, or its key is not a partner key.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 404)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("No shipment has the tracking number, or it is not APX- followed by eight digits.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 500)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("An unexpected error occurred, or no partner key is configured.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         {
@@ -679,6 +878,26 @@ namespace ApexPost.Client
                             throw new ApiException<ValidationProblemDetails>("A query value is invalid, such as a page size above 50 or an unknown status.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
+                        if (status_ == 401)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The bearer token is missing, invalid or expired.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 403)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The token does not have the Admin role.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
                         if (status_ == 500)
                         {
                             var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
@@ -798,6 +1017,26 @@ namespace ApexPost.Client
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
                             throw new ApiException<ValidationProblemDetails>("The request failed validation or its JSON is malformed.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 401)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The bearer token is missing, invalid or expired.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 403)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The token does not have the Admin role.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 409)
@@ -924,6 +1163,16 @@ namespace ApexPost.Client
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
                             return objectResponse_.Object;
+                        }
+                        else
+                        if (status_ == 401)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The bearer token is missing, invalid or expired.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 404)
@@ -1063,6 +1312,26 @@ namespace ApexPost.Client
                             throw new ApiException<ValidationProblemDetails>("The request failed validation or its JSON is malformed.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
+                        if (status_ == 401)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The bearer token is missing, invalid or expired.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 403)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The token does not have the Admin role.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
                         if (status_ == 404)
                         {
                             var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
@@ -1193,6 +1462,26 @@ namespace ApexPost.Client
                         if (status_ == 204)
                         {
                             return;
+                        }
+                        else
+                        if (status_ == 401)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The bearer token is missing, invalid or expired.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 403)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The token does not have the Admin role.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 404)
@@ -1345,6 +1634,26 @@ namespace ApexPost.Client
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
                             throw new ApiException<ValidationProblemDetails>("The status is missing or not a defined status, or the JSON is malformed.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 401)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The bearer token is missing, invalid or expired.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                        }
+                        else
+                        if (status_ == 403)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            throw new ApiException<ProblemDetails>("The token does not have the Courier role.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 404)
@@ -1623,6 +1932,52 @@ namespace ApexPost.Client
         [System.Text.Json.Serialization.JsonPropertyName("scannedAtUtc")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
         public System.DateTimeOffset ScannedAtUtc { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    /// <summary>
+    /// A shipment's tracking status as a partner sees it (version 2). Only what a
+    /// <br/>partner needs to track the shipment: no recipient name, phone number or
+    /// <br/>address.
+    /// </summary>
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class PartnerShipmentResponse
+    {
+
+        /// <summary>
+        /// The tracking number: APX- followed by eight digits.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("trackingNumber")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string TrackingNumber { get; set; } = default!;
+
+        /// <summary>
+        /// The current status, as its name: Created, PickedUp, InTransit,
+        /// <br/>OutForDelivery, Delivered or Failed.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("status")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<ShipmentStatus>))]
+        public ShipmentStatus Status { get; set; } = default!;
+
+        /// <summary>
+        /// The city the shipment is going to.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("destinationCity")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string DestinationCity { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("latestScan")]
+        public LatestScanResponse? LatestScan { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 

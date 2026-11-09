@@ -1,0 +1,56 @@
+Run: 2026-11-09T15:54:05.533Z
+Phase: nodb
+
+screenshot: d5-01-swagger-v2-locks.png
+screenshot: d5-02-swagger-v2-authorize-dialog.png
+execute: GetShipment {"trackingNumber":"APX-00000011"} -> 401
+  body: { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.2", "title": "Unauthorized", "status": 401, "traceId": "00-fdf5fb9e374991c55cd7cc3bee7900ba-2df83350ec7626e5-00" }
+screenshot: d2-01-v2-get-without-token-401.png
+authorize: Bearer = Courier token for COURIER-DEMO-07
+screenshot: d5-03-swagger-v2-authorized-courier.png
+execute: DeleteShipment {"trackingNumber":"APX-00000011"} -> 403
+  body: { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.4", "title": "Forbidden", "status": 403, "traceId": "00-d3127f63f85ee7856a82431d6a0c51ec-33def3386decd581-00" }
+screenshot: d2-02-v2-delete-as-courier-403.png
+execute: UploadShipmentScans {"trackingNumber":"APX-00000011"} -> 403
+  body: { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.4", "title": "This courier may not upload these scans.", "status": 403, "detail": "Every scan must be recorded under your own courierId, COURIER-DEMO-07. No scan in the batch was stored.", "traceId": "00-e57c5922330d8cec6364394b0bb6991a-ff435a9279e1d128-00" }
+screenshot: d2-03-v2-upload-other-courier-403.png
+authorize: PartnerApiKey = "not-a-partner-key"
+execute: GetPartnerShipment {"trackingNumber":"APX-00000011"} -> 401
+  body: { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.2", "title": "A valid partner API key is required.", "status": 401, "detail": "Send the partner's key in the X-Api-Key header.", "traceId": "00-83f657be0ab8a962a8be263a3fb6c9a8-a749b4fb761abcdc-00" }
+screenshot: d3-01-partner-invalid-key-401.png
+screenshot: d5-04-swagger-v1-locks.png
+authorize: Bearer = Admin token
+execute: ChangeShipmentStatus {"trackingNumber":"APX-00000001"} -> 403
+  body: { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.4", "title": "Forbidden", "status": 403, "traceId": "00-cd0ddfe4814386b2dcd04b4d62cf20c3-cd692edfb6f55ebf-00" }
+screenshot: d2-04-v1-patch-as-admin-403.png
+authorize: Bearer = Courier token for COURIER-DEMO-07
+execute: ListShipments {} -> 403
+  body: { "type": "https://tools.ietf.org/html/rfc9110#section-15.5.4", "title": "Forbidden", "status": 403, "traceId": "00-c518f0c830f5e3131c990098f9caf3a3-fc2c1e89c6e389c2-00" }
+screenshot: d2-05-v1-list-as-courier-403.png
+
+Run: 2026-11-09T15:56:27.985Z
+Phase: db
+
+authorize: Bearer = Admin token
+execute: CreateShipment {} -> 201
+  body: { "trackingNumber": "APX-00000301", "recipient": { "name": "DEMO Swagger Recipient", "phone": "+919876543210", "address": "30 Demo Road", "city": "Pune" }, "weightKg": 2, "status": "Created", "latestScan": null }
+screenshot: d2-06-v2-create-as-admin-201.png
+authorize: PartnerApiKey = the configured partner key
+execute: GetPartnerShipment {"trackingNumber":"APX-00000301"} -> 200
+  body: { "trackingNumber": "APX-00000301", "status": "Created", "destinationCity": "Pune", "latestScan": null }
+screenshot: d3-02-partner-valid-key-no-jwt-200.png
+authorize: Bearer = Courier token for COURIER-DEMO-07
+execute: UploadShipmentScans {"trackingNumber":"APX-00000301"} -> 200
+  body: { "accepted": 1, "duplicatesSkipped": 0, "rejected": 0, "rejections": [] }
+screenshot: d2-07-v2-upload-own-courier-200.png
+execute: GetShipment {"trackingNumber":"APX-00000301"} -> 200
+  body: { "trackingNumber": "APX-00000301", "recipient": { "name": "DEMO Swagger Recipient", "phone": "+919876543210", "address": "30 Demo Road", "city": "Pune" }, "weightKg": 2, "status": "Created", "latestScan": { "scanType": 0, "location": "Pune hub", "scannedAtUtc": "2026-11-09T09:00:00+00:00" } }
+screenshot: d2-08-v2-get-as-courier-200.png
+authorize: Bearer = Admin token
+execute: ListShipments {} -> 200
+  body: { "items": [ { "trackingNumber": "APX-00000001", "recipientName": "DEMO Recipient", "recipientPhone": "+919876543210", "recipientAddress": "10 Demo Avenue", "recipientCity": "Pune", "weightKg": 3, "status": 1 }, { "trackingNumber": "APX-00000011", "recipientName": "DEMO V2 Recipient", "recipientPhone": "+919876543210", "recipientAddress": "12 Demo Lane", "recipientCity": "Nagpur", "weightKg": 1.5,
+screenshot: d2-09-v1-list-as-admin-200.png
+authorize: Bearer = Courier token for COURIER-DEMO-07
+execute: ChangeShipmentStatus {"trackingNumber":"APX-00000301"} -> 200
+  body: { "trackingNumber": "APX-00000301", "recipientName": "DEMO Swagger Recipient", "recipientPhone": "+919876543210", "recipientAddress": "30 Demo Road", "recipientCity": "Pune", "weightKg": 2, "status": 1 }
+screenshot: d2-10-v1-patch-as-courier-200.png

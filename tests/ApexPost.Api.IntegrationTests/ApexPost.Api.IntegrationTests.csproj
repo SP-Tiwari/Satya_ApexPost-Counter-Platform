@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ApexPost.Api\ApexPost.Api.csproj" />
     <ProjectReference Include="..\..\src\ApexPost.Client.Consumer\ApexPost.Client.Consumer.csproj" />
+    <ProjectReference Include="..\..\src\ApexPost.Courier.Sync\ApexPost.Courier.Sync.csproj" />
   </ItemGroup>
 
   <!-- The published contracts, compared with the documents the API generates. -->
@@ -32,6 +33,9 @@
   <ItemGroup>
     <Compile Include="..\Shared\DisposableSqlDatabase.cs" Link="DisposableSqlDatabase.cs" />
     <Compile Include="..\Shared\SqlTestSettings.cs" Link="SqlTestSettings.cs" />
+    <!-- The courier device's database folders for the end-to-end sync test (D9),
+         chosen as in the Part A tests. -->
+    <Compile Include="..\ApexPost.Courier.Offline.Tests\TestSupport.cs" Link="CourierOfflineTestSupport.cs" />
   </ItemGroup>
 
 </Project>

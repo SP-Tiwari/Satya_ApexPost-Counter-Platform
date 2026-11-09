@@ -1,0 +1,13 @@
+Setup (UTC 2026-11-09T20:58:23Z): an Admin token from POST /dev/token creates three fictional shipments through v2.
+
+POST https://localhost:7280/api/v2/shipments  (Authorization: Bearer <adminToken: redacted>)  trackingNumber APX-10000001
+201
+{"trackingNumber":"APX-10000001","recipient":{"name":"DEMO Recipient 1","phone":"+919876543210","address":"1 Demo Street","city":"Pune"},"weightKg":2.5,"status":"Created","latestScan":null}
+
+POST https://localhost:7280/api/v2/shipments  (Authorization: Bearer <adminToken: redacted>)  trackingNumber APX-10000002
+201
+{"trackingNumber":"APX-10000002","recipient":{"name":"DEMO Recipient 2","phone":"+919876543210","address":"2 Demo Street","city":"Pune"},"weightKg":2.5,"status":"Created","latestScan":null}
+
+POST https://localhost:7280/api/v2/shipments  (Authorization: Bearer <adminToken: redacted>)  trackingNumber APX-10000003
+201
+{"trackingNumber":"APX-10000003","recipient":{"name":"DEMO Recipient 3","phone":"+919876543210","address":"3 Demo Street","city":"Pune"},"weightKg":2.5,"status":"Created","latestScan":null}

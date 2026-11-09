@@ -104,19 +104,29 @@ public sealed partial class OpenApiDocumentationTests
 	}
 
 	// C3: every operation, with its route name (the operationId), tag, summary
-	// and every status code it can return. C5: each version's document has the
-	// same eight operations under its own path prefix.
-	private static readonly (string Method, string Path, string OperationId, string Tag, string Summary, string StatusCodes)[] OperationTable =
+	// and every status code it can return in each version (null: the version
+	// does not have it). C5: each version's document has its own operations
+	// under its own path prefix. Part D: every operation can return 401, those
+	// limited to a role also 403, and version 2 adds the partner operation.
+	private static readonly (string Method, string Path, string OperationId, string Tag, string Summary, string? V1Codes, string? V2Codes)[] OperationTable =
 	[
-		("get", "shipments", "ListShipments", "Shipments", "List shipments by page, status and city", "200 400 500"),
-		("get", "shipments/{trackingNumber}", "GetShipment", "Shipments", "Get a shipment by tracking number", "200 404 500"),
-		("post", "shipments", "CreateShipment", "Shipments", "Create a shipment", "201 400 409 415 500"),
-		("put", "shipments/{trackingNumber}", "ReplaceShipment", "Shipments", "Replace a shipment's editable details", "200 400 404 409 415 500"),
-		("patch", "shipments/{trackingNumber}/status", "ChangeShipmentStatus", "Shipments", "Change a shipment's status", "200 400 404 409 415 500"),
-		("delete", "shipments/{trackingNumber}", "DeleteShipment", "Shipments", "Delete a shipment in Created status", "204 404 409 500"),
-		("post", "shipments/{trackingNumber}/scans", "UploadShipmentScans", "Scans", "Upload offline courier scans", "200 400 404 409 415 500"),
-		("get", "shipments/{trackingNumber}/scans", "GetShipmentScans", "Scans", "Get a shipment's scan history", "200 404 500")
+		("get", "shipments", "ListShipments", "Shipments", "List shipments by page, status and city", "200 400 401 403 500", "200 400 401 403 500"),
+		("get", "shipments/{trackingNumber}", "GetShipment", "Shipments", "Get a shipment by tracking number", "200 401 404 500", "200 401 404 500"),
+		("post", "shipments", "CreateShipment", "Shipments", "Create a shipment", "201 400 401 403 409 415 500", "201 400 401 403 409 415 500"),
+		("put", "shipments/{trackingNumber}", "ReplaceShipment", "Shipments", "Replace a shipment's editable details", "200 400 401 403 404 409 415 500", "200 400 401 403 404 409 415 500"),
+		("patch", "shipments/{trackingNumber}/status", "ChangeShipmentStatus", "Shipments", "Change a shipment's status", "200 400 401 403 404 409 415 500", "200 400 401 403 404 409 415 500"),
+		("delete", "shipments/{trackingNumber}", "DeleteShipment", "Shipments", "Delete a shipment in Created status", "204 401 403 404 409 500", "204 401 403 404 409 500"),
+		("post", "shipments/{trackingNumber}/scans", "UploadShipmentScans", "Scans", "Upload offline courier scans", "200 400 401 403 404 409 415 500", "200 400 401 403 404 409 415 500"),
+		("get", "shipments/{trackingNumber}/scans", "GetShipmentScans", "Scans", "Get a shipment's scan history", "200 401 404 500", "200 401 404 500"),
+		("get", "partner/shipments/{trackingNumber}", "GetPartnerShipment", "Partner", "Track a shipment as a partner", null, "200 401 404 500")
 	];
+
+	private static IEnumerable<(string Method, string Path, string OperationId, string Tag, string Summary, string StatusCodes)> OperationsOf(string version) =>
+		OperationTable
+			.Select(operation => (operation.Method, operation.Path, operation.OperationId, operation.Tag, operation.Summary,
+				StatusCodes: version == "v1" ? operation.V1Codes : operation.V2Codes))
+			.Where(operation => operation.StatusCodes is not null)
+			.Select(operation => (operation.Method, operation.Path, operation.OperationId, operation.Tag, operation.Summary, operation.StatusCodes!));
 
 	public static TheoryData<string, string, string, string, string, string, string> Operations
 	{
@@ -125,7 +135,7 @@ public sealed partial class OpenApiDocumentationTests
 			var data = new TheoryData<string, string, string, string, string, string, string>();
 			foreach (var version in new[] { "v1", "v2" })
 			{
-				foreach (var (method, path, operationId, tag, summary, statusCodes) in OperationTable)
+				foreach (var (method, path, operationId, tag, summary, statusCodes) in OperationsOf(version))
 					data.Add(version, method, $"/api/{version}/{path}", operationId, tag, summary, statusCodes);
 			}
 			return data;
@@ -171,7 +181,7 @@ public sealed partial class OpenApiDocumentationTests
 		}
 	}
 
-	// C5: each document has exactly its own version's eight operations, with
+	// C5: each document has exactly its own version's operations, with
 	// the same unique operation IDs, and no path from the other version.
 	[Theory]
 	[InlineData("v1")]
@@ -189,7 +199,7 @@ public sealed partial class OpenApiDocumentationTests
 
 		Assert.All(paths, path => Assert.StartsWith($"/api/{version}/", path.Name, StringComparison.Ordinal));
 		Assert.Equal(
-			OperationTable.Select(operation => (operation.Method, $"/api/{version}/{operation.Path}", (string?)operation.OperationId))
+			OperationsOf(version).Select(operation => (operation.Method, $"/api/{version}/{operation.Path}", (string?)operation.OperationId))
 				.Order(),
 			operations.Select(operation => (operation.Method, operation.Path, operation.Id)).Order());
 		Assert.Equal(operations.Length, operations.Select(operation => operation.Id).Distinct(StringComparer.Ordinal).Count());
@@ -210,7 +220,7 @@ public sealed partial class OpenApiDocumentationTests
 			.Where(operation => operation.Value.TryGetProperty("responses", out _))
 			.ToArray();
 
-		Assert.Equal(8, operations.Length);
+		Assert.Equal(OperationsOf(version).Count(), operations.Length);
 		Assert.All(operations, operation => Assert.Equal(
 			deprecated,
 			operation.Value.TryGetProperty("deprecated", out var flag) && flag.GetBoolean()));
@@ -354,6 +364,7 @@ public sealed partial class OpenApiDocumentationTests
 	[InlineData("v2", "RecipientResponse")]
 	[InlineData("v2", "LatestScanResponse")]
 	[InlineData("v2", "ShipmentPageResponse")]
+	[InlineData("v2", "PartnerShipmentResponse")]
 	public async Task OpenApiDocument_EachDto_AndEachOfItsProperties_HasAnXmlDescription(string version, string schemaName)
 	{
 		using var document = await GetDocumentAsync(version);
