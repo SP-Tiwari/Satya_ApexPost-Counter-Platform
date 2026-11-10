@@ -543,6 +543,7 @@ The two versions' OpenAPI documents are published in [contracts/](contracts/): [
 
 ## Documentation and sample records
 
+- [Week 4 submission checklist](docs/week4-submission-checklist.md): every marked Week 4 criterion (Parts A–D, 100 marks) mapped to its code, tests, documentation and evidence, with what was shown live, the substitutions for the .NET MAUI app and the branch history
 - [Design](DESIGN.md): architecture and domain diagrams, pipeline order, middleware versus filters, threats and mitigations, auditing, concurrency, C# 14 features, SOLID mapping
 - [Request flow](docs/architecture.md): a counter sale end to end
 - [API notes](API-NOTES.md): the shipments API's endpoints, status codes, validation, OpenAPI metadata, versions and documents
@@ -562,7 +563,9 @@ dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
 
-**Week 4 Part D Milestone 5 verification (latest, D10/D11 console client):** on 2026-11-09 at 20:36 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx` then passed 1,575 of 1,575 tests, with 0 failed and 0 skipped. Every code and test file was last changed before that build:
+**Final Week 4 verification (latest):** on 2026-11-09, from 21:25 to 21:27 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx --no-build` then ran on that build and passed 1,575 of 1,575 tests, with 0 failed and 0 skipped. The per-project counts are the same as in Milestone 5, below. The run came after the last configuration change: the courier console's `ApexPost.Courier.Sync.CourierResilience` log level, in `src/ApexPost.Courier.Console/appsettings.json`. Since then, only documentation and evidence have changed.
+
+**Week 4 Part D Milestone 5 verification (D10/D11 console client):** on 2026-11-09 at 20:36 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx` then passed 1,575 of 1,575 tests, with 0 failed and 0 skipped. Every code and test file was last changed before that build:
 
 | Project | Passed |
 |---|---|
