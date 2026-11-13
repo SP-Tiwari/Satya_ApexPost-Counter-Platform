@@ -10,7 +10,7 @@ Every route starts with the API version (Part C, C4; see [API versioning](#api-v
 
 | Verb | Route | Action | Purpose | Status codes |
 |---|---|---|---|---|
-| GET | `/api/v1/shipments?page=&pageSize=&status=&city=` | `ShipmentsController.List` | Paged, filtered list, ordered by tracking number. `page` defaults to 1, `pageSize` to 20, and its maximum is 50. Admin (Part D) | 200, 400, 401, 403 |
+| GET | `/api/v1/shipments?page=&pageSize=&status=&city=` | `ShipmentsController.List` | Paged, filtered list, ordered by tracking number. `page` defaults to 1, `pageSize` to 20, and its maximum is 50. Any signed-in user (Part D; Admin only until the Week 4 review) | 200, 400, 401 |
 | GET | `/api/v1/shipments/{trackingNumber}` | `ShipmentsController.Get` | One shipment. Any signed-in user (Part D) | 200, 401, 404 |
 | POST | `/api/v1/shipments` | `ShipmentsController.Create` | Creates a shipment with status `Created`; the `Location` header comes from `CreatedAtAction`. Admin (Part D) | 201, 400, 401, 403, 409, 415 |
 | PUT | `/api/v1/shipments/{trackingNumber}` | `ShipmentsController.Replace` | Replaces the editable details: recipient name, phone, address and city, and the weight. Admin (Part D) | 200, 400, 401, 403, 404, 409, 415 |
@@ -90,7 +90,7 @@ The rules are the same in version 1 and version 2, so the deprecated version can
 
 | Verb | Route (`/api/v1/...` and `/api/v2/...`) | Requires | Additional status codes |
 |---|---|---|---|
-| GET | `…/shipments` | Bearer token with the Admin role | 401, 403 |
+| GET | `…/shipments` | Any valid bearer token (Admin role only until the Week 4 review) | 401 |
 | GET | `…/shipments/{trackingNumber}` | Any valid bearer token | 401 |
 | POST | `…/shipments` | Bearer token with the Admin role | 401, 403 |
 | PUT | `…/shipments/{trackingNumber}` | Bearer token with the Admin role | 401, 403 |
@@ -118,7 +118,7 @@ The built-in generator writes the documents from the controllers (Development on
 
 | `operationId` (route name) | Verb and route | Tag | Summary (`[EndpointSummary]`) | Declared responses (`[ProducesResponseType]`) |
 |---|---|---|---|---|
-| `ListShipments` | GET `/api/v1/shipments` | Shipments | List shipments by page, status and city | 200, 400, 401, 403, 500 |
+| `ListShipments` | GET `/api/v1/shipments` | Shipments | List shipments by page, status and city | 200, 400, 401, 500 |
 | `GetShipment` | GET `/api/v1/shipments/{trackingNumber}` | Shipments | Get a shipment by tracking number | 200, 401, 404, 500 |
 | `CreateShipment` | POST `/api/v1/shipments` | Shipments | Create a shipment | 201, 400, 401, 403, 409, 415, 500 |
 | `ReplaceShipment` | PUT `/api/v1/shipments/{trackingNumber}` | Shipments | Replace a shipment's editable details | 200, 400, 401, 403, 404, 409, 415, 500 |
@@ -168,7 +168,7 @@ The built-in generator writes the documents from the controllers (Development on
   "recipient": { "name": "DEMO Recipient", "phone": "+919876543210", "address": "10 Demo Avenue", "city": "Pune" },
   "weightKg": 3,
   "status": "PickedUp",
-  "latestScan": { "scanType": 1, "location": "Pune sorting centre", "scannedAtUtc": "2026-11-07T09:30:00+00:00" }
+  "latestScan": { "scanType": "InTransit", "location": "Pune sorting centre", "scannedAtUtc": "2026-11-07T09:30:00+00:00" }
 }
 ```
 
