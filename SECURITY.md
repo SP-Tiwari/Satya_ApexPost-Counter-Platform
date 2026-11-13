@@ -73,11 +73,11 @@ The response is `{ "accessToken": "…", "tokenType": "Bearer", "expiresAtUtc": 
 
 ## Authorization (D2)
 
-The same rules apply to `/api/v1` (deprecated) and `/api/v2`, so the older version cannot be used to get round them:
+The same rules apply to `/api/v1` (deprecated), its unversioned alias `/api/shipments` and `/api/v2`, so neither the older version nor the alias can be used to get round them:
 
 | Operation | Route (`/api/v1/...` and `/api/v2/...`) | Rule | No, invalid or expired token | Valid token, wrong role |
 |---|---|---|---|---|
-| List shipments | `GET …/shipments` | `[Authorize(Roles = "Admin")]` | 401 | 403 |
+| List shipments | `GET …/shipments` | `[Authorize]`: any authenticated user (since the Week 4 review) | 401 | — |
 | Get one shipment | `GET …/shipments/{trackingNumber}` | `[Authorize]`: any authenticated user | 401 | — |
 | Create a shipment | `POST …/shipments` | `[Authorize(Roles = "Admin")]` | 401 | 403 |
 | Replace details | `PUT …/shipments/{trackingNumber}` | `[Authorize(Roles = "Admin")]` | 401 | 403 |
@@ -88,7 +88,7 @@ The same rules apply to `/api/v1` (deprecated) and `/api/v2`, so the older versi
 | Partner tracking (v2 only) | `GET /api/v2/partner/shipments/{trackingNumber}` | `[AllowAnonymous]` for bearer tokens; a valid `X-Api-Key` (see D3) | 401 without a valid key | — |
 | Anything else | Any other request | Fallback policy: any authenticated user | 401 | — |
 
-The roles follow who does the work. A courier in the field moves a shipment along and uploads its scans. Office administrators create, edit, list and delete shipments. Anyone signed in may read one shipment and its scans. A token with both roles may do both.
+The roles follow who does the work. A courier in the field moves a shipment along and uploads its scans. Office administrators create, edit and delete shipments. Anyone signed in may list shipments and read one shipment and its scans: the brief opens every GET to any authenticated user, and the Week 4 review corrected the list, which had been Admin-only. A token with both roles may do both.
 
 **Fallback policy:** `AddAuthorizationBuilder().SetFallbackPolicy(...)` requires an authenticated user for every endpoint without an authorization attribute of its own, and for every request that matches no endpoint at all. A future endpoint is therefore protected even if someone forgets `[Authorize]`. Three things opt out with `AllowAnonymous`:
 - the partner route, which has its own key check,

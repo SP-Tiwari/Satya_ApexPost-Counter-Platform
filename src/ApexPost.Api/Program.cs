@@ -1,3 +1,4 @@
+using ApexPost.Api.Controllers;
 using ApexPost.Api.Errors;
 using ApexPost.Api.OpenApi;
 using ApexPost.Api.Persistence;
@@ -8,6 +9,7 @@ using ApexPost.Application.Services;
 using ApexPost.Infrastructure.Persistence.Sql;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Rewrite;
 
 // Minimal hosting: this file is the composition root; there is no Startup class.
 var builder = WebApplication.CreateBuilder(args);
@@ -119,6 +121,19 @@ if (app.Environment.IsDevelopment())
 	// D1: development access tokens; this route does not exist elsewhere.
 	app.MapDevelopmentTokenEndpoint().AllowAnonymous();
 }
+
+// Week 4 review: the Part B URLs keep working. /api/shipments and everything
+// under it (one shipment, its status and its scans) is served by version 1,
+// the version that keeps the Part B contract, so a Part B client that never
+// learned about versioning gets the same answers, including the deprecation
+// headers, instead of a 404. The rewrite is internal (no redirect), so the
+// client keeps its URL and the method and body are untouched; the query string
+// is carried over. It runs before routing, which is placed explicitly after it
+// so that the endpoint is chosen for the rewritten path. The OpenAPI documents
+// list only the versioned paths; the alias is documented in VERSIONING.md.
+app.UseRewriter(new RewriteOptions()
+	.AddRewrite(ShipmentRoutes.UnversionedAliasPattern, ShipmentRoutes.UnversionedAliasTarget, skipRemainingRules: true));
+app.UseRouting();
 
 app.UseAuthentication();
 // D3: the partner route authenticates with its API key, after routing has

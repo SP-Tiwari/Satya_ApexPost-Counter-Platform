@@ -1,4 +1,4 @@
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 using Couchbase.Lite;
 using Couchbase.Lite.Query;
 using Microsoft.Extensions.Logging;

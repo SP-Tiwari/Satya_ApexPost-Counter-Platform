@@ -64,11 +64,22 @@ public sealed class ApiVersioningTests : IDisposable
 		Assert.Equal(
 			["scanType", "location", "scannedAtUtc"],
 			latestScan.EnumerateObject().Select(property => property.Name));
-		Assert.Equal((int)ShipmentScanType.InTransit, latestScan.GetProperty("scanType").GetInt32());
+		// A string, like the status (Week 4 review).
+		Assert.Equal("InTransit", latestScan.GetProperty("scanType").GetString());
 		Assert.Equal("Pune hub", latestScan.GetProperty("location").GetString());
 		Assert.Equal(
 			now.AddMinutes(-30).ToUnixTimeMilliseconds(),
 			latestScan.GetProperty("scannedAtUtc").GetDateTimeOffset().ToUnixTimeMilliseconds());
+	}
+
+	// The version 2 latest-scan enum mirrors the domain's scan types, so every
+	// scan the API accepts has a name to return.
+	[Fact]
+	public void V2_LatestScanType_HasTheSameMembersAsShipmentScanType()
+	{
+		Assert.Equal(
+			Enum.GetValues<ShipmentScanType>().Select(member => (member.ToString(), (int)member)),
+			Enum.GetValues<ApexPost.Api.Models.V2.LatestScanType>().Select(member => (member.ToString(), (int)member)));
 	}
 
 	[Fact]
@@ -254,12 +265,88 @@ public sealed class ApiVersioningTests : IDisposable
 		await response.AssertProblemAsync(HttpStatusCode.NotFound);
 	}
 
-	// The version is part of every URL; the Part B URLs without one are no
-	// longer routes.
+	// Week 4 review: "v1 keeps the Part B contract unchanged" includes its
+	// URLs. The unversioned Part B paths are an alias of version 1: the same
+	// shape, the same rules and the version headers, with no redirect.
+
+	[Fact]
+	public async Task UnversionedAlias_Get_ReturnsTheV1Shape_AndTheVersionHeaders()
+	{
+		await _client.CreateAsync(TrackingNumber);
+
+		var response = await _client.GetAsync($"/api/shipments/{TrackingNumber}");
+
+		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+		AssertVersionHeaders(response);
+		var aliased = await response.Content.ReadFromJsonAsync<JsonElement>();
+		var v1 = await _client.GetFromJsonAsync<JsonElement>(Api.Shipment(TrackingNumber));
+		Assert.Equal(v1.GetRawText(), aliased.GetRawText());
+	}
+
+	[Fact]
+	public async Task UnversionedAlias_List_KeepsTheQueryString()
+	{
+		await _client.CreateAsync(TrackingNumber);
+		await _client.CreateAsync("APX-70000002");
+
+		var page = await _client.GetFromJsonAsync<JsonElement>("/api/shipments?page=2&pageSize=1");
+
+		Assert.Equal(2, page.GetProperty("page").GetInt32());
+		Assert.Equal(1, page.GetProperty("pageSize").GetInt32());
+		Assert.Equal(2, page.GetProperty("totalCount").GetInt32());
+		Assert.Equal(
+			"APX-70000002",
+			Assert.Single(page.GetProperty("items").EnumerateArray()).GetProperty("trackingNumber").GetString());
+	}
+
+	[Fact]
+	public async Task UnversionedAlias_WritesStatusAndScans_ThroughVersion1()
+	{
+		var created = await _client.PostAsJsonAsync("/api/shipments", Api.NewShipment(TrackingNumber));
+		var status = await _client.PatchAsJsonAsync($"/api/shipments/{TrackingNumber}/status", new { status = 1 });
+		var upload = await _client.PostAsJsonAsync(
+			$"/api/shipments/{TrackingNumber}/scans",
+			new { scans = new[] { Api.Scan(Api.NewScanId(), TrackingNumber, DateTimeOffset.UtcNow.AddMinutes(-5)) } });
+		var history = await _client.GetFromJsonAsync<JsonElement>($"/api/shipments/{TrackingNumber}/scans");
+
+		Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+		// The Location is the canonical version 1 URL.
+		Assert.Equal(new Uri(_client.BaseAddress!, Api.Shipment(TrackingNumber)), created.Headers.Location);
+		Assert.Equal(HttpStatusCode.OK, status.StatusCode);
+		Assert.Equal((int)ShipmentStatus.PickedUp, (await status.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32());
+		Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+		Assert.Single(history.EnumerateArray());
+	}
+
 	[Theory]
-	[InlineData("/api/shipments")]
-	[InlineData("/api/shipments/APX-70000001")]
-	public async Task UnversionedUrl_Returns404ProblemDetails(string path)
+	[InlineData("/API/Shipments/APX-70000001")]
+	[InlineData("/api/shipments/APX-70000001/")]
+	public async Task UnversionedAlias_IsCaseInsensitive_LikeRouting(string path)
+	{
+		await _client.CreateAsync(TrackingNumber);
+
+		var response = await _client.GetAsync(path);
+
+		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+	}
+
+	[Theory]
+	[InlineData("/api/shipments/APX-99999999", HttpStatusCode.NotFound)]
+	[InlineData("/api/shipments/not-a-tracking-number", HttpStatusCode.NotFound)]
+	[InlineData("/api/shipments?pageSize=51", HttpStatusCode.BadRequest)]
+	public async Task UnversionedAlias_Errors_AreTheV1ProblemDetails(string path, HttpStatusCode status)
+	{
+		var response = await _client.GetAsync(path);
+
+		await response.AssertProblemAsync(status);
+	}
+
+	// Only the shipments path is aliased: a path that merely starts with the
+	// same letters, or another resource, is not rewritten.
+	[Theory]
+	[InlineData("/api/shipmentsXYZ")]
+	[InlineData("/api/partner/shipments/APX-70000001")]
+	public async Task OtherUnversionedUrls_AreNotAliased_AndReturn404(string path)
 	{
 		var response = await _client.GetAsync(path);
 

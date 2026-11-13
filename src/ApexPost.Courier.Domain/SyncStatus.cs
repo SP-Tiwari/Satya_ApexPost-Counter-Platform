@@ -1,4 +1,4 @@
-namespace ApexPost.Courier.Offline.Domain;
+namespace ApexPost.Courier.Domain;
 
 public enum SyncStatus
 {

@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using ApexPost.Courier.Offline.Application;
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

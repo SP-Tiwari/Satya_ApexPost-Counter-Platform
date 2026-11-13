@@ -15,9 +15,9 @@ namespace ApexPost.Api.Controllers.V2;
 // The same actions, routes, route names, status codes and service calls as
 // the version 1 controller, and the same XML comment conventions. Only the
 // response DTOs, their mapping and the status request differ.
-// Week 4 Part D, D2: GET one shipment needs any signed-in user, the status
-// change the Courier role, and the list, create, replace and delete the Admin
-// role. Version 1 has the same rules.
+// Week 4 Part D, D2: both GETs (the list and one shipment) need any signed-in
+// user, as the brief says; the status change needs the Courier role, and
+// create, replace and delete the Admin role. Version 1 has the same rules.
 
 /// <summary>
 /// Version 2 of tracked shipments: the paged list, one shipment, and creating,
@@ -46,13 +46,11 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 	/// <response code="200">The page of shipments.</response>
 	/// <response code="400">A query value is invalid, such as a page size above 50 or an unknown status.</response>
 	/// <response code="401">The bearer token is missing, invalid or expired.</response>
-	/// <response code="403">The token does not have the Admin role.</response>
 	/// <response code="500">An unexpected error occurred.</response>
 	[HttpGet(Name = "ListShipments")]
 	[EndpointSummary("List shipments by page, status and city")]
-	[Authorize(Roles = ApexPostClaims.AdminRole)]
+	[Authorize]
 	[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
-	[ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ShipmentPageResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ValidationProblemDetails>(
 		StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]

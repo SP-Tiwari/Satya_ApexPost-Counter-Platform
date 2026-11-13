@@ -1,6 +1,6 @@
 # Courier offline design (Week 4 Part A, synchronization in Part D)
 
-Couriers store shipment scans in an embedded Couchbase Lite database, `apexpost_courier`, using its default collection (`src/ApexPost.Courier.Offline`; decisions in [ADR 0027](docs/adr/0027-couchbase-lite-courier-offline-store.md)). **Implemented** means built and verified, in Part A unless marked Part D. **Design** means a plan or reasoning that is not implemented. Section 4 describes the synchronization with the API added in Part D (D9).
+Couriers store shipment scans in an embedded Couchbase Lite database, `apexpost_courier`, using its default collection (`src/ApexPost.Courier.Offline`, with the domain model in `src/ApexPost.Courier.Domain`; decisions in [ADR 0027](docs/adr/0027-couchbase-lite-courier-offline-store.md) and [ADR 0031](docs/adr/0031-courier-domain-project.md)). **Implemented** means built and verified, in Part A unless marked Part D. **Design** means a plan or reasoning that is not implemented. Section 4 describes the synchronization with the API added in Part D (D9).
 
 ## 1. Why scans are saved locally first
 

@@ -1,6 +1,6 @@
 using ApexPost.Courier.Harness;
 using ApexPost.Courier.Offline.Application;
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 using ApexPost.Courier.Offline.Uploading;
 
 namespace ApexPost.Courier.Offline.Tests;

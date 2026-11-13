@@ -487,10 +487,11 @@ public sealed class SecurityTests : IDisposable
 
 	// The approved authorization matrix, in both versions: no token is a 401,
 	// a token without the required role a 403, both as Problem Details, and
-	// the allowed role succeeds.
+	// the allowed role succeeds. "alias" is the unversioned Part B path,
+	// /api/shipments, which is version 1 and must apply the same rules.
 	private static readonly Dictionary<string, string> RequiredRole = new()
 	{
-		["list"] = ApexPostClaims.AdminRole,
+		["list"] = "any",
 		["get"] = "any",
 		["create"] = ApexPostClaims.AdminRole,
 		["replace"] = ApexPostClaims.AdminRole,
@@ -505,7 +506,7 @@ public sealed class SecurityTests : IDisposable
 		get
 		{
 			var data = new TheoryData<string, string, string>();
-			foreach (var version in new[] { "v1", "v2" })
+			foreach (var version in new[] { "v1", "v2", "alias" })
 			{
 				foreach (var operation in RequiredRole.Keys)
 				{
@@ -528,18 +529,19 @@ public sealed class SecurityTests : IDisposable
 			_ => null
 		};
 		var client = await WithShipmentAsync(token);
-		var shipment = $"/api/{version}/shipments/{TrackingNumber}";
+		var shipments = version == "alias" ? "/api/shipments" : $"/api/{version}/shipments";
+		var shipment = $"{shipments}/{TrackingNumber}";
 		var details = Api.NewShipment(TrackingNumber);
 		details.Remove("trackingNumber");
 
 		var (response, success) = operation switch
 		{
-			"list" => (await client.GetAsync($"/api/{version}/shipments"), HttpStatusCode.OK),
+			"list" => (await client.GetAsync(shipments), HttpStatusCode.OK),
 			"get" => (await client.GetAsync(shipment), HttpStatusCode.OK),
-			"create" => (await client.PostAsJsonAsync($"/api/{version}/shipments", Api.NewShipment("APX-70000002")), HttpStatusCode.Created),
+			"create" => (await client.PostAsJsonAsync(shipments, Api.NewShipment("APX-70000002")), HttpStatusCode.Created),
 			"replace" => (await client.PutAsJsonAsync(shipment, details), HttpStatusCode.OK),
 			"status" => (await client.PatchAsJsonAsync($"{shipment}/status",
-				version == "v1" ? new { status = (object)1 } : new { status = (object)"PickedUp" }), HttpStatusCode.OK),
+				version != "v2" ? new { status = (object)1 } : new { status = (object)"PickedUp" }), HttpStatusCode.OK),
 			"delete" => (await client.DeleteAsync(shipment), HttpStatusCode.NoContent),
 			"upload" => (await client.PostAsJsonAsync($"{shipment}/scans", new { scans = new[] { OwnScan() } }), HttpStatusCode.OK),
 			_ => (await client.GetAsync($"{shipment}/scans"), HttpStatusCode.OK)

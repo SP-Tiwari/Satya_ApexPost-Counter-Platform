@@ -1,4 +1,4 @@
-namespace ApexPost.Courier.Offline.Domain;
+namespace ApexPost.Courier.Domain;
 
 // One courier scan of a shipment. Every property validates itself in its init
 // accessor, so a copy made with "with" is checked as well as a new scan.
