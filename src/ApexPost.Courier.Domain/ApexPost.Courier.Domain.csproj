@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The courier device's domain model: ShipmentScan, its ID, scan type and sync
+    status. It has no package or project references on purpose, so the compiler
+    (not only a test) guarantees that no Couchbase type can reach the domain.
+    ApexPost.Courier.Offline references this project and owns the Couchbase
+    persistence. See ADR 0031.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

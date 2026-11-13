@@ -1,20 +1,46 @@
 using System.Reflection;
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 using ApexPost.Courier.Offline.Persistence;
 
 namespace ApexPost.Courier.Offline.Tests;
 
 // The brief: domain classes must not reference any Couchbase types, and the
-// Week 3 SQL Server code must stay untouched.
+// Week 3 SQL Server code must stay untouched. Since the Week 4 review the
+// domain is its own assembly, ApexPost.Courier.Domain, with no package or
+// project references, so the compiler enforces the rule; these tests guard
+// against a reference being added back.
 public sealed class ArchitectureTests
 {
-	private static readonly Assembly Library = typeof(ShipmentScan).Assembly;
+	private static readonly Assembly DomainAssembly = typeof(ShipmentScan).Assembly;
+	private static readonly Assembly Library = typeof(CourierDatabase).Assembly;
+
+	[Fact]
+	public void Domain_IsASeparateAssemblyFromThePersistenceLibrary()
+	{
+		Assert.Equal("ApexPost.Courier.Domain", DomainAssembly.GetName().Name);
+		Assert.NotEqual(DomainAssembly, Library);
+		Assert.DoesNotContain(Library.GetTypes(), type => type.Namespace == "ApexPost.Courier.Domain");
+	}
+
+	[Fact]
+	public void DomainAssembly_ReferencesOnlyTheFramework()
+	{
+		var references = DomainAssembly.GetReferencedAssemblies()
+			.Select(name => name.Name!)
+			.ToList();
+
+		Assert.All(references, name => Assert.True(
+			name.StartsWith("System", StringComparison.Ordinal)
+				|| name.Equals("netstandard", StringComparison.Ordinal)
+				|| name.Equals("mscorlib", StringComparison.Ordinal),
+			$"The courier domain must reference only the framework, but references {name}."));
+	}
 
 	[Fact]
 	public void DomainTypes_DoNotReferenceCouchbase()
 	{
-		var domainTypes = Library.GetTypes()
-			.Where(type => type.Namespace == "ApexPost.Courier.Offline.Domain")
+		var domainTypes = DomainAssembly.GetTypes()
+			.Where(type => type.Namespace == "ApexPost.Courier.Domain")
 			.ToList();
 		Assert.NotEmpty(domainTypes);
 
@@ -44,7 +70,10 @@ public sealed class ArchitectureTests
 	{
 		var references = Library.GetReferencedAssemblies().Select(name => name.Name).ToList();
 
-		Assert.DoesNotContain(references, name => name!.StartsWith("ApexPost.", StringComparison.Ordinal));
+		// The courier domain is the only ApexPost assembly the library may use.
+		Assert.DoesNotContain(references, name =>
+			name!.StartsWith("ApexPost.", StringComparison.Ordinal)
+			&& name != "ApexPost.Courier.Domain");
 		Assert.DoesNotContain(references, name => name!.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal));
 	}
 

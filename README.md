@@ -8,6 +8,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 - `src/ApexPost.Application` — use cases and persistence/security/audit abstractions.
 - `src/ApexPost.Infrastructure` — the EF Core SQL Server persistence layer (`ApexPostDbContext`, mappings, migrations, repositories and stores). SQL Server is the only persistence implementation.
 - `src/ApexPost.Web` — MVC controllers and views, authentication, middleware, and composition root.
+- `src/ApexPost.Courier.Domain` — Week 4: the courier device's domain model (`ShipmentScan`, its ID, scan type and sync status), with no package or project references, so the compiler keeps Couchbase out of it. See [ADR 0031](docs/adr/0031-courier-domain-project.md).
 - `src/ApexPost.Courier.Offline` — Week 4: the courier device's local Couchbase Lite store, repository, SQL++ queries, outbox and change listener. See [Courier offline storage](#courier-offline-storage-week-4-part-a).
 - `src/ApexPost.Courier.Harness` — Week 4: the console harness for the courier store.
 - `src/ApexPost.Api` — Week 4: the REST API for tracked shipments and courier scans, over the same SQL Server database. See [Shipments API](#shipments-api-week-4-part-b); its JWT, role and partner-key security is in [SECURITY.md](SECURITY.md).

@@ -556,7 +556,7 @@ Content-Type: application/json
 ### 56. GET /api/v1/shipments: 401, version 1 needs a token too
 GET {{baseUrl}}/api/v1/shipments
 
-### 57. GET /api/v1/shipments: 403, the list needs the Admin role
+### 57. GET /api/v1/shipments: 200, any signed-in user may list shipments (Week 4 review; was 403)
 GET {{baseUrl}}/api/v1/shipments
 Authorization: Bearer {{courierToken}}
 
@@ -587,3 +587,15 @@ Content-Type: application/json
 
 ### 61. GET /api/v2/shipments/{trackingNumber}/scans: 401, the scan history needs a token
 GET {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}/scans
+
+### 62. GET /api/shipments: 200, the unversioned Part B URL is an alias of version 1 (Week 4 review)
+GET {{baseUrl}}/api/shipments?pageSize=5
+Authorization: Bearer {{courierToken}}
+
+### 63. GET /api/shipments/{trackingNumber}: 200, the version 1 shape and the version headers
+GET {{baseUrl}}/api/shipments/{{trackingNumber}}
+Authorization: Bearer {{courierToken}}
+
+### 64. GET /api/v2/shipments/{trackingNumber}: 200, latestScan.scanType is a name, such as "InTransit" (Week 4 review)
+GET {{baseUrl}}/api/v2/shipments/{{v2TrackingNumber}}
+Authorization: Bearer {{courierToken}}

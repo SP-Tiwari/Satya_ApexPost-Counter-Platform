@@ -1,5 +1,5 @@
 using ApexPost.Courier.Offline.Application;
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 using ApexPost.Courier.Offline.Persistence;
 
 namespace ApexPost.Courier.Harness;

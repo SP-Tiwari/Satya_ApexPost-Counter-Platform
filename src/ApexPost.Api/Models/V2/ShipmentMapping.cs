@@ -1,5 +1,6 @@
 using ApexPost.Application.Persistence;
 using ApexPost.Domain.Entities;
+using ApexPost.Domain.Enums;
 
 namespace ApexPost.Api.Models.V2;
 
@@ -30,8 +31,19 @@ internal static class ShipmentMapping
 
 	private static LatestScanResponse? ToLatestScanResponse(this TrackedShipment shipment) =>
 		shipment.LatestScan is { } scan
-			? new LatestScanResponse(scan.ScanType, scan.Location, scan.ScannedAtUtc)
+			? new LatestScanResponse(scan.ScanType.ToLatestScanType(), scan.Location, scan.ScannedAtUtc)
 			: null;
+
+	// By name, so a reordered or added member is a failure here, not a wrong
+	// value on the wire.
+	internal static LatestScanType ToLatestScanType(this ShipmentScanType scanType) => scanType switch
+	{
+		ShipmentScanType.Pickup => LatestScanType.Pickup,
+		ShipmentScanType.InTransit => LatestScanType.InTransit,
+		ShipmentScanType.Delivered => LatestScanType.Delivered,
+		ShipmentScanType.Failed => LatestScanType.Failed,
+		_ => throw new ArgumentOutOfRangeException(nameof(scanType), scanType, "Unknown scan type.")
+	};
 
 	public static ShipmentPageResponse ToV2Response(
 		this TrackedShipmentPage page,
