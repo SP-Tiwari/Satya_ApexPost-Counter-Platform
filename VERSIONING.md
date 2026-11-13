@@ -9,7 +9,7 @@ How the ApexPost Logistics API (`src/ApexPost.Api`) is versioned, where each ver
 | 1.0 | `/api/v1` | **Deprecated** since 2026-11-07; sunset planned for 2027-05-07 | `/openapi/v1.json` | [contracts/v1.json](contracts/v1.json) | None |
 | 2.0 | `/api/v2` | **Current** | `/openapi/v2.json` | [contracts/v2.json](contracts/v2.json) | [src/ApexPost.Client](src/ApexPost.Client) |
 
-- **How a version is chosen:** by the URL segment, `/api/v{version}/shipments` (`UrlSegmentApiVersionReader`). `/api/v1.0/...` is the same version as `/api/v1/...`. An unknown version, such as `/api/v3/...`, is a 404 Problem Details. There is no default version, so a URL without one, such as `/api/shipments`, is also a 404.
+- **How a version is chosen:** by the URL segment, `/api/v{version}/shipments` (`UrlSegmentApiVersionReader`). `/api/v1.0/...` is the same version as `/api/v1/...`. An unknown version, such as `/api/v3/...`, is a 404 Problem Details. **Unversioned Part B URLs:** since the Week 4 review, `/api/shipments` and everything under it (one shipment, its status and its scans) is an alias of version 1, the version that keeps the Part B contract (change 19). It is an internal rewrite in `Program.cs` (`UseRewriter`, before `UseRouting`), not a redirect: the client keeps its URL, method, body and query string, and gets the version 1 response with the version headers. Only that path is aliased; other unversioned URLs, such as `/api/partner/...`, are still a 404. The OpenAPI documents list only the versioned paths.
 - **How versions are reported:** every response from a versioned action carries `api-supported-versions: 2.0` and `api-deprecated-versions: 1.0` (`ReportApiVersions`). The only exception is a 415, which routing answers before a version is selected.
 - **How deprecation is shown:** `[ApiVersion("1.0", Deprecated = true)]`. Every operation in the v1 document is `deprecated: true`, the v1 document's description names version 2, and Swagger UI lists v1 as "v1 (deprecated)".
 - **What the versions share:** both use the same `TrackedShipmentApplicationService`, rules and database, so a shipment created through one version is read and changed through the other. Only the DTOs and their mapping differ.
@@ -84,21 +84,24 @@ Clients should ignore response fields they do not know. Version 2 relies on that
 | 16 | Part D, v1 and v2 | A scan's `scanType` in an upload is accepted as the name, such as `"InTransit"`, as well as the number. The schema stays the numeric enum, and the property description says so | Non-breaking | The accepted input is widened: every earlier request stays valid. Responses still return the number, so the `ShipmentScanType` schema is unchanged |
 | 17 | Part D (D5) | Plain HTTP is redirected (307) to HTTPS in every environment, and the contracts' `servers` entry is now `https://localhost:7280/` | Non-breaking for the contract | `servers` names the publishing host and is excluded from the contract comparison. A client configured with an `http://` base URL is redirected, and must switch to `https://` so it never sends a token over plain HTTP |
 | 18 | Part D (D2) | A fallback authorization policy requires a signed-in user for every request without a rule of its own, including requests that match no route. An anonymous request to an unknown route, an unsupported version or a malformed tracking number is now a 401 instead of a 404; a signed-in caller still gets the 404. The partner route is exempt (`[AllowAnonymous]`) and still requires its API key | **Breaking** for anonymous clients that relied on a 404 | The status code for the same anonymous request changes. Every documented operation already requires a token (changes 12 and 13), so no documented anonymous request is affected. Protecting by default means a future endpoint cannot be left open by mistake |
+| 19 | Week 4 review, v1 | The unversioned Part B URLs, `/api/shipments/...`, work again as an alias of `/api/v1/shipments/...` (see "How a version is chosen") | Non-breaking | It reverses the 404 of change 1: a request that failed now succeeds, with the same body and rules as version 1, including the Part D authorization. "v1 keeps the Part B contract unchanged" includes its URLs. Nothing in either document changes. Tests: `ApiVersioningTests.UnversionedAlias_*`, and the `alias` rows of `SecurityTests.AuthorizationMatrix` |
+| 20 | Week 4 review, v1 and v2 | `GET …/shipments` (the list) needs any signed-in user instead of the Admin role, and no longer declares a 403 | Non-breaking | The accepted callers are widened: every request that succeeded still does, and a Courier token that got 403 now gets 200. The brief says GET is open to any authenticated user; change 13 had wrongly limited the list to Admin. Both documents drop the list's 403 response |
+| 21 | Week 4 review, v2 | `latestScan.scanType` in shipment and partner responses is the name, such as `"InTransit"`, instead of the number `1`. It has its own schema, `LatestScanType` (`type: string`); the scan endpoints keep the numeric `ShipmentScanType` | **Breaking** for v2 clients that read `latestScan.scanType` as a number | The JSON type changes, as in change 6. It makes version 2 consistent: `status` was already a name, and the review found the number inconsistent with the rest of v2. It goes into version 2 rather than a version 3 because version 2 was released on 2026-11-07, the fix comes from its first review, and the only known client is the generated one in this repository, which was regenerated in the same change (`LatestScanType`). A separate enum, not a property converter on `ShipmentScanType`, keeps the scan endpoints' schema numeric, because one CLR type gives one schema |
 
 **The same in both versions:**
 - the operations and their routes (apart from the version segment), operation IDs, status codes and Problem Details errors, including the Part D authorization rules and their 401 and 403 responses (changes 12, 13 and 18); only the partner operation (change 15) is version 2 alone
 - the create, replace and scan-upload request bodies and their validation rules
-- the scan endpoints' responses, where `scanType` stays a number
+- the scan endpoints' responses, where `scanType` stays a number (only version 2's `latestScan.scanType` is a name, change 21)
 - the business rules: status transitions, delete only while `Created`, and idempotent scan upload
 
 ## Migrating from version 1 to version 2
 
 | Version 1 | Version 2 |
 |---|---|
-| `/api/v1/shipments...` | `/api/v2/shipments...` |
+| `/api/v1/shipments...`, or the unversioned alias `/api/shipments...` | `/api/v2/shipments...` |
 | `recipientName`, `recipientPhone`, `recipientAddress`, `recipientCity` | `recipient.name`, `recipient.phone`, `recipient.address`, `recipient.city` |
 | `"status": 1` | `"status": "PickedUp"` (names: `Created`, `PickedUp`, `InTransit`, `OutForDelivery`, `Delivered`, `Failed`) |
-| Not available | `latestScan`: the most recent scan, or `null` |
+| Not available | `latestScan`: the most recent scan, or `null`; its `scanType` is a name, such as `"InTransit"` |
 | `PATCH …/status` with `{ "status": 1 }` | `{ "status": "PickedUp" }`; the number is still accepted |
 | `?status=1` | `?status=PickedUp`; the number is still accepted |
 | Scan upload and scan history | Unchanged; both versions need the same bearer token (Part D) |
@@ -114,7 +117,7 @@ The dates are the plan for this fictional service. Once a sunset date is announc
 | 2026-11-07 | **Deprecate.** Version 2 is released and version 1 is marked deprecated: `Deprecated = true`, `api-deprecated-versions: 1.0` on every response, `deprecated: true` on every operation in `contracts/v1.json`, and "v1 (deprecated)" in Swagger UI. Version 1 is frozen: no new operations or fields, only security and bug fixes | Done |
 | 2026-11-07 | **Notify.** Give the customer-portal team and partner companies this file, the migration table and the v2 contract and client | Planned |
 | 2027-02-07 (three months before sunset) | **Announce the date in the API.** Add an `Asp.Versioning` sunset policy for version 1.0, so every version 1 response also carries the `Sunset` header (RFC 8594) with the date and a `Link` to this file. Review the version 1 traffic in the request logs and contact each remaining client | Planned |
-| 2027-05-07 | **Sunset.** Remove the version 1 controller and the `1.0` declaration on the scans controller, with their DTOs, mapping and tests. `/api/v1/...` then returns a 404 Problem Details like any unsupported version. `contracts/v1.json` is deleted; it stays in the Git history | Planned |
+| 2027-05-07 | **Sunset.** Remove the version 1 controller and the `1.0` declaration on the scans controller, with their DTOs, mapping and tests, and the unversioned `/api/shipments` alias (change 19). `/api/v1/...` then returns a 404 Problem Details like any unsupported version. `contracts/v1.json` is deleted; it stays in the Git history | Planned |
 
 **What a version 1 client sees until the sunset:** the same requests and responses as before, plus the two version headers. After the sunset it must call `/api/v2`.
 

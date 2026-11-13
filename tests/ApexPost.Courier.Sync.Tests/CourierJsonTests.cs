@@ -1,5 +1,5 @@
 using System.Text.Json;
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 using ApexPost.Courier.Sync.Contracts;
 
 namespace ApexPost.Courier.Sync.Tests;

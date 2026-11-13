@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ApexPost.Courier.Offline.Application;
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 using ApexPost.Courier.Offline.Persistence;
 using ApexPost.Courier.Sync;
 using Microsoft.Extensions.Configuration;

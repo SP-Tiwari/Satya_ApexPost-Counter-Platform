@@ -5,6 +5,7 @@
     <Project Path="src/ApexPost.Client.Consumer/ApexPost.Client.Consumer.csproj" />
     <Project Path="src/ApexPost.Client/ApexPost.Client.csproj" />
     <Project Path="src/ApexPost.Courier.Console/ApexPost.Courier.Console.csproj" />
+    <Project Path="src/ApexPost.Courier.Domain/ApexPost.Courier.Domain.csproj" />
     <Project Path="src/ApexPost.Courier.Harness/ApexPost.Courier.Harness.csproj" />
     <Project Path="src/ApexPost.Courier.Offline/ApexPost.Courier.Offline.csproj" />
     <Project Path="src/ApexPost.Courier.Sync/ApexPost.Courier.Sync.csproj" />

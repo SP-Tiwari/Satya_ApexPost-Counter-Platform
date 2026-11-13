@@ -1,6 +1,6 @@
 using System.Net;
 using System.Text.Json;
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 using Polly.CircuitBreaker;
 
 namespace ApexPost.Courier.Sync.Tests;

@@ -1,6 +1,6 @@
 using System.Net;
 using System.Text.Json;
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 using ApexPost.Courier.Offline.Persistence;
 using ApexPost.Courier.Sync;
 using ApexPost.Courier.Sync.Tests;
