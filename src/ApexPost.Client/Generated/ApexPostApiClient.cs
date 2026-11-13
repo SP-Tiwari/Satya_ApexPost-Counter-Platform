@@ -888,16 +888,6 @@ namespace ApexPost.Client
                             throw new ApiException<ProblemDetails>("The bearer token is missing, invalid or expired.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
-                        if (status_ == 403)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            throw new ApiException<ProblemDetails>("The token does not have the Admin role.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
-                        }
-                        else
                         if (status_ == 500)
                         {
                             var objectResponse_ = await ReadObjectResponseAsync<ProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
@@ -1914,10 +1904,12 @@ namespace ApexPost.Client
     {
 
         /// <summary>
-        /// The scan type: 0 Pickup, 1 InTransit, 2 Delivered or 3 Failed, as in the scan endpoints.
+        /// The scan type, as its name: Pickup, InTransit, Delivered or Failed.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("scanType")]
-        public ShipmentScanType ScanType { get; set; } = default!;
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<LatestScanType>))]
+        public LatestScanType ScanType { get; set; } = default!;
 
         /// <summary>
         /// Where the scan was made.
@@ -1941,6 +1933,27 @@ namespace ApexPost.Client
             get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
             set { _additionalProperties = value; }
         }
+
+    }
+
+    /// <summary>
+    /// The type of a shipment's latest scan, written as its name (version 2).
+    /// </summary>
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public enum LatestScanType
+    {
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Pickup")]
+        Pickup = 0,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"InTransit")]
+        InTransit = 1,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Delivered")]
+        Delivered = 2,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Failed")]
+        Failed = 3,
 
     }
 

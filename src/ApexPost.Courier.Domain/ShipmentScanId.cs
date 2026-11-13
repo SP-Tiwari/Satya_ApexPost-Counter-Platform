@@ -1,4 +1,4 @@
-namespace ApexPost.Courier.Offline.Domain;
+namespace ApexPost.Courier.Domain;
 
 // Document IDs use the format scan::{Guid}, with the GUID in its standard
 // hyphenated form.

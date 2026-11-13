@@ -55,3 +55,6 @@ Thumbs.db
 # Keep intentional source configuration files tracked
 # Do not add appsettings.json or appsettings.Development.json here.
 # Never commit real passwords, API keys, or other secrets.
+# Local Week 5 assignment and reference files
+/assignmentweek05.txt
+/SampleStrategyReference.png

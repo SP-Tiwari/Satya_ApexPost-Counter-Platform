@@ -107,10 +107,11 @@ public sealed partial class OpenApiDocumentationTests
 	// and every status code it can return in each version (null: the version
 	// does not have it). C5: each version's document has its own operations
 	// under its own path prefix. Part D: every operation can return 401, those
-	// limited to a role also 403, and version 2 adds the partner operation.
+	// limited to a role also 403 (the list is open to any signed-in user since
+	// the Week 4 review), and version 2 adds the partner operation.
 	private static readonly (string Method, string Path, string OperationId, string Tag, string Summary, string? V1Codes, string? V2Codes)[] OperationTable =
 	[
-		("get", "shipments", "ListShipments", "Shipments", "List shipments by page, status and city", "200 400 401 403 500", "200 400 401 403 500"),
+		("get", "shipments", "ListShipments", "Shipments", "List shipments by page, status and city", "200 400 401 500", "200 400 401 500"),
 		("get", "shipments/{trackingNumber}", "GetShipment", "Shipments", "Get a shipment by tracking number", "200 401 404 500", "200 401 404 500"),
 		("post", "shipments", "CreateShipment", "Shipments", "Create a shipment", "201 400 401 403 409 415 500", "201 400 401 403 409 415 500"),
 		("put", "shipments/{trackingNumber}", "ReplaceShipment", "Shipments", "Replace a shipment's editable details", "200 400 401 403 404 409 415 500", "200 400 401 403 404 409 415 500"),
@@ -269,6 +270,18 @@ public sealed partial class OpenApiDocumentationTests
 		Assert.Equal(
 			["Created", "PickedUp", "InTransit", "OutForDelivery", "Delivered", "Failed"],
 			schemas.GetProperty("ShipmentStatus").GetProperty("enum").EnumerateArray().Select(item => item.GetString()));
+
+		// Week 4 review: the latest scan's type is a string enum, like the
+		// status, while the scan endpoints keep the numeric ShipmentScanType.
+		Assert.Equal(
+			"#/components/schemas/LatestScanType",
+			schemas.GetProperty("LatestScanResponse").GetProperty("properties").GetProperty("scanType").GetProperty("$ref").GetString());
+		var latestScanType = schemas.GetProperty("LatestScanType");
+		Assert.Equal("string", latestScanType.GetProperty("type").GetString());
+		Assert.Equal(
+			["Pickup", "InTransit", "Delivered", "Failed"],
+			latestScanType.GetProperty("enum").EnumerateArray().Select(item => item.GetString()));
+		Assert.Equal("integer", schemas.GetProperty("ShipmentScanType").GetProperty("type").GetString());
 	}
 
 	// C6: ContractSchemaTransformer states the wire types precisely, so that a

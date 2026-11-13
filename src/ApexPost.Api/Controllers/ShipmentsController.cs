@@ -17,9 +17,9 @@ namespace ApexPost.Api.Controllers;
 // that is not an operation parameter, such as cancellationToken, onto the
 // request body, in tag order, so the request tag comes last.
 // Week 4 Part D: the same role rules as version 2, so the deprecated version
-// cannot be used to get round them: GET one shipment needs any signed-in user,
-// the status change the Courier role, and the list, create, replace and
-// delete the Admin role.
+// cannot be used to get round them: both GETs (the list and one shipment) need
+// any signed-in user, the status change the Courier role, and create, replace
+// and delete the Admin role.
 
 /// <summary>
 /// Version 1 (deprecated) of tracked shipments: the paged list, one shipment,
@@ -49,13 +49,11 @@ public sealed class ShipmentsController(TrackedShipmentApplicationService shipme
 	/// <response code="200">The page of shipments.</response>
 	/// <response code="400">A query value is invalid, such as a page size above 50 or an unknown status.</response>
 	/// <response code="401">The bearer token is missing, invalid or expired.</response>
-	/// <response code="403">The token does not have the Admin role.</response>
 	/// <response code="500">An unexpected error occurred.</response>
 	[HttpGet(Name = "ListShipments")]
 	[EndpointSummary("List shipments by page, status and city")]
-	[Authorize(Roles = ApexPostClaims.AdminRole)]
+	[Authorize]
 	[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
-	[ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)]
 	[ProducesResponseType<ShipmentPageResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
 	[ProducesResponseType<ValidationProblemDetails>(
 		StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)]

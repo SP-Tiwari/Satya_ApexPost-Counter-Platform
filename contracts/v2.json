@@ -358,16 +358,6 @@
               }
             }
           },
-          "403": {
-            "description": "The token does not have the Admin role.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "200": {
             "description": "The page of shipments.",
             "content": {
@@ -991,8 +981,8 @@
         "type": "object",
         "properties": {
           "scanType": {
-            "description": "The scan type: 0 Pickup, 1 InTransit, 2 Delivered or 3 Failed, as in the scan endpoints.",
-            "$ref": "#/components/schemas/ShipmentScanType"
+            "description": "The scan type, as its name: Pickup, InTransit, Delivered or Failed.",
+            "$ref": "#/components/schemas/LatestScanType"
           },
           "location": {
             "type": "string",
@@ -1005,6 +995,16 @@
           }
         },
         "description": "A summary of a shipment's most recent scan."
+      },
+      "LatestScanType": {
+        "enum": [
+          "Pickup",
+          "InTransit",
+          "Delivered",
+          "Failed"
+        ],
+        "type": "string",
+        "description": "The type of a shipment's latest scan, written as its name (version 2)."
       },
       "PartnerShipmentResponse": {
         "required": [

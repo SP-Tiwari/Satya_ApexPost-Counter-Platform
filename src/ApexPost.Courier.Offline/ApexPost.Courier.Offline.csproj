@@ -13,6 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The domain model is its own project with no Couchbase reference; see ADR 0031. -->
+    <ProjectReference Include="..\ApexPost.Courier.Domain\ApexPost.Courier.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="ApexPost.Courier.Offline.Tests" />
   </ItemGroup>
 

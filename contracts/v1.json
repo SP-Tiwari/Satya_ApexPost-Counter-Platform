@@ -291,16 +291,6 @@
               }
             }
           },
-          "403": {
-            "description": "The token does not have the Admin role.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "200": {
             "description": "The page of shipments.",
             "content": {

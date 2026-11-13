@@ -1,4 +1,4 @@
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 
 namespace ApexPost.Courier.Offline.Application;
 

@@ -65,7 +65,7 @@ public sealed class ClientSdkTests : IDisposable
 
 		Assert.Equal((2, 0, 0), (first.Accepted, first.DuplicatesSkipped, first.Rejected));
 		Assert.Equal((0, 2, 0), (again.Accepted, again.DuplicatesSkipped, again.Rejected));
-		Assert.Equal(ShipmentScanType.InTransit, shipment.LatestScan!.ScanType);
+		Assert.Equal(LatestScanType.InTransit, shipment.LatestScan!.ScanType);
 		Assert.Equal("Pune hub", shipment.LatestScan.Location);
 		Assert.Equal([ShipmentScanType.Pickup, ShipmentScanType.InTransit], history.Select(scan => scan.ScanType));
 	}
@@ -195,7 +195,11 @@ public sealed class ClientSdkTests : IDisposable
 		Assert.Equal(typeof(LatestScanResponse), typeof(ShipmentResponse).GetProperty(nameof(ShipmentResponse.LatestScan))!.PropertyType);
 		Assert.Equal(typeof(decimal), typeof(ShipmentResponse).GetProperty(nameof(ShipmentResponse.WeightKg))!.PropertyType);
 		Assert.Equal(typeof(decimal?), typeof(CreateShipmentRequest).GetProperty(nameof(CreateShipmentRequest.WeightKg))!.PropertyType);
-		Assert.Equal(typeof(ShipmentScanType), typeof(LatestScanResponse).GetProperty(nameof(LatestScanResponse.ScanType))!.PropertyType);
+		var latestScanType = typeof(LatestScanResponse).GetProperty(nameof(LatestScanResponse.ScanType))!;
+		Assert.Equal(typeof(LatestScanType), latestScanType.PropertyType);
+		Assert.Equal(
+			typeof(JsonStringEnumConverter<LatestScanType>),
+			Assert.Single(latestScanType.GetCustomAttributes(typeof(JsonConverterAttribute), false).Cast<JsonConverterAttribute>()).ConverterType);
 		Assert.Equal(typeof(ShipmentScanType?), typeof(ScanUploadItem).GetProperty(nameof(ScanUploadItem.ScanType))!.PropertyType);
 		Assert.Equal(typeof(DateTimeOffset), typeof(LatestScanResponse).GetProperty(nameof(LatestScanResponse.ScannedAtUtc))!.PropertyType);
 

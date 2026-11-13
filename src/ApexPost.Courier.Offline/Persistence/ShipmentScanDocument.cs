@@ -1,5 +1,5 @@
 using System.Globalization;
-using ApexPost.Courier.Offline.Domain;
+using ApexPost.Courier.Domain;
 using Couchbase.Lite;
 
 namespace ApexPost.Courier.Offline.Persistence;

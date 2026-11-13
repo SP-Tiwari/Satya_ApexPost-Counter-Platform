@@ -36,13 +36,39 @@ public sealed record RecipientResponse(
 	string City);
 
 /// <summary>A summary of a shipment's most recent scan.</summary>
-/// <param name="ScanType">The scan type: 0 Pickup, 1 InTransit, 2 Delivered or 3 Failed, as in the scan endpoints.</param>
+/// <param name="ScanType">
+/// The scan type, as its name: Pickup, InTransit, Delivered or Failed.
+/// </param>
 /// <param name="Location">Where the scan was made.</param>
 /// <param name="ScannedAtUtc">When the scan was made.</param>
 public sealed record LatestScanResponse(
-	ShipmentScanType ScanType,
+	LatestScanType ScanType,
 	string Location,
 	DateTimeOffset ScannedAtUtc);
+
+// Week 4 review: the latest scan's type is a string in version 2, like the
+// status. It is its own enum, not ShipmentScanType with a property converter,
+// because the scan endpoints (shared by both versions) keep returning
+// ShipmentScanType as a number; one CLR type would give one OpenAPI schema
+// for two wire formats. The members and their order match ShipmentScanType;
+// a test checks that they stay in step.
+
+/// <summary>The type of a shipment's latest scan, written as its name (version 2).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<LatestScanType>))]
+public enum LatestScanType
+{
+	/// <summary>The courier picked the shipment up.</summary>
+	Pickup = ShipmentScanType.Pickup,
+
+	/// <summary>The shipment passed through a hub or vehicle.</summary>
+	InTransit = ShipmentScanType.InTransit,
+
+	/// <summary>The shipment was delivered.</summary>
+	Delivered = ShipmentScanType.Delivered,
+
+	/// <summary>A delivery attempt failed.</summary>
+	Failed = ShipmentScanType.Failed
+}
 
 /// <summary>One page of shipments (version 2).</summary>
 /// <param name="Items">The shipments on this page, ordered by tracking number.</param>
