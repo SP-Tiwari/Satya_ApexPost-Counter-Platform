@@ -301,12 +301,12 @@ The collection change listener logs the IDs of every changed document, along wit
 | Requirement | Implementation | Verification |
 |---|---|---|
 | Couchbase Lite, `apexpost_courier`, default collection, `CourierDatabase : IDisposable` | `Persistence/CourierDatabase.cs` | `CourierDatabaseTests` |
-| `ShipmentScan` document, `scan::{Guid}` IDs | `Domain/ShipmentScan.cs`, `Domain/ShipmentScanId.cs`, `Persistence/ShipmentScanDocument.cs` | `ShipmentScanTests`, `Create_StoresTheSevenFieldsAsAJsonDocument` |
+| `ShipmentScan` document, `scan::{Guid}` IDs | `src/ApexPost.Courier.Domain/ShipmentScan.cs`, `src/ApexPost.Courier.Domain/ShipmentScanId.cs`, `Persistence/ShipmentScanDocument.cs` | `ShipmentScanTests`, `Create_StoresTheSevenFieldsAsAJsonDocument` |
 | `IScanRepository`, `CouchbaseScanRepository`, key-value CRUD and list all | `Application/IScanRepository.cs`, `Persistence/CouchbaseScanRepository.cs` | `CouchbaseScanRepositoryTests` |
 | Three SQL++ queries, parameters only, value indexes | `Persistence/ScanQueries.cs`; indexes created in `CourierDatabase` | `ScanQueryTests`, [query plans](docs/evidence/week4-part-a/query-plans-and-tests.txt) |
-| Save locally first as `Pending`; `OutboxService` with a fake `IShipmentUploader` (since Part D: batches of 20, and the real uploader in the courier client, see [Courier console client](#courier-console-client-week-4-part-d)) | `Domain/ShipmentScan.Record`, `Application/OutboxService.cs`, `Uploading/FakeShipmentUploader.cs` | `OutboxServiceTests`, [harness session](docs/evidence/week4-part-a/harness-session-1.txt) |
+| Save locally first as `Pending`; `OutboxService` with a fake `IShipmentUploader` (since Part D: batches of 20, and the real uploader in the courier client, see [Courier console client](#courier-console-client-week-4-part-d)) | `src/ApexPost.Courier.Domain/ShipmentScan.cs` (`ShipmentScan.Record`), `Application/OutboxService.cs`, `Uploading/FakeShipmentUploader.cs` | `OutboxServiceTests`, [harness session](docs/evidence/week4-part-a/harness-session-1.txt) |
 | Change listener logging IDs and a live pending count; token removed on dispose | `CourierDatabase.StartChangeListener`, `StopChangeListener`, `Dispose` | `ChangeListenerTests` |
-| Domain classes reference no Couchbase types | `Domain/` namespace | `ArchitectureTests` |
+| Domain classes reference no Couchbase types | `src/ApexPost.Courier.Domain`, a separate project with no package or project references ([ADR 0031](docs/adr/0031-courier-domain-project.md)) | `ArchitectureTests` |
 | Console harness menu | `src/ApexPost.Courier.Harness` | `CourierHarnessTests`, [harness sessions](docs/evidence/week4-part-a/README.md) |
 
 Implementation paths are under `src/ApexPost.Courier.Offline` unless they start with `src/`. All the tests are in `tests/ApexPost.Courier.Offline.Tests`. Each test opens its own database in a new GUID-named folder and deletes it afterwards. The parent folder is chosen by `CourierTestStorage` in `TestSupport.cs`, in this order:
@@ -487,11 +487,12 @@ The output is [src/ApexPost.Client/Generated/ApexPostApiClient.cs](src/ApexPost.
 | Methods (`IApexPostApiClient`; each also has an overload with a `CancellationToken`) | `ListShipmentsAsync`, `GetShipmentAsync`, `CreateShipmentAsync`, `ReplaceShipmentAsync`, `ChangeShipmentStatusAsync`, `DeleteShipmentAsync`, `UploadShipmentScansAsync`, `GetShipmentScansAsync` |
 | Request models | `CreateShipmentRequest`, `UpdateShipmentRequest`, `UpdateStatusRequest`, `ScanUploadRequest`, `ScanUploadItem` |
 | Response models | `ShipmentResponse` with `RecipientResponse` and `LatestScanResponse`, `ShipmentPageResponse`, `ScanResponse`, `ScanUploadResponse`, `RejectedScanResponse`, `ProblemDetails`, `ValidationProblemDetails` |
-| Enums | `ShipmentStatus` (`Created` … `Failed`), `ShipmentScanType` (`Pickup` … `Failed`), with the API's names and numbers |
+| Enums | `ShipmentStatus` (`Created` … `Failed`), `ShipmentScanType` (`Pickup` … `Failed`), with the API's names and numbers, and `LatestScanType` (`Pickup` … `Failed`, names only) |
 | Exceptions | `ApiException`; `ApiException<ProblemDetails>` for 404, 409, 415 and 500; `ApiException<ValidationProblemDetails>` for 400 |
 
 - **Status as a string:** `ShipmentResponse.Status` and `UpdateStatusRequest.Status` are `ShipmentStatus`, with `[JsonConverter(typeof(JsonStringEnumConverter<ShipmentStatus>))]`. The client reads `"status": "PickedUp"` and sends `{"status":"PickedUp"}`, and a status filter goes in the query as `Status=PickedUp`.
-- **Scan type as a number:** `scanType` is `ShipmentScanType`, sent and read as its number, as the version 2 scan endpoints define it.
+- **Scan type in the scan endpoints, as a number:** `ScanUploadItem.ScanType` and `ScanResponse.ScanType` are `ShipmentScanType`, sent and read as its number (`"scanType": 1`), as the scan endpoints define it in both versions (`ShipmentScanType`, `type: integer`, in `contracts/v1.json` and `contracts/v2.json`).
+- **Latest scan type, as a string:** `LatestScanResponse.ScanType` is `LatestScanType`, with `[JsonConverter(typeof(JsonStringEnumConverter<LatestScanType>))]`, so the client reads `"latestScan": { "scanType": "InTransit", … }` (`LatestScanType`, `type: string`, in `contracts/v2.json`; since the Week 4 review, [VERSIONING.md](VERSIONING.md) change 21). Version 1 has no `latestScan`.
 - **Other types:** `weightKg` is `decimal`, and scan times are `DateTimeOffset`.
 - **Why the types are precise:** NSwag can only use what the document states. The API's `ContractSchemaTransformer` adds the enum and decimal facts to both documents without changing the JSON on the wire (see [API-NOTES.md](API-NOTES.md#schema-types-for-generated-clients-week-4-part-c-c6)).
 
@@ -564,7 +565,7 @@ dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
 ```
 
-**Final Week 4 verification (latest):** on 2026-11-09, from 21:25 to 21:27 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx --no-build` then ran on that build and passed 1,575 of 1,575 tests, with 0 failed and 0 skipped. The per-project counts are the same as in Milestone 5, below. The run came after the last configuration change: the courier console's `ApexPost.Courier.Sync.CourierResilience` log level, in `src/ApexPost.Courier.Console/appsettings.json`. Since then, only documentation and evidence have changed.
+**Final Week 4 verification (historical, before the Week 4 review fixes):** on 2026-11-09, from 21:25 to 21:27 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx --no-build` then ran on that build and passed 1,575 of 1,575 tests, with 0 failed and 0 skipped. The per-project counts are the same as in Milestone 5, below. The run came after the last configuration change: the courier console's `ApexPost.Courier.Sync.CourierResilience` log level, in `src/ApexPost.Courier.Console/appsettings.json`. Since then, only documentation and evidence have changed.
 
 **Week 4 Part D Milestone 5 verification (D10/D11 console client):** on 2026-11-09 at 20:36 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx` then passed 1,575 of 1,575 tests, with 0 failed and 0 skipped. Every code and test file was last changed before that build:
 

@@ -6,7 +6,7 @@ This page maps each marked criterion of the Week 4 assignment (Parts A, B, C and
 - **Live:** shown against the running application, and recorded in the linked evidence.
 - **Tests:** covered only by automated tests. Where a criterion is partly live and partly tests, the row says which part is which.
 
-The latest full run, on 2026-11-09 at 21:25 UTC, built with 0 warnings and 0 errors and passed 1,575 of 1,575 tests. It is recorded in [README.md](../README.md#build-and-test).
+The full run at submission, on 2026-11-09 at 21:25 UTC, built with 0 warnings and 0 errors and passed 1,575 of 1,575 tests. It is recorded in [README.md](../README.md#build-and-test). This count is historical: it predates the Week 4 review fixes, whose run is recorded in [week4-review-fixes.md](week4-review-fixes.md).
 
 ## Marks overview
 
@@ -24,7 +24,7 @@ Code paths are under `src/ApexPost.Courier.Offline` and tests under `tests/ApexP
 
 | Criterion | Marks | Implementation | Tests | Documentation and evidence | Verified by |
 |---|---|---|---|---|---|
-| Database lifecycle and document model | 5 | `Persistence/CourierDatabase.cs` (`apexpost_courier`, default collection, `IDisposable`); `Domain/ShipmentScan.cs`, `Domain/ShipmentScanId.cs` (`scan::{Guid}`), `Persistence/ShipmentScanDocument.cs` | `CourierDatabaseTests`, `ShipmentScanTests` | [ADR 0027](adr/0027-couchbase-lite-courier-offline-store.md), [harness session 1](evidence/week4-part-a/harness-session-1.txt) | Live and tests |
+| Database lifecycle and document model | 5 | `Persistence/CourierDatabase.cs` (`apexpost_courier`, default collection, `IDisposable`); `src/ApexPost.Courier.Domain/ShipmentScan.cs`, `src/ApexPost.Courier.Domain/ShipmentScanId.cs` (`scan::{Guid}`; a separate project since the Week 4 review, [ADR 0031](adr/0031-courier-domain-project.md)), `Persistence/ShipmentScanDocument.cs` | `CourierDatabaseTests`, `ShipmentScanTests` | [ADR 0027](adr/0027-couchbase-lite-courier-offline-store.md), [harness session 1](evidence/week4-part-a/harness-session-1.txt) | Live and tests |
 | Repository and key-value CRUD | 5 | `Application/IScanRepository.cs`, `Persistence/CouchbaseScanRepository.cs`; the domain references no Couchbase types | `CouchbaseScanRepositoryTests`, `ArchitectureTests` | [harness sessions](evidence/week4-part-a/README.md) | Live and tests |
 | SQL++ queries, parameters and indexes | 6 | `Persistence/ScanQueries.cs` (three parameterized queries); value indexes on `trackingNumber` and `syncStatus` in `CourierDatabase` | `ScanQueryTests` | [query plans and tests](evidence/week4-part-a/query-plans-and-tests.txt), screenshots [01](evidence/week4-part-a/screenshots/01-query-by-tracking-number.png), [02](evidence/week4-part-a/screenshots/02-query-pending.png), [03](evidence/week4-part-a/screenshots/03-query-scans-per-type.png) | Live and tests |
 | Outbox / offline persistence strategy | 4 | `ShipmentScan.Record` (saved locally as `Pending`), `Application/OutboxService.cs`, `Application/IShipmentUploader.cs`, `Uploading/FakeShipmentUploader.cs` | `OutboxServiceTests` | [OFFLINE-DESIGN.md](../OFFLINE-DESIGN.md#1-why-scans-are-saved-locally-first), [harness session 1](evidence/week4-part-a/harness-session-1.txt) | Live and tests |
