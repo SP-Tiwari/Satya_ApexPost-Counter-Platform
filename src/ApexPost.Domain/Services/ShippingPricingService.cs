@@ -6,8 +6,11 @@ public sealed class ShippingPricingService
 	private readonly IReadOnlyDictionary<
 		(string DestinationZone, ShippingServiceLevel ServiceLevel),
 		ShippingRate> _rates;
+	private readonly Money? _heavyParcelSurcharge;
 
-	public ShippingPricingService(IEnumerable<ShippingRate> rates)
+	public ShippingPricingService(
+		IEnumerable<ShippingRate> rates,
+		Money? heavyParcelSurcharge = null)
 	{
 		ArgumentNullException.ThrowIfNull(rates);
 
@@ -29,6 +32,7 @@ public sealed class ShippingPricingService
 		}
 
 		_rates = configuredRates;
+		_heavyParcelSurcharge = heavyParcelSurcharge;
 	}
 
 	public Money CalculatePrice(ShippingItem shippingItem)
@@ -44,6 +48,26 @@ public sealed class ShippingPricingService
 
 		var amount = rate.BasePrice.Amount
 			+ shippingItem.Weight.Kilograms * rate.PerKilogramCharge.Amount;
+
+		if (shippingItem.Type == ShippingItemType.Parcel && shippingItem.Weight.Kilograms > 30m)
+		{
+			if (_heavyParcelSurcharge is null)
+			{
+				throw new InvalidOperationException(
+					"No heavy-parcel surcharge is configured for parcels over 30 kg.");
+			}
+
+			if (!string.Equals(
+				_heavyParcelSurcharge.Currency,
+				rate.BasePrice.Currency,
+				StringComparison.Ordinal))
+			{
+				throw new InvalidOperationException(
+					$"The heavy-parcel surcharge currency ({_heavyParcelSurcharge.Currency}) must match the shipping rate currency ({rate.BasePrice.Currency}).");
+			}
+
+			amount += _heavyParcelSurcharge.Amount;
+		}
 
 		return new Money(amount, rate.BasePrice.Currency);
 	}

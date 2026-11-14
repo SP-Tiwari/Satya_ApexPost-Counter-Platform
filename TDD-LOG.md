@@ -50,7 +50,37 @@ The best overload for 'ShippingPricingService' does not have a parameter named '
 
 ## GREEN
 
-Not started.
+Only `src/ApexPost.Domain/Services/ShippingPricingService.cs` changed. The RED tests were not edited.
+
+**Step 1: the input only (2026-11-14 10:56 UTC).** The constructor gained an optional parameter, `Money? heavyParcelSurcharge = null`, and nothing else. The tests compiled and failed on their assertions, exactly where RED predicted:
+
+| Test case | Result |
+|---|---|
+| `CalculatePrice_ParcelOver30Kg_AddsTheSurcharge(30.01, 120.02)` | Failed: expected 120.02 INR, actual 70.02 INR |
+| `CalculatePrice_ParcelOver30Kg_AddsTheSurcharge(31, 122)` | Failed: expected 122 INR, actual 72 INR |
+| `CalculatePrice_ParcelOver30KgWithNoConfiguredSurcharge_ThrowsInvalidOperationException` | Failed: no exception was thrown |
+| `CalculatePrice_SurchargeInAnotherCurrency_ThrowsInvalidOperationException` | Failed: no exception was thrown |
+
+Pricing tests: **4 failed, 10 passed** (the 7 original tests and the 3 boundary guards).
+
+**Step 2: the minimal implementation.** The constructor stores the surcharge. `CalculatePrice` then adds one branch after the existing formula, for a parcel whose weight is greater than `30m` kg:
+- no configured surcharge throws `InvalidOperationException` ("No heavy-parcel surcharge is configured for parcels over 30 kg.");
+- a surcharge in a currency other than the rate's throws `InvalidOperationException`;
+- otherwise the surcharge amount is added.
+
+Letters and parcels at or below 30 kg take the existing path unchanged. The 30 kg threshold is a literal for now, and is left for REFACTOR.
+
+**Results (2026-11-14):**
+
+| Run | Result |
+|---|---|
+| `dotnet test tests/ApexPost.Domain.Tests --filter "FullyQualifiedName~ShippingPricingServiceTests"` (10:56 UTC) | 14 passed, 0 failed, 0 skipped |
+| `dotnet test tests/ApexPost.Domain.Tests` | 286 passed, 0 failed, 0 skipped |
+| `dotnet build ApexPost.slnx --no-incremental`, then `dotnet test ApexPost.slnx --no-build` (10:57–10:59 UTC) | 0 warnings; **1,633 passed, 0 failed, 0 skipped**: Domain 286, Application 150, Courier.Sync 215, Courier.Console 15, Courier.Offline 88, Infrastructure 239, Api 337, Web 303 |
+
+**Production code changed to make the rule testable:** the surcharge is passed to the constructor instead of being hard-coded. The amount is configured policy (ADR 0005), so the tests supply a fictional 50.00 INR, and the existing calls, which pass only the rates, compile unchanged.
+
+**Effect on existing callers:** `MixedBasketApplicationService` and `DemoDataInitializer` still pass no surcharge. Until the surcharge is configured for the counter workflow, a counter sale of a parcel over 30 kg is refused, rather than priced without its surcharge; letters and parcels up to 30 kg are not affected. This only matters where an operator sets a parcel weight limit above 30 kg. Demo shipments weigh at most 3 kg, so the demo data is unaffected. Wiring the surcharge into the counter workflow is outside this exercise.
 
 ## REFACTOR
 
