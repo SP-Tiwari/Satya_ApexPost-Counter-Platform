@@ -10,8 +10,17 @@ public static class StaffPasswordHashVerifier
 
 	public const int MinimumIterations = 600_000;
 	private const int MaximumIterations = 2_000_000;
-	private static readonly byte[] DummySalt = new byte[SaltSizeBytes];
-	private static readonly byte[] DummyHash = new byte[HashSizeBytes];
+
+	// A well-formed credential that no password matches. Checking against it
+	// runs the same validation, PBKDF2 work factor and comparison as a real
+	// credential, so an unknown account takes as long to reject as a wrong
+	// password for a real one.
+	internal static readonly StaffCredential DummyCredential = new(
+		"unknown-staff",
+		CurrentVersion,
+		MinimumIterations,
+		Convert.ToBase64String(new byte[SaltSizeBytes]),
+		Convert.ToBase64String(new byte[HashSizeBytes]));
 
 	public static bool Verify(string password, StaffCredential credential)
 	{
@@ -60,17 +69,9 @@ public static class StaffPasswordHashVerifier
 		}
 	}
 
-	// Uses the same work factor as every credential StaffPasswordHasher
-	// creates, so an unknown account takes as long to reject as a wrong
-	// password for a real one.
 	public static void PerformDummyVerification(string password)
 	{
 		ArgumentNullException.ThrowIfNull(password);
-		_ = Rfc2898DeriveBytes.Pbkdf2(
-			password,
-			DummySalt,
-			MinimumIterations,
-			HashAlgorithmName.SHA256,
-			HashSizeBytes);
+		_ = Verify(password, DummyCredential);
 	}
 }

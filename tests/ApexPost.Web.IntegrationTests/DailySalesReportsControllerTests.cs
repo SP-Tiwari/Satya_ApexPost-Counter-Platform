@@ -30,6 +30,10 @@ public sealed class DailySalesReportsControllerTests : IAsyncLifetime
 					"Authentication:CredentialFile",
 					Path.Combine(_storageDirectory, "credentials.json"));
 				builder.ConfigureTestServices(services =>
+				{
+					// The dashboard's "today" is the report date, whatever the real date.
+					services.AddSingleton<TimeProvider>(new FixedTimeProvider(
+						new DateTimeOffset(ReportDate, new TimeOnly(12, 0), TimeSpan.Zero)));
 					services.AddAuthentication(options =>
 					{
 						options.DefaultAuthenticateScheme =
@@ -41,7 +45,8 @@ public sealed class DailySalesReportsControllerTests : IAsyncLifetime
 					}).AddScheme<AuthenticationSchemeOptions,
 						LowStockTestAuthenticationHandler>(
 						LowStockTestAuthenticationHandler.SchemeName,
-						_ => { }));
+						_ => { });
+				});
 			});
 		return Task.CompletedTask;
 	}
@@ -99,11 +104,9 @@ public sealed class DailySalesReportsControllerTests : IAsyncLifetime
 	[Fact]
 	public async Task Dashboard_ShowsTodaysSalesRoundedLikeTheDailySalesReport()
 	{
-		var today = DateOnly.FromDateTime(DateTime.UtcNow);
 		await SeedAsync(
 			[CreateStaff(ManagerId, StaffRole.BranchManager, "BR01")],
-			[CreatePaidBasket(
-				"BR01", 24.05m, 1m, today.DayNumber - ReportDate.DayNumber, taxRate: 0.1m)]);
+			[CreatePaidBasket("BR01", 24.05m, 1m, taxRate: 0.1m)]);
 		using var client = CreateClient("BranchManager", ManagerId, "BR01");
 
 		var response = await client.GetAsync("/");

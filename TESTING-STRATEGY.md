@@ -1,0 +1,129 @@
+# ApexPost testing strategy (Week 5)
+
+**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `684470c`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. All planned Week 5 work is now done; the reflection is in section 8. After the Moq tests of M3, the full run of 2026-11-14 (10:36–10:38 UTC) passed **1,626 of 1,626**, with 0 failed, 0 skipped and 0 build warnings. After the TDD work of M4, the full run of 2026-11-14 (11:03–11:04 UTC), on the code committed as `256a248`, gave **1,633 passed, 0 failed, 0 skipped, 0 build warnings**. After the BDD scenarios of M5, the full run of 2026-11-14 (11:31–11:33 UTC) gave **1,642 passed, 0 failed, 0 skipped, 0 build warnings**. **Latest:** after the M6 tests, the full run of 2026-11-14 (15:56–15:58 UTC) gave **1,660 passed, 0 failed, 0 skipped, 0 build warnings**. **Clock note:** all 2026-11-14 times in this document were read from a system clock that VMware Tools had set 5 h 28 min 48 s fast at about 09:15 IST; Windows Time corrected it at 18:23 IST (Windows System log, Kernel-General event 1). The true times are 5 h 28 min 48 s earlier, for example 15:56 UTC was 10:27 UTC. Dates, order, durations and results are unaffected, and the dates of the Week 5 commits up to `4fed488` carry the same offset.
+
+![ApexPost testing strategy: architecture, TDD, BDD, projects, resources and best practices](docs/assets/testing-strategy.png)
+
+## 1. Scope and risks
+
+**In scope:** domain and application services, validation, repositories (integration level), the Web API, the typed client `ApexPost.Courier.Sync` and the Couchbase Lite outbox `ApexPost.Courier.Offline`. **Out of scope:** UI pages, browser testing and MAUI (the courier client is a console).
+
+| # | Risk | Existing evidence | Week 5 |
+|---|---|---|---|
+| R1 | Invalid status transitions | `ShipmentStatusTransitionRuleTests` (all 36 pairs), `ShipmentStatusTests` | Moq: `TrackedShipmentApplicationServiceTests` (done, M3) |
+| R2 | Duplicate tracking numbers | `ShipmentEndpointsTests` (409, keeps the first) | `ShipmentCreation.feature` (done, M5) |
+| R3 | Duplicate scans | `ScanUploadTests`, `CourierClientRetryTests` | `ScanSync.feature` (done, M5) |
+| R4 | JWT roles and courier ownership | `SecurityTests` | Kept |
+| R5 | Client retries | `ResilienceTests`, `ApexApiClientTests` | Kept |
+| R6 | Offline outbox loses scans | `OutboxServiceTests`, `CourierOfflineSyncTests` | Moq: `OutboxServiceInteractionTests` (done, M3) |
+| R7 | Sale atomicity and stock | `SaleRollbackTests`, `TransactionsControllerTests` | Kept |
+| R8 | Published contract drift | `PublishedContractTests`, `ApiVersioningTests` | Kept |
+| R9 | Weight limits (0.1–70 kg) | `ShipmentEndpointsTests`, `WeightTests` | Heavy-parcel surcharge by TDD (done, M4; `TDD-LOG.md`); weight Scenario Outline in `ShipmentCreation.feature` (done, M5); surcharge Scenario Outline in `HeavyParcelSurcharge.feature` (done, M6) |
+
+## 2. Test architecture and projects
+
+| Test project | Tests | Unit | Integration | Main tools / resources |
+|---|---:|---:|---:|---|
+| `ApexPost.Domain.Tests` | 286 | 286 | 0 | xUnit theories over rules and value objects; heavy-parcel surcharge tests (TDD) |
+| `ApexPost.Application.Tests` | 162 | 162 | 0 | Hand-written fakes; Moq (`TrackedShipmentApplicationServiceTests`, `ParcelStatusApplicationServiceTests`) |
+| `ApexPost.Courier.Sync.Tests` | 215 | 196 | 19 | `StubHandler`, test clock; DPAPI temp folder |
+| `ApexPost.Courier.Console.Tests` | 15 | 15 | 0 | Scripted console, in-memory stores |
+| `ApexPost.Courier.Offline.Tests` | 88 | 35 | 53 | Couchbase Lite in a temp folder; Moq (`OutboxServiceInteractionTests`) |
+| `ApexPost.Infrastructure.Tests` | 239 | 99 | 140 | SQL Server test database |
+| `ApexPost.Api.IntegrationTests` | 337 | 0 | 337 | `WebApplicationFactory` + SQL Server + test JWT |
+| `ApexPost.Web.IntegrationTests` | 303 | 18 | 285 | `WebApplicationFactory` + SQL Server |
+| `ApexPost.Specs` | 15 | – | – | Reqnroll BDD: 6 API scenario runs (SQL Server), 3 outbox scenarios (Couchbase Lite), 6 pricing scenario runs (in memory) |
+| **Total** | **1,660** | **811 (49%)** | **834 (50%)** | plus **15 BDD scenario runs (0.9%)** |
+
+This is the documented equivalent of the suggested `ApexPost.UnitTests`, `ApexPost.IntegrationTests` and `ApexPost.Specs`: unit and integration tests live in one test project per layer, with each project's split shown above. Most integration tests are in Infrastructure, API and Web, with the Couchbase Lite tests in Courier.Offline and the DPAPI tests in Courier.Sync, and the BDD scenarios are in `ApexPost.Specs`.
+
+- **Unit:** in memory, milliseconds; every rule and boundary. **Integration:** proves the wiring. Unique indexes, `rowversion`, rollback, procedures and JWT rules exist only in SQL Server and the HTTP pipeline, so this layer is thick on purpose. **BDD:** a few business scenarios on top.
+- **Framework:** xUnit 2.9.3 everywhere. A new class instance per test, `IDisposable`/`IAsyncLifetime` for setup and teardown, `[Theory]` + `[InlineData]` for boundaries. Reqnroll generates xUnit classes, so all levels run in `dotnet test` and Test Explorer.
+- **Conventions:** `Method_Scenario_ExpectedResult`; Arrange, Act, Assert; exact exception types; both sides of each boundary; fictional data only (`APX-`, `example.test`); no secrets.
+- **Data access:** never mock `DbContext`/`DbSet` (LINQ to Objects hides SQL translation, constraints and transactions); EF Core InMemory and SQLite are not used. Every Moq-tested decision also has an integration test against the real provider.
+- **Review of existing tests:** all 108 classes were reviewed and none is removed. Three classes were **modified in M2**:
+  - `SqlScriptTests` (three tests) and `DailySalesReportsControllerTests.Dashboard_ShowsTodaysSalesRoundedLikeTheDailySalesReport` took "today" from `DateTime.UtcNow`, so a run crossing midnight UTC could fail. They now use a `FixedTimeProvider` (`tests/Shared/FixedTimeProvider.cs`) on a fixed business date.
+  - `StaffPasswordHashingTests.DummyVerification_TakesAboutAsLongAsARealCheck` compared wall-clock timings, so its result depended on machine load. It is replaced by `DummyCredential_HasTheSameWorkFactorAsACreatedCredential`, which checks the same timing-attack guard deterministically. `PerformDummyVerification` now runs `Verify` against an internal `DummyCredential`, so the unknown-account path does the same work as a real check. A break-and-restore check confirmed the new test fails when the dummy work factor changes.
+
+## 3. TDD: the inner loop (M3 Moq, M4 TDD)
+
+**RED:** write one failing test and see it fail. **GREEN:** write the minimum code that passes. **REFACTOR:** improve the structure while all tests stay green. Repeat for the next case. Each phase is its own commit (`RED:`, `GREEN:`, `REFACTOR:`) and is recorded in `TDD-LOG.md`.
+
+- **TDD (done, M4).** Evidence: [TDD-LOG.md](TDD-LOG.md) and three separate commits:
+  - `264f8f2` RED: add heavy parcel surcharge pricing tests;
+  - `5cce2c8` GREEN: implement heavy parcel surcharge pricing;
+  - `256a248` REFACTOR: improve heavy parcel pricing clarity.
+- **Rule:** a **parcel** strictly over 30 kg pays a heavy-parcel surcharge in `ShippingPricingService.CalculatePrice`.
+  - **No surcharge:** exactly 30 kg and below, and letters of any weight.
+  - **Amount:** a fictional **50.00 INR**. It is configurable, not hard-coded: it is passed to the service's constructor as `heavyParcelSurcharge`, because ADR 0005 treats prices as configured policy.
+  - **Errors:** a parcel over 30 kg with no configured surcharge fails closed (`InvalidOperationException`), as a missing rate does. A surcharge in a different currency from the rate is rejected.
+- **Tests:** 7 new cases in `ShippingPricingServiceTests`: 30 kg, 29.99 kg, 30.01 kg and 31 kg, no surcharge configured, a USD surcharge, and a 31 kg letter. The 7 original pricing tests are unchanged.
+- **Scope:** the rule is implemented only in the domain pricing service. The counter workflow (`MixedBasketApplicationService`) and the application configuration are **not wired**, so no surcharge is configured in the running application. Until it is, a counter sale of a parcel over 30 kg is refused rather than priced without its surcharge; this matters only where a parcel weight limit above 30 kg is configured.
+- **Moq (done, M3)** isolates two services with `Mock<T>`, `Setup`/`Returns`/`ReturnsAsync`/`ThrowsAsync`/`SetupSequence`, `It.Is`/`It.IsAny`, and `Verify` with `Times.Once`/`Times.Never`/`Times.Exactly`:
+  - **Interface naming:** the assignment's `IShipmentRepository` is this solution's `ITrackedShipmentRepository` (`src/ApexPost.Application/Persistence/ITrackedShipmentRepository.cs`), the shipment repository of the Week 4 API. Its SQL Server implementation is `SqlTrackedShipmentRepository`. No `IShipmentRepository` exists, and the interface is not renamed, because its name is already used by the service, the implementation and the dependency registration.
+  - `TrackedShipmentApplicationServiceTests` (10 tests) mocks `ITrackedShipmentRepository` and `IUnitOfWork`. The `ExecuteInTransactionAsync` mock runs the use case it is given, as the real unit of work does. Covered: create saves once; a `DuplicateRecordException` becomes a conflict (R2); an allowed status change saves; Delivered → InTransit, an unknown tracking number, and deleting a PickedUp shipment save nothing (R1); a repeated scan is stored once, a scan held by another shipment is rejected, and a duplicate on save reruns the upload once on fresh state (R3).
+  - `OutboxServiceInteractionTests` (6 tests) mocks `IScanRepository` and `IShipmentUploader`. Covered: Synced and Failed are written back per scan; 25 scans go as batches of 20 and 5; an uploader exception or a RetryLater stops the run with no status change for unanswered scans (R6); nothing pending or an already cancelled run never calls the uploader.
+  - **What they do not prove:** the SQL, unique keys, transactions and Couchbase Lite storage behind the mocked interfaces. Those are covered by `SqlPersistenceTests`, the API integration tests and `OutboxServiceTests`.
+  - **Proof that they can fail:** each class was checked by break-and-restore. A service that saved after accepting no scans failed 2 of the 10 tests, and an outbox that kept sending batches after a missing answer failed 2 of the 6 tests.
+- **How the tests guide the code:** the test states the rule before the code exists; only code a failing test asks for is written; later changes are checked against every earlier rule.
+
+## 4. BDD: the outer loop (M5, M6)
+
+**Done (M5).** The business, a developer and a tester agree concrete examples first. These are written as **Given → When → Then** in feature files, with a `Background` per feature.
+
+**Project:** `tests/ApexPost.Specs`, using Reqnroll 3.3.4 with `Reqnroll.xUnit` and xUnit 2.9.3. Reqnroll generates an xUnit class for each feature at build time, so the scenarios run in `dotnet test` and Test Explorer like every other test. The project links the existing test infrastructure instead of copying it: `DisposableSqlDatabase`, `ApiTestHost.cs` (`ApiFactory`, `TestTokens`) and the Couchbase Lite `TestSupport.cs`. No production code was changed.
+
+| Feature | Level and system under test | Scenarios |
+|---|---|---|
+| `Features/ShipmentCreation.feature` | API: `ApiFactory` (`WebApplicationFactory`) on the disposable `ApexPost_Test_*` SQL Server database, signed in with an Admin test JWT | A valid shipment is created (201, Location, stored as Created); a tracking number cannot be used twice (409, the first is kept); **Scenario Outline** "Only weights from 0.1 kg to 70 kg are accepted", with **Examples** 0.05 → refused (400 on `weightKg`), 0.1 → created, 70 → created, 70.1 → refused |
+| `Features/ScanSync.feature` | Service: `OutboxService` over a real Couchbase Lite store in a temporary folder; `CentralSystemStub` gives the central system's answers | Offline scans are uploaded, oldest first, and marked Synced; a scan the central system already holds is still sent, because the device cannot know, and is marked Synced on the accepting answer; a refused scan is marked Failed with the server's reason ("The scan ID is already recorded for another shipment."). Afterwards, the next sync sends nothing |
+| `Features/HeavyParcelSurcharge.feature` (M6) | Service: `ShippingPricingService` called directly, in memory, with no API host or database | Background: a Standard rate of 100.00 INR plus 10.00 INR per kg and a 50.00 INR surcharge. **Scenario Outline** with **Examples** 29.99 kg → 399.90, 30 → 400.00, 30.01 → 450.10, 31 → 460.00; a 31 kg letter → 410.00; with no surcharge configured, a 31 kg parcel is refused. A deliberate BDD view of the rule built by TDD in M4; counter-workflow pricing is not covered |
+
+- **Context injection:** `ShipmentApiContext`, `CourierScanContext` and `HeavyParcelSurchargeContext` are plain classes. Reqnroll creates one of each per scenario and passes it to the constructors of the step classes (`ShipmentCreationSteps`, `ScanSyncSteps`, `HeavyParcelSurchargeSteps`) and of `ScenarioHooks`. Steps share state only through these objects; there are no static fields.
+- **Hooks:** `ScenarioHooks` are scoped by feature tag.
+  - `[BeforeScenario("shipment-api")]` starts a new `ApiFactory`, which empties the disposable database; `[AfterScenario("shipment-api")]` disposes the response, the client and the host.
+  - `[BeforeScenario("courier-offline")]` opens a `CourierTestContext` in a new `<guid>` folder; `[AfterScenario("courier-offline")]` closes the database and deletes the folder.
+  - `AfterScenario` runs even when a step fails. After the runs, no courier test folder was left.
+- **Why a stub at service level:** the courier device's own rule is that each answer gives each scan its final status, and that nothing final is sent again. `CentralSystemStub` answers as the real `ApiShipmentUploader` reports the API's answers: a new or already-held scan is Synced, and a refused scan is Rejected with the server's reason. **It does not prove** the API's de-duplication or rejection rules; those run against SQL Server in `ScanUploadTests` and `CourierOfflineSyncTests`.
+- **Results (2026-11-14 14:08:46–14:08:59 UTC):** `dotnet test tests/ApexPost.Specs` gave 9 passed, 0 failed, 0 skipped: 2 + 4 shipment-creation runs (the outline counts once per Examples row) and 3 scan-sync scenarios. After M6 added the pricing feature (2 + 4 runs, no hooks because it uses no external resources), the whole project gave 15 passed, 0 failed, 0 skipped (2026-11-14 15:52:20 UTC).
+
+**How BDD complements TDD:** BDD checks that we build the right behaviour, in business words. TDD checks that each rule is built right, in code. A scenario stays red until it is delivered; each rule underneath is built RED → GREEN → REFACTOR. A red scenario with green unit tests points to wiring; a red unit test points to the rule.
+
+## 5. Copilot-assisted tests (M6)
+
+**Done (M6).** GitHub Copilot (Agent mode in Visual Studio 2026) drafted one service's unit tests and one feature with its step definitions. Every draft was built, run and reviewed before it was kept. [COPILOT-LOG.md](COPILOT-LOG.md) records both prompts word for word, Copilot's output, and each kept, changed or rejected decision with its reason.
+
+- **Unit tests:** `ParcelStatusApplicationServiceTests` (12 tests, Moq) for `ParcelStatusApplicationService`, which had no unit tests. Four of Copilot's tests were kept unchanged. Rejected and replaced: an exception assertion that accepted any subclass (`ThrowsAnyAsync`) and expected values read back from the test's own input. Added in review: three missing edge cases.
+- **Feature:** `HeavyParcelSurcharge.feature`, `HeavyParcelSurchargeSteps` and `HeavyParcelSurchargeContext` (section 4). All of Copilot's expected prices were correct by hand calculation. Rejected: a project-file line that Visual Studio wrote during the agent run and that excluded the feature from the build (the file was restored), a hard-coded zone and service level, a catch-all exception handler and an unused property.
+- **Proof that generated tests can fail:** two Copilot tests, kept unchanged, failed against temporary production changes and passed again after the restore. `ScreenQueryShipmentIdCaseDiffers_ReturnsNull` failed when the ID check ignored letter case, and `CourierTrackingConfigured_IncludesCourierAndCallsTrackingOnce` failed when the courier was never asked.
+- **Marking:** each Copilot-assisted class starts with a `// Copilot-assisted:` comment.
+
+## 6. Test resources, isolation and cleanup
+
+- **SQL Server:** `DisposableSqlDatabase` creates `ApexPost_Test_<guid>` with the real migrations and refuses any other name. `Reset()` deletes all rows **before** each test, and tests run one at a time on that database. The database is dropped by the collection fixture or on process exit.
+- **WebApplicationFactory:** `ApiFactory` and `ApexPostWebApplicationFactory` host the app in memory against the disposable database, with a signing key generated for each run.
+- **Couchbase Lite:** `CourierTestContext` gives each test its own `<guid>` folder inside `using`. It is closed and deleted on pass or failure, so these tests can run in parallel.
+- **Files and time:** `DpapiTokenStoreTests` uses its own temp folder, deleted in `Dispose()`. Business dates, report dates and time boundaries come from `FakeTimeProvider` or `FixedTimeProvider`, never from `DateTime.UtcNow`. A few API tests still build scan times and token expiries relative to the real clock, with minutes or hours of margin, because JWT lifetime validation uses the server's real clock. A few other tests read the real clock for stored timestamps (an audit record in `SqlPersistenceTests`, a payment in `UnitOfWorkBoundaryTests`) and for one 10-second polling timeout in `ChangeListenerTests`; no assertion depends on these values.
+- **Limitation:** if the test process is killed, an `ApexPost_Test_*` database can be left behind. It never affects later runs because each run uses a new name; the README explains how to remove it.
+
+**Best practices:** deterministic tests (fixed clocks, no network, no random input); independent tests (each arranges its own data); no shared mutable state; reliable cleanup through `Dispose` and `using`, even when a test fails; no test-order dependencies (reset before each test, so any test runs alone or in any order).
+
+## 7. Not tested, and milestones
+
+**Not tested:** UI and browser behaviour, real external networks, framework internals, the generated NSwag client line by line, performance (PERFORMANCE.md), Sync Gateway, and private members.
+
+**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq (done) · M4 TDD and `TDD-LOG.md` (done; commits `264f8f2`, `5cce2c8`, `256a248`) · M5 `ApexPost.Specs` (done) · M6 Copilot-assisted tests and `COPILOT-LOG.md` (done) · M7 final run and reflection (done; the run is in the README section "Final Week 5 test run", the reflection in section 8).
+
+## 8. Reflection (M7)
+
+**Strategy used, and why.** Each risk was tested at the cheapest level that can really prove it: unit tests for rules and boundaries, Moq for the decisions a service makes about its dependencies, a real SQL Server and the real HTTP pipeline for anything that depends on constraints, transactions or security, and Reqnroll scenarios for business examples. The one new rule, the heavy-parcel surcharge, was built test first. Generated test drafts were kept only after review and a break-and-restore check. The 1,610 existing tests were all kept, so new tests went only where the risk map showed a gap.
+
+**What did the strategy catch?** No defect in the existing business rules: every full run passed. It caught weak tests and weak evidence instead:
+- four tests that read the real clock, so a run crossing midnight UTC could fail, and one that compared wall-clock timings; all five are now deterministic (M2);
+- assertions that could pass for the wrong reason: a BDD step that checked only its own stub (M5), and, in the generated drafts, an exception assertion that accepted any subclass, expected values read back from the test's own input, hard-coded data and a catch-all exception handler (M6);
+- a feature silently left out of the build during an agent run: the build succeeded and every test passed, and only the discovered-test count showed that its scenarios were not running;
+- `ApexPost_Test_*` databases left behind when a test process is stopped, because they are dropped only on process exit.
+
+**What would I change?** Drop the test databases with a test-run fixture instead of an exit handler; check the discovered test count in every run, not only pass or fail; wire the surcharge into the counter workflow behind an integration test, since the rule is now proven only in the domain service; and produce the optional coverage report, which would have pointed earlier to services like `ParcelStatusApplicationService` that had no unit tests.
+
+**Which test type gave the most confidence per minute spent?** The API integration tests on `WebApplicationFactory` and a real SQL Server. One test proves routing, authorization, validation, EF Core and the database constraint together: the 409 for a duplicate tracking number depends on a unique key that no unit test can prove. Unit tests are much cheaper to run (286 domain tests in about a second, against 56 seconds for 337 API tests) and were the best value while building a rule test first, but for ApexPost's riskiest behaviour the integration layer bought the most confidence for the time.

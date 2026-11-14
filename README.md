@@ -16,7 +16,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 - `src/ApexPost.Client.Consumer` — Week 4: the console app that calls the API through the generated client.
 - `src/ApexPost.Courier.Sync` — Week 4 Part D: the courier client's typed API client, bearer-token handler, resilience pipeline (retry, circuit breaker, timeouts), DPAPI token store and source-generated JSON. See [Courier console client](#courier-console-client-week-4-part-d).
 - `src/ApexPost.Courier.Console` — Week 4 Part D: the courier console client (Login, New Scan, Pending Scans, Sync Status), used instead of a .NET MAUI app.
-- `tests/*` — Domain, Application, Infrastructure, Web integration, API integration, courier offline, courier client and courier console tests.
+- `tests/*` — Domain, Application, Infrastructure, Web integration, API integration, courier offline, courier client and courier console tests, and the Week 5 Reqnroll BDD specifications (`tests/ApexPost.Specs`).
 
 ## Implemented workflows and protections
 
@@ -301,12 +301,12 @@ The collection change listener logs the IDs of every changed document, along wit
 | Requirement | Implementation | Verification |
 |---|---|---|
 | Couchbase Lite, `apexpost_courier`, default collection, `CourierDatabase : IDisposable` | `Persistence/CourierDatabase.cs` | `CourierDatabaseTests` |
-| `ShipmentScan` document, `scan::{Guid}` IDs | `Domain/ShipmentScan.cs`, `Domain/ShipmentScanId.cs`, `Persistence/ShipmentScanDocument.cs` | `ShipmentScanTests`, `Create_StoresTheSevenFieldsAsAJsonDocument` |
+| `ShipmentScan` document, `scan::{Guid}` IDs | `src/ApexPost.Courier.Domain/ShipmentScan.cs`, `src/ApexPost.Courier.Domain/ShipmentScanId.cs`, `Persistence/ShipmentScanDocument.cs` | `ShipmentScanTests`, `Create_StoresTheSevenFieldsAsAJsonDocument` |
 | `IScanRepository`, `CouchbaseScanRepository`, key-value CRUD and list all | `Application/IScanRepository.cs`, `Persistence/CouchbaseScanRepository.cs` | `CouchbaseScanRepositoryTests` |
 | Three SQL++ queries, parameters only, value indexes | `Persistence/ScanQueries.cs`; indexes created in `CourierDatabase` | `ScanQueryTests`, [query plans](docs/evidence/week4-part-a/query-plans-and-tests.txt) |
-| Save locally first as `Pending`; `OutboxService` with a fake `IShipmentUploader` (since Part D: batches of 20, and the real uploader in the courier client, see [Courier console client](#courier-console-client-week-4-part-d)) | `Domain/ShipmentScan.Record`, `Application/OutboxService.cs`, `Uploading/FakeShipmentUploader.cs` | `OutboxServiceTests`, [harness session](docs/evidence/week4-part-a/harness-session-1.txt) |
+| Save locally first as `Pending`; `OutboxService` with a fake `IShipmentUploader` (since Part D: batches of 20, and the real uploader in the courier client, see [Courier console client](#courier-console-client-week-4-part-d)) | `src/ApexPost.Courier.Domain/ShipmentScan.cs` (`ShipmentScan.Record`), `Application/OutboxService.cs`, `Uploading/FakeShipmentUploader.cs` | `OutboxServiceTests`, [harness session](docs/evidence/week4-part-a/harness-session-1.txt) |
 | Change listener logging IDs and a live pending count; token removed on dispose | `CourierDatabase.StartChangeListener`, `StopChangeListener`, `Dispose` | `ChangeListenerTests` |
-| Domain classes reference no Couchbase types | `Domain/` namespace | `ArchitectureTests` |
+| Domain classes reference no Couchbase types | `src/ApexPost.Courier.Domain`, a separate project with no package or project references ([ADR 0031](docs/adr/0031-courier-domain-project.md)) | `ArchitectureTests` |
 | Console harness menu | `src/ApexPost.Courier.Harness` | `CourierHarnessTests`, [harness sessions](docs/evidence/week4-part-a/README.md) |
 
 Implementation paths are under `src/ApexPost.Courier.Offline` unless they start with `src/`. All the tests are in `tests/ApexPost.Courier.Offline.Tests`. Each test opens its own database in a new GUID-named folder and deletes it afterwards. The parent folder is chosen by `CourierTestStorage` in `TestSupport.cs`, in this order:
@@ -487,11 +487,12 @@ The output is [src/ApexPost.Client/Generated/ApexPostApiClient.cs](src/ApexPost.
 | Methods (`IApexPostApiClient`; each also has an overload with a `CancellationToken`) | `ListShipmentsAsync`, `GetShipmentAsync`, `CreateShipmentAsync`, `ReplaceShipmentAsync`, `ChangeShipmentStatusAsync`, `DeleteShipmentAsync`, `UploadShipmentScansAsync`, `GetShipmentScansAsync` |
 | Request models | `CreateShipmentRequest`, `UpdateShipmentRequest`, `UpdateStatusRequest`, `ScanUploadRequest`, `ScanUploadItem` |
 | Response models | `ShipmentResponse` with `RecipientResponse` and `LatestScanResponse`, `ShipmentPageResponse`, `ScanResponse`, `ScanUploadResponse`, `RejectedScanResponse`, `ProblemDetails`, `ValidationProblemDetails` |
-| Enums | `ShipmentStatus` (`Created` … `Failed`), `ShipmentScanType` (`Pickup` … `Failed`), with the API's names and numbers |
+| Enums | `ShipmentStatus` (`Created` … `Failed`), `ShipmentScanType` (`Pickup` … `Failed`), with the API's names and numbers, and `LatestScanType` (`Pickup` … `Failed`, names only) |
 | Exceptions | `ApiException`; `ApiException<ProblemDetails>` for 404, 409, 415 and 500; `ApiException<ValidationProblemDetails>` for 400 |
 
 - **Status as a string:** `ShipmentResponse.Status` and `UpdateStatusRequest.Status` are `ShipmentStatus`, with `[JsonConverter(typeof(JsonStringEnumConverter<ShipmentStatus>))]`. The client reads `"status": "PickedUp"` and sends `{"status":"PickedUp"}`, and a status filter goes in the query as `Status=PickedUp`.
-- **Scan type as a number:** `scanType` is `ShipmentScanType`, sent and read as its number, as the version 2 scan endpoints define it.
+- **Scan type in the scan endpoints, as a number:** `ScanUploadItem.ScanType` and `ScanResponse.ScanType` are `ShipmentScanType`, sent and read as its number (`"scanType": 1`), as the scan endpoints define it in both versions (`ShipmentScanType`, `type: integer`, in `contracts/v1.json` and `contracts/v2.json`).
+- **Latest scan type, as a string:** `LatestScanResponse.ScanType` is `LatestScanType`, with `[JsonConverter(typeof(JsonStringEnumConverter<LatestScanType>))]`, so the client reads `"latestScan": { "scanType": "InTransit", … }` (`LatestScanType`, `type: string`, in `contracts/v2.json`; since the Week 4 review, [VERSIONING.md](VERSIONING.md) change 21). Version 1 has no `latestScan`.
 - **Other types:** `weightKg` is `decimal`, and scan times are `DateTimeOffset`.
 - **Why the types are precise:** NSwag can only use what the document states. The API's `ContractSchemaTransformer` adds the enum and decimal facts to both documents without changing the JSON on the wire (see [API-NOTES.md](API-NOTES.md#schema-types-for-generated-clients-week-4-part-c-c6)).
 
@@ -557,14 +558,117 @@ The two versions' OpenAPI documents are published in [contracts/](contracts/): [
 
 ## Build and test
 
+The testing strategy, test levels, the review of every test class and the Week 5 reflection are in [TESTING-STRATEGY.md](TESTING-STRATEGY.md). The test-first work is recorded in [TDD-LOG.md](TDD-LOG.md). The latest full run is in [Final Week 5 test run](#final-week-5-test-run).
+
+### Prerequisites
+
+| Requirement | Why |
+|---|---|
+| Windows and the .NET 10 SDK | All projects target `net10.0`. `DpapiTokenStoreTests` use Windows DPAPI, and `RunDemoScriptTests` start `powershell.exe` |
+| A local SQL Server instance, reached with Windows authentication | `ApexPost.Infrastructure.Tests`, `ApexPost.Api.IntegrationTests` and `ApexPost.Web.IntegrationTests` run against a real database. The default instance is `.`; a LocalDB instance such as `(localdb)\MSSQLLocalDB` is also accepted |
+| Permission to create databases on that instance | Each test project run creates its own `ApexPost_Test_<guid>` database with the real migrations, and drops it when the run ends |
+| The SQL Server service account can write to the test data folder | The tests create the folder if it is missing (default `E:\SqlData\ApexPost\Tests`), and SQL Server writes the database files there |
+
+No connection string, user-secret, password or key is needed. The test settings build the connection themselves, always with Windows authentication and only to `master` or an `ApexPost_Test_*` database, so a test can never reach `ApexPostDb`. The Web and API test hosts remove user-secrets and supply their own fictional configuration; the API tests make a new JWT signing key for each run. The unit test projects need no database at all.
+
+If a test run is stopped before it ends (for example, the process is killed), its `ApexPost_Test_<guid>` database can remain. It never affects later runs, because each run uses a new name. To remove it, delete it in SSMS, or run `sqlcmd -S . -E -C -Q "DROP DATABASE [ApexPost_Test_<guid>]"` with the exact name. Never drop `ApexPostDb`.
+
+### Test environment variables (optional)
+
+Set these only to change the defaults, for example on another machine. They are read from the environment of the process that runs the tests.
+
+| Variable | Default | Accepts |
+|---|---|---|
+| `APEXPOST_TEST_SQL_SERVER` | `.` | A local instance only: `.`, `(local)` or `localhost`, each with an optional `\INSTANCE`, or `(localdb)\NAME`. Remote hosts, IP addresses, ports and protocol prefixes are refused |
+| `APEXPOST_TEST_DATA_DIRECTORY` | `E:\SqlData\ApexPost\Tests` | An absolute local folder of at most 73 characters that the SQL Server service account can write to. No part may end in a dot or space |
+| `APEXPOST_TEST_OTHER_MACHINE` | Not set | `true`, required with any other data folder, to confirm this is not the development machine |
+| `APEXPOST_COURIER_TEST_DATA_DIRECTORY` | `E:\ApexPostTestData\CourierOffline` if drive E: exists, otherwise `%TEMP%\ApexPostCourierTests` | An absolute folder on a drive that exists, for the Couchbase Lite test databases |
+
+An invalid value stops the tests, and they never fall back to another location. If `E:\SqlData\ApexPost` exists, the SQL data folder cannot be changed. Before migrating, the fixture confirms the database exists with both files in the configured folder, and stops otherwise. The SQL overrides have only been tested without a database, not in a full run on another machine.
+
+### Run the tests from PowerShell
+
 From the repository root:
 
 ```powershell
 dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
+
+# One project, for example the unit tests that need no database
+dotnet test tests/ApexPost.Domain.Tests
+
+# The BDD scenarios (Reqnroll), or one feature
+dotnet test tests/ApexPost.Specs
+dotnet test tests/ApexPost.Specs --filter "FullyQualifiedName~ShipmentCreationFeature"
+
+# One class or one test, by name
+dotnet test tests/ApexPost.Infrastructure.Tests --filter "FullyQualifiedName~SqlScriptTests"
+dotnet test tests/ApexPost.Application.Tests --filter "FullyQualifiedName~StaffPasswordHashingTests.DummyCredential_HasTheSameWorkFactorAsACreatedCredential"
+
+# On another machine: set the variables in the same session first
+$env:APEXPOST_TEST_SQL_SERVER = "(localdb)\MSSQLLocalDB"
+$env:APEXPOST_TEST_DATA_DIRECTORY = "D:\SqlData\ApexPostTests"
+$env:APEXPOST_TEST_OTHER_MACHINE = "true"
+dotnet test ApexPost.slnx
 ```
 
-**Final Week 4 verification (latest):** on 2026-11-09, from 21:25 to 21:27 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx --no-build` then ran on that build and passed 1,575 of 1,575 tests, with 0 failed and 0 skipped. The per-project counts are the same as in Milestone 5, below. The run came after the last configuration change: the courier console's `ApexPost.Courier.Sync.CourierResilience` log level, in `src/ApexPost.Courier.Console/appsettings.json`. Since then, only documentation and evidence have changed.
+`dotnet test` prints `Passed!` or `Failed!` with the passed, failed and skipped counts for each project.
+
+### Run the tests in Visual Studio Test Explorer
+
+1. Open `ApexPost.slnx` in Visual Studio 2026 and build the solution (**Build** > **Build Solution**).
+2. Open **Test** > **Test Explorer**. The tests of all nine test projects are discovered after the build. Reqnroll generates an xUnit test for each BDD scenario and for each Examples row of a Scenario Outline.
+3. Select **Run All Tests**, or right-click a project, class or test and select **Run**. Group by **Project** or **Class** to find a test, and use the search box to filter by name.
+4. If you need the environment variables above, set them as user or system environment variables and restart Visual Studio, so the test host inherits them.
+
+Test Explorer and `dotnet test` use the same xUnit runner and the same test settings, so no extra setup is needed for either.
+
+### Deterministic tests
+
+The four tests changed in Week 5 Milestone 2 take the date from a `FixedTimeProvider` ([tests/Shared/FixedTimeProvider.cs](tests/Shared/FixedTimeProvider.cs)) instead of the real clock:
+
+- `SqlTestHost` stamps sales and voids at 10:00 UTC on `SqlTestHost.BusinessDate` (2026-01-15), so the `SqlScriptTests` daily-sales tests no longer read `DateTime.UtcNow` and cannot fail when a run crosses midnight UTC.
+- `DailySalesReportsControllerTests` replaces the Web application's `TimeProvider`, so the dashboard's "today" is the report date in `Dashboard_ShowsTodaysSalesRoundedLikeTheDailySalesReport`.
+- `StaffPasswordHashingTests.DummyCredential_HasTheSameWorkFactorAsACreatedCredential` replaces a wall-clock timing comparison. `StaffPasswordHashVerifier.PerformDummyVerification` now checks the password against `DummyCredential`, an internal credential that no password matches, so the unknown-account path does the same work as a real check by construction, and the test compares their hash parameters instead of their run times.
+
+### Final Week 5 test run
+
+On 2026-11-14, on the `week5-testing` branch, `dotnet build ApexPost.slnx --no-incremental` (15:56:08–15:56:34 UTC) finished with **0 warnings and 0 errors**. `dotnet test ApexPost.slnx --no-build` (15:56:34–15:58:11 UTC) then gave **1,660 passed, 0 failed, 0 skipped**. The run covers the code committed in `4fed488`; only documentation and the strategy diagram changed between the run and that commit, and no code, test or project file has changed since.
+
+**Clock note:** all 2026-11-14 times in this document were read from a system clock that VMware Tools had set 5 h 28 min 48 s fast at about 09:15 IST; Windows Time corrected it at 18:23 IST (Windows System log, Kernel-General event 1). The true times are 5 h 28 min 48 s earlier, for example 15:56 UTC was 10:27 UTC. Dates, order, durations and results are unaffected, and the dates of the Week 5 commits up to `4fed488` carry the same offset.
+
+| Project | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| Domain | 286 | 0 | 0 |
+| Application | 162 | 0 | 0 |
+| Courier.Sync | 215 | 0 | 0 |
+| Courier.Console | 15 | 0 | 0 |
+| Courier.Offline | 88 | 0 | 0 |
+| Specs (Reqnroll BDD) | 15 | 0 | 0 |
+| Infrastructure | 239 | 0 | 0 |
+| API integration | 337 | 0 | 0 |
+| Web integration | 303 | 0 | 0 |
+| **Total** | **1,660** | **0** | **0** |
+
+The summary lines of that run, as `dotnet test` printed them:
+
+```text
+Passed!  - Failed:     0, Passed:   162, Skipped:     0, Total:   162, Duration: 1 s - ApexPost.Application.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    15, Skipped:     0, Total:    15, Duration: 4 s - ApexPost.Courier.Console.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    88, Skipped:     0, Total:    88, Duration: 4 s - ApexPost.Courier.Offline.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   286, Skipped:     0, Total:   286, Duration: 1 s - ApexPost.Domain.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   215, Skipped:     0, Total:   215, Duration: 6 s - ApexPost.Courier.Sync.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    15, Skipped:     0, Total:    15, Duration: 12 s - ApexPost.Specs.dll (net10.0)
+Passed!  - Failed:     0, Passed:   239, Skipped:     0, Total:   239, Duration: 36 s - ApexPost.Infrastructure.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   337, Skipped:     0, Total:   337, Duration: 56 s - ApexPost.Api.IntegrationTests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   303, Skipped:     0, Total:   303, Duration: 1 m 8 s - ApexPost.Web.IntegrationTests.dll (net10.0)
+```
+
+The Week 5 baseline and the full runs after each milestone (1,610, 1,626, 1,633, 1,642 and 1,660 tests, all passing) are listed at the top of [TESTING-STRATEGY.md](TESTING-STRATEGY.md). No code coverage report was produced; it was optional in Week 5.
+
+### Earlier verified runs
+
+**Final Week 4 verification (historical, before the Week 4 review fixes):** on 2026-11-09, from 21:25 to 21:27 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx --no-build` then ran on that build and passed 1,575 of 1,575 tests, with 0 failed and 0 skipped. The per-project counts are the same as in Milestone 5, below. The run came after the last configuration change: the courier console's `ApexPost.Courier.Sync.CourierResilience` log level, in `src/ApexPost.Courier.Console/appsettings.json`. Since then, only documentation and evidence have changed.
 
 **Week 4 Part D Milestone 5 verification (D10/D11 console client):** on 2026-11-09 at 20:36 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx` then passed 1,575 of 1,575 tests, with 0 failed and 0 skipped. Every code and test file was last changed before that build:
 
@@ -646,13 +750,3 @@ Every code and test file was last changed before that build; only documentation 
 The Week 4 Part B full run, on 2026-11-07 at 11:14 UTC on the Week 4 Part B branch, passed 1,124 of 1,124 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 276, Application 140, Courier.Offline 68, Infrastructure 239, Web 303 and API integration 98. It is recorded in [docs/evidence/week4-part-b](docs/evidence/week4-part-b/README.md).
 
 The last full Week 3 run, on 2026-11-03 at 10:04 UTC after the Week 3 trainer-feedback corrections and the removal of unused code, passed 906 of 906 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 224, Application 140, Infrastructure 239, Web 303. The corrections are traced in [DESIGN.md section 4.10](DESIGN.md#410-week-3-trainer-feedback). The previous full run, on 2026-11-01, passed 904 of 904. A Postman CLI run on that earlier code passed 65 of 65 requests and 188 of 188 assertions. An earlier full run the same day, before the score-improvement changes, passed 892 of 892. The [test results](docs/evidence/week3-test-results.md) record all of these.
-
-The SQL tests need a local SQL Server instance and Windows authentication with permission to create databases. By default they use the instance `.` and keep disposable database files in `E:\SqlData\ApexPost\Tests`. On another machine, set these environment variables:
-
-| Variable | Default | Accepts |
-|---|---|---|
-| `APEXPOST_TEST_SQL_SERVER` | `.` | A local instance only: `.`, `(local)` or `localhost`, each with an optional `\INSTANCE`, or `(localdb)\NAME`. Remote hosts, IP addresses, ports and protocol prefixes are refused |
-| `APEXPOST_TEST_DATA_DIRECTORY` | `E:\SqlData\ApexPost\Tests` | An absolute local folder of at most 73 characters that the SQL Server service account can write to. No part may end in a dot or space |
-| `APEXPOST_TEST_OTHER_MACHINE` | Not set | `true`, required with any other data folder, to confirm this is not the development machine |
-
-An invalid value stops the tests, and they never fall back to another location. If `E:\SqlData\ApexPost` exists, the data folder cannot be changed. Before migrating, the fixture confirms the database exists with both files in the configured folder, and stops otherwise. It connects only to `master` and its own `ApexPost_Test_*` databases, so it can't reach `ApexPostDb`. These overrides have only been tested without a database, not in a full run on another machine.
