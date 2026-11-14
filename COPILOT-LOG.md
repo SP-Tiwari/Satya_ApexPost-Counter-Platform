@@ -15,6 +15,7 @@ GitHub Copilot drafted unit tests for one service and one Gherkin feature with i
 - **Tool:** GitHub Copilot Chat in Visual Studio Community 2026 (18.11.12315.225), **Agent** mode: Copilot created the files and built the projects; in Prompt A it also ran the tests, and in Prompt B it only listed them.
 - **Model:** `gpt-5.3-codex`.
 - **Date:** 2026-11-14. Prompt A was sent at 15:12:25 UTC and Prompt B at 15:28:16 UTC.
+- **Clock note:** all 2026-11-14 times in this document were read from a system clock that VMware Tools had set 5 h 28 min 48 s fast at about 09:15 IST; Windows Time corrected it at 18:23 IST (Windows System log, Kernel-General event 1). The true times are 5 h 28 min 48 s earlier, for example 15:12:25 UTC was 09:43:37 UTC. Dates, order, durations and results are unaffected, and the dates of the Week 5 commits up to `4fed488` carry the same offset.
 - **Source:** both prompts below are copied from the Visual Studio Copilot chat log of that session. Copilot's files were preserved unchanged, outside the repository, before any review change, and every finding below was checked against them.
 
 ## Prompt A: unit tests for ParcelStatusApplicationService
