@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- Reqnroll generates each feature's xUnit class at build time, into obj/. -->
+    <ReqnrollUseIntermediateOutputPathForCodeBehind>true</ReqnrollUseIntermediateOutputPathForCodeBehind>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Reqnroll.xUnit" Version="3.3.4" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="ApexPost.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ApexPost.Api\ApexPost.Api.csproj" />
+    <ProjectReference Include="..\..\src\ApexPost.Courier.Sync\ApexPost.Courier.Sync.csproj" />
+  </ItemGroup>
+
+  <!-- The existing test infrastructure, shared rather than copied: the
+       disposable SQL Server database, the in-memory API host with test JWTs,
+       and the per-test Couchbase Lite folders. -->
+  <ItemGroup>
+    <Compile Include="..\Shared\DisposableSqlDatabase.cs" Link="Shared\DisposableSqlDatabase.cs" />
+    <Compile Include="..\Shared\SqlTestSettings.cs" Link="Shared\SqlTestSettings.cs" />
+    <Compile Include="..\Shared\FixedTimeProvider.cs" Link="Shared\FixedTimeProvider.cs" />
+    <Compile Include="..\ApexPost.Api.IntegrationTests\ApiTestHost.cs" Link="Shared\ApiTestHost.cs" />
+    <Compile Include="..\ApexPost.Courier.Offline.Tests\TestSupport.cs" Link="Shared\CourierOfflineTestSupport.cs" />
+  </ItemGroup>
+
+</Project>
