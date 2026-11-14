@@ -1,6 +1,6 @@
 # ApexPost testing strategy (Week 5)
 
-**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `684470c`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. "Planned" shows the milestone (M7). After the Moq tests of M3, the full run of 2026-11-14 (10:36–10:38 UTC) passed **1,626 of 1,626**, with 0 failed, 0 skipped and 0 build warnings. After the TDD work of M4, the full run of 2026-11-14 (11:03–11:04 UTC), on the code committed as `256a248`, gave **1,633 passed, 0 failed, 0 skipped, 0 build warnings**. After the BDD scenarios of M5, the full run of 2026-11-14 (11:31–11:33 UTC) gave **1,642 passed, 0 failed, 0 skipped, 0 build warnings**. **Latest:** after the M6 tests, the full run of 2026-11-14 (15:56–15:58 UTC) gave **1,660 passed, 0 failed, 0 skipped, 0 build warnings**.
+**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `684470c`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. All planned Week 5 work is now done; the reflection is in section 8. After the Moq tests of M3, the full run of 2026-11-14 (10:36–10:38 UTC) passed **1,626 of 1,626**, with 0 failed, 0 skipped and 0 build warnings. After the TDD work of M4, the full run of 2026-11-14 (11:03–11:04 UTC), on the code committed as `256a248`, gave **1,633 passed, 0 failed, 0 skipped, 0 build warnings**. After the BDD scenarios of M5, the full run of 2026-11-14 (11:31–11:33 UTC) gave **1,642 passed, 0 failed, 0 skipped, 0 build warnings**. **Latest:** after the M6 tests, the full run of 2026-11-14 (15:56–15:58 UTC) gave **1,660 passed, 0 failed, 0 skipped, 0 build warnings**.
 
 ![ApexPost testing strategy: architecture, TDD, BDD, projects, resources and best practices](docs/assets/testing-strategy.png)
 
@@ -34,6 +34,8 @@
 | `ApexPost.Web.IntegrationTests` | 303 | 18 | 285 | `WebApplicationFactory` + SQL Server |
 | `ApexPost.Specs` | 15 | – | – | Reqnroll BDD: 6 API scenario runs (SQL Server), 3 outbox scenarios (Couchbase Lite), 6 pricing scenario runs (in memory) |
 | **Total** | **1,660** | **811 (49%)** | **834 (50%)** | plus **15 BDD scenario runs (0.9%)** |
+
+This is the documented equivalent of the suggested `ApexPost.UnitTests`, `ApexPost.IntegrationTests` and `ApexPost.Specs`: unit and integration tests live in one test project per layer, with each project's split shown above. Most integration tests are in Infrastructure, API and Web, with the Couchbase Lite tests in Courier.Offline and the DPAPI tests in Courier.Sync, and the BDD scenarios are in `ApexPost.Specs`.
 
 - **Unit:** in memory, milliseconds; every rule and boundary. **Integration:** proves the wiring. Unique indexes, `rowversion`, rollback, procedures and JWT rules exist only in SQL Server and the HTTP pipeline, so this layer is thick on purpose. **BDD:** a few business scenarios on top.
 - **Framework:** xUnit 2.9.3 everywhere. A new class instance per test, `IDisposable`/`IAsyncLifetime` for setup and teardown, `[Theory]` + `[InlineData]` for boundaries. Reqnroll generates xUnit classes, so all levels run in `dotnet test` and Test Explorer.
@@ -110,4 +112,18 @@
 
 **Not tested:** UI and browser behaviour, real external networks, framework internals, the generated NSwag client line by line, performance (PERFORMANCE.md), Sync Gateway, and private members.
 
-**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq (done) · M4 TDD and `TDD-LOG.md` (done; commits `264f8f2`, `5cce2c8`, `256a248`) · M5 `ApexPost.Specs` (done) · M6 Copilot-assisted tests and `COPILOT-LOG.md` (done) · M7 final run and reflection.
+**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq (done) · M4 TDD and `TDD-LOG.md` (done; commits `264f8f2`, `5cce2c8`, `256a248`) · M5 `ApexPost.Specs` (done) · M6 Copilot-assisted tests and `COPILOT-LOG.md` (done) · M7 final run and reflection (done; the run is in the README section "Final Week 5 test run", the reflection in section 8).
+
+## 8. Reflection (M7)
+
+**Strategy used, and why.** Each risk was tested at the cheapest level that can really prove it: unit tests for rules and boundaries, Moq for the decisions a service makes about its dependencies, a real SQL Server and the real HTTP pipeline for anything that depends on constraints, transactions or security, and Reqnroll scenarios for business examples. The one new rule, the heavy-parcel surcharge, was built test first. Generated test drafts were kept only after review and a break-and-restore check. The 1,610 existing tests were all kept, so new tests went only where the risk map showed a gap.
+
+**What did the strategy catch?** No defect in the existing business rules: every full run passed. It caught weak tests and weak evidence instead:
+- four tests that read the real clock, so a run crossing midnight UTC could fail, and one that compared wall-clock timings; all five are now deterministic (M2);
+- assertions that could pass for the wrong reason: a BDD step that checked only its own stub (M5), and, in the generated drafts, an exception assertion that accepted any subclass, expected values read back from the test's own input, hard-coded data and a catch-all exception handler (M6);
+- a feature silently left out of the build during an agent run: the build succeeded and every test passed, and only the discovered-test count showed that its scenarios were not running;
+- `ApexPost_Test_*` databases left behind when a test process is stopped, because they are dropped only on process exit.
+
+**What would I change?** Drop the test databases with a test-run fixture instead of an exit handler; check the discovered test count in every run, not only pass or fail; wire the surcharge into the counter workflow behind an integration test, since the rule is now proven only in the domain service; and produce the optional coverage report, which would have pointed earlier to services like `ParcelStatusApplicationService` that had no unit tests.
+
+**Which test type gave the most confidence per minute spent?** The API integration tests on `WebApplicationFactory` and a real SQL Server. One test proves routing, authorization, validation, EF Core and the database constraint together: the 409 for a duplicate tracking number depends on a unique key that no unit test can prove. Unit tests are much cheaper to run (286 domain tests in about a second, against 56 seconds for 337 API tests) and were the best value while building a rule test first, but for ApexPost's riskiest behaviour the integration layer bought the most confidence for the time.
