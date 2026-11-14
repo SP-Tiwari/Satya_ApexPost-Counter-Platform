@@ -1,6 +1,6 @@
 # ApexPost testing strategy (Week 5)
 
-**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `684470c`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. "Planned" shows the milestone (M6–M7). After the Moq tests of M3, the full run of 2026-11-14 (10:36–10:38 UTC) passed **1,626 of 1,626**, with 0 failed, 0 skipped and 0 build warnings. After the TDD work of M4, the full run of 2026-11-14 (11:03–11:04 UTC), on the code committed as `256a248`, gave **1,633 passed, 0 failed, 0 skipped, 0 build warnings**. **Latest:** after the BDD scenarios of M5, the full run of 2026-11-14 (11:31–11:33 UTC) gave **1,642 passed, 0 failed, 0 skipped, 0 build warnings**.
+**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `684470c`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. "Planned" shows the milestone (M7). After the Moq tests of M3, the full run of 2026-11-14 (10:36–10:38 UTC) passed **1,626 of 1,626**, with 0 failed, 0 skipped and 0 build warnings. After the TDD work of M4, the full run of 2026-11-14 (11:03–11:04 UTC), on the code committed as `256a248`, gave **1,633 passed, 0 failed, 0 skipped, 0 build warnings**. After the BDD scenarios of M5, the full run of 2026-11-14 (11:31–11:33 UTC) gave **1,642 passed, 0 failed, 0 skipped, 0 build warnings**. **Latest:** after the M6 tests, the full run of 2026-11-14 (15:56–15:58 UTC) gave **1,660 passed, 0 failed, 0 skipped, 0 build warnings**.
 
 ![ApexPost testing strategy: architecture, TDD, BDD, projects, resources and best practices](docs/assets/testing-strategy.png)
 
@@ -18,22 +18,22 @@
 | R6 | Offline outbox loses scans | `OutboxServiceTests`, `CourierOfflineSyncTests` | Moq: `OutboxServiceInteractionTests` (done, M3) |
 | R7 | Sale atomicity and stock | `SaleRollbackTests`, `TransactionsControllerTests` | Kept |
 | R8 | Published contract drift | `PublishedContractTests`, `ApiVersioningTests` | Kept |
-| R9 | Weight limits (0.1–70 kg) | `ShipmentEndpointsTests`, `WeightTests` | Heavy-parcel surcharge by TDD (done, M4; `TDD-LOG.md`); weight Scenario Outline in `ShipmentCreation.feature` (done, M5) |
+| R9 | Weight limits (0.1–70 kg) | `ShipmentEndpointsTests`, `WeightTests` | Heavy-parcel surcharge by TDD (done, M4; `TDD-LOG.md`); weight Scenario Outline in `ShipmentCreation.feature` (done, M5); surcharge Scenario Outline in `HeavyParcelSurcharge.feature` (done, M6) |
 
 ## 2. Test architecture and projects
 
 | Test project | Tests | Unit | Integration | Main tools / resources |
 |---|---:|---:|---:|---|
 | `ApexPost.Domain.Tests` | 286 | 286 | 0 | xUnit theories over rules and value objects; heavy-parcel surcharge tests (TDD) |
-| `ApexPost.Application.Tests` | 150 | 150 | 0 | Hand-written fakes; Moq (`TrackedShipmentApplicationServiceTests`) |
+| `ApexPost.Application.Tests` | 162 | 162 | 0 | Hand-written fakes; Moq (`TrackedShipmentApplicationServiceTests`, `ParcelStatusApplicationServiceTests`) |
 | `ApexPost.Courier.Sync.Tests` | 215 | 196 | 19 | `StubHandler`, test clock; DPAPI temp folder |
 | `ApexPost.Courier.Console.Tests` | 15 | 15 | 0 | Scripted console, in-memory stores |
 | `ApexPost.Courier.Offline.Tests` | 88 | 35 | 53 | Couchbase Lite in a temp folder; Moq (`OutboxServiceInteractionTests`) |
 | `ApexPost.Infrastructure.Tests` | 239 | 99 | 140 | SQL Server test database |
 | `ApexPost.Api.IntegrationTests` | 337 | 0 | 337 | `WebApplicationFactory` + SQL Server + test JWT |
 | `ApexPost.Web.IntegrationTests` | 303 | 18 | 285 | `WebApplicationFactory` + SQL Server |
-| `ApexPost.Specs` | 9 | – | – | Reqnroll BDD: 6 API scenario runs (SQL Server), 3 outbox scenarios (Couchbase Lite) |
-| **Total** | **1,642** | **799 (49%)** | **834 (51%)** | plus **9 BDD scenario runs (0.5%)** |
+| `ApexPost.Specs` | 15 | – | – | Reqnroll BDD: 6 API scenario runs (SQL Server), 3 outbox scenarios (Couchbase Lite), 6 pricing scenario runs (in memory) |
+| **Total** | **1,660** | **811 (49%)** | **834 (50%)** | plus **15 BDD scenario runs (0.9%)** |
 
 - **Unit:** in memory, milliseconds; every rule and boundary. **Integration:** proves the wiring. Unique indexes, `rowversion`, rollback, procedures and JWT rules exist only in SQL Server and the HTTP pipeline, so this layer is thick on purpose. **BDD:** a few business scenarios on top.
 - **Framework:** xUnit 2.9.3 everywhere. A new class instance per test, `IDisposable`/`IAsyncLifetime` for setup and teardown, `[Theory]` + `[InlineData]` for boundaries. Reqnroll generates xUnit classes, so all levels run in `dotnet test` and Test Explorer.
@@ -65,7 +65,7 @@
   - **Proof that they can fail:** each class was checked by break-and-restore. A service that saved after accepting no scans failed 2 of the 10 tests, and an outbox that kept sending batches after a missing answer failed 2 of the 6 tests.
 - **How the tests guide the code:** the test states the rule before the code exists; only code a failing test asks for is written; later changes are checked against every earlier rule.
 
-## 4. BDD: the outer loop (M5)
+## 4. BDD: the outer loop (M5, M6)
 
 **Done (M5).** The business, a developer and a tester agree concrete examples first. These are written as **Given → When → Then** in feature files, with a `Background` per feature.
 
@@ -75,18 +75,28 @@
 |---|---|---|
 | `Features/ShipmentCreation.feature` | API: `ApiFactory` (`WebApplicationFactory`) on the disposable `ApexPost_Test_*` SQL Server database, signed in with an Admin test JWT | A valid shipment is created (201, Location, stored as Created); a tracking number cannot be used twice (409, the first is kept); **Scenario Outline** "Only weights from 0.1 kg to 70 kg are accepted", with **Examples** 0.05 → refused (400 on `weightKg`), 0.1 → created, 70 → created, 70.1 → refused |
 | `Features/ScanSync.feature` | Service: `OutboxService` over a real Couchbase Lite store in a temporary folder; `CentralSystemStub` gives the central system's answers | Offline scans are uploaded, oldest first, and marked Synced; a scan the central system already holds is still sent, because the device cannot know, and is marked Synced on the accepting answer; a refused scan is marked Failed with the server's reason ("The scan ID is already recorded for another shipment."). Afterwards, the next sync sends nothing |
+| `Features/HeavyParcelSurcharge.feature` (M6) | Service: `ShippingPricingService` called directly, in memory, with no API host or database | Background: a Standard rate of 100.00 INR plus 10.00 INR per kg and a 50.00 INR surcharge. **Scenario Outline** with **Examples** 29.99 kg → 399.90, 30 → 400.00, 30.01 → 450.10, 31 → 460.00; a 31 kg letter → 410.00; with no surcharge configured, a 31 kg parcel is refused. A deliberate BDD view of the rule built by TDD in M4; counter-workflow pricing is not covered |
 
-- **Context injection:** `ShipmentApiContext` and `CourierScanContext` are plain classes. Reqnroll creates one of each per scenario and passes it to the constructors of the step classes (`ShipmentCreationSteps`, `ScanSyncSteps`) and of `ScenarioHooks`. Steps share state only through these objects; there are no static fields.
+- **Context injection:** `ShipmentApiContext`, `CourierScanContext` and `HeavyParcelSurchargeContext` are plain classes. Reqnroll creates one of each per scenario and passes it to the constructors of the step classes (`ShipmentCreationSteps`, `ScanSyncSteps`, `HeavyParcelSurchargeSteps`) and of `ScenarioHooks`. Steps share state only through these objects; there are no static fields.
 - **Hooks:** `ScenarioHooks` are scoped by feature tag.
   - `[BeforeScenario("shipment-api")]` starts a new `ApiFactory`, which empties the disposable database; `[AfterScenario("shipment-api")]` disposes the response, the client and the host.
   - `[BeforeScenario("courier-offline")]` opens a `CourierTestContext` in a new `<guid>` folder; `[AfterScenario("courier-offline")]` closes the database and deletes the folder.
   - `AfterScenario` runs even when a step fails. After the runs, no courier test folder was left.
 - **Why a stub at service level:** the courier device's own rule is that each answer gives each scan its final status, and that nothing final is sent again. `CentralSystemStub` answers as the real `ApiShipmentUploader` reports the API's answers: a new or already-held scan is Synced, and a refused scan is Rejected with the server's reason. **It does not prove** the API's de-duplication or rejection rules; those run against SQL Server in `ScanUploadTests` and `CourierOfflineSyncTests`.
-- **Results (2026-11-14 14:08:46–14:08:59 UTC):** `dotnet test tests/ApexPost.Specs` gave 9 passed, 0 failed, 0 skipped: 2 + 4 shipment-creation runs (the outline counts once per Examples row) and 3 scan-sync scenarios.
+- **Results (2026-11-14 14:08:46–14:08:59 UTC):** `dotnet test tests/ApexPost.Specs` gave 9 passed, 0 failed, 0 skipped: 2 + 4 shipment-creation runs (the outline counts once per Examples row) and 3 scan-sync scenarios. After M6 added the pricing feature (2 + 4 runs, no hooks because it uses no external resources), the whole project gave 15 passed, 0 failed, 0 skipped (2026-11-14 15:52:20 UTC).
 
 **How BDD complements TDD:** BDD checks that we build the right behaviour, in business words. TDD checks that each rule is built right, in code. A scenario stays red until it is delivered; each rule underneath is built RED → GREEN → REFACTOR. A red scenario with green unit tests points to wiring; a red unit test points to the rule.
 
-## 5. Test resources, isolation and cleanup
+## 5. Copilot-assisted tests (M6)
+
+**Done (M6).** GitHub Copilot (Agent mode in Visual Studio 2026) drafted one service's unit tests and one feature with its step definitions. Every draft was built, run and reviewed before it was kept. [COPILOT-LOG.md](COPILOT-LOG.md) records both prompts word for word, Copilot's output, and each kept, changed or rejected decision with its reason.
+
+- **Unit tests:** `ParcelStatusApplicationServiceTests` (12 tests, Moq) for `ParcelStatusApplicationService`, which had no unit tests. Four of Copilot's tests were kept unchanged. Rejected and replaced: an exception assertion that accepted any subclass (`ThrowsAnyAsync`) and expected values read back from the test's own input. Added in review: three missing edge cases.
+- **Feature:** `HeavyParcelSurcharge.feature`, `HeavyParcelSurchargeSteps` and `HeavyParcelSurchargeContext` (section 4). All of Copilot's expected prices were correct by hand calculation. Rejected: a project-file line that Visual Studio wrote during the agent run and that excluded the feature from the build (the file was restored), a hard-coded zone and service level, a catch-all exception handler and an unused property.
+- **Proof that generated tests can fail:** two Copilot tests, kept unchanged, failed against temporary production changes and passed again after the restore. `ScreenQueryShipmentIdCaseDiffers_ReturnsNull` failed when the ID check ignored letter case, and `CourierTrackingConfigured_IncludesCourierAndCallsTrackingOnce` failed when the courier was never asked.
+- **Marking:** each Copilot-assisted class starts with a `// Copilot-assisted:` comment.
+
+## 6. Test resources, isolation and cleanup
 
 - **SQL Server:** `DisposableSqlDatabase` creates `ApexPost_Test_<guid>` with the real migrations and refuses any other name. `Reset()` deletes all rows **before** each test, and tests run one at a time on that database. The database is dropped by the collection fixture or on process exit.
 - **WebApplicationFactory:** `ApiFactory` and `ApexPostWebApplicationFactory` host the app in memory against the disposable database, with a signing key generated for each run.
@@ -96,8 +106,8 @@
 
 **Best practices:** deterministic tests (fixed clocks, no network, no random input); independent tests (each arranges its own data); no shared mutable state; reliable cleanup through `Dispose` and `using`, even when a test fails; no test-order dependencies (reset before each test, so any test runs alone or in any order).
 
-## 6. Not tested, and milestones
+## 7. Not tested, and milestones
 
 **Not tested:** UI and browser behaviour, real external networks, framework internals, the generated NSwag client line by line, performance (PERFORMANCE.md), Sync Gateway, and private members.
 
-**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq (done) · M4 TDD and `TDD-LOG.md` (done; commits `264f8f2`, `5cce2c8`, `256a248`) · M5 `ApexPost.Specs` (done) · M6 Copilot-assisted drafts and `COPILOT-LOG.md` (kept only if they fail when the code is broken) · M7 final run and reflection.
+**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq (done) · M4 TDD and `TDD-LOG.md` (done; commits `264f8f2`, `5cce2c8`, `256a248`) · M5 `ApexPost.Specs` (done) · M6 Copilot-assisted tests and `COPILOT-LOG.md` (done) · M7 final run and reflection.
