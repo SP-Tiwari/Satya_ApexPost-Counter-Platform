@@ -1,6 +1,6 @@
 # ApexPost testing strategy (Week 5)
 
-**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `684470c`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. "Planned" shows the milestone (M3–M7).
+**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `684470c`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. "Planned" shows the milestone (M4–M7). After the Moq tests of M3, the full run of 2026-11-14 (10:36–10:38 UTC) passed **1,626 of 1,626**, with 0 failed, 0 skipped and 0 build warnings.
 
 ![ApexPost testing strategy: architecture, TDD, BDD, projects, resources and best practices](docs/assets/testing-strategy.png)
 
@@ -10,12 +10,12 @@
 
 | # | Risk | Existing evidence | Week 5 |
 |---|---|---|---|
-| R1 | Invalid status transitions | `ShipmentStatusTransitionRuleTests` (all 36 pairs), `ShipmentStatusTests` | Moq tests (M3) |
+| R1 | Invalid status transitions | `ShipmentStatusTransitionRuleTests` (all 36 pairs), `ShipmentStatusTests` | Moq: `TrackedShipmentApplicationServiceTests` (done, M3) |
 | R2 | Duplicate tracking numbers | `ShipmentEndpointsTests` (409, keeps the first) | `ShipmentCreation.feature` (M5) |
 | R3 | Duplicate scans | `ScanUploadTests`, `CourierClientRetryTests` | `ScanSync.feature` (M5) |
 | R4 | JWT roles and courier ownership | `SecurityTests` | Kept |
 | R5 | Client retries | `ResilienceTests`, `ApexApiClientTests` | Kept |
-| R6 | Offline outbox loses scans | `OutboxServiceTests`, `CourierOfflineSyncTests` | Moq tests (M3) |
+| R6 | Offline outbox loses scans | `OutboxServiceTests`, `CourierOfflineSyncTests` | Moq: `OutboxServiceInteractionTests` (done, M3) |
 | R7 | Sale atomicity and stock | `SaleRollbackTests`, `TransactionsControllerTests` | Kept |
 | R8 | Published contract drift | `PublishedContractTests`, `ApiVersioningTests` | Kept |
 | R9 | Weight limits (0.1–70 kg) | `ShipmentEndpointsTests`, `WeightTests` | Surcharge by TDD (M4); Scenario Outline (M5) |
@@ -25,14 +25,14 @@
 | Test project | Tests | Unit | Integration | Main tools / resources |
 |---|---:|---:|---:|---|
 | `ApexPost.Domain.Tests` | 279 | 279 | 0 | xUnit theories over rules and value objects |
-| `ApexPost.Application.Tests` | 140 | 140 | 0 | Hand-written fakes; Moq (M3) |
+| `ApexPost.Application.Tests` | 150 | 150 | 0 | Hand-written fakes; Moq (`TrackedShipmentApplicationServiceTests`) |
 | `ApexPost.Courier.Sync.Tests` | 215 | 196 | 19 | `StubHandler`, test clock; DPAPI temp folder |
 | `ApexPost.Courier.Console.Tests` | 15 | 15 | 0 | Scripted console, in-memory stores |
-| `ApexPost.Courier.Offline.Tests` | 82 | 29 | 53 | Couchbase Lite in a temp folder |
+| `ApexPost.Courier.Offline.Tests` | 88 | 35 | 53 | Couchbase Lite in a temp folder; Moq (`OutboxServiceInteractionTests`) |
 | `ApexPost.Infrastructure.Tests` | 239 | 99 | 140 | SQL Server test database |
 | `ApexPost.Api.IntegrationTests` | 337 | 0 | 337 | `WebApplicationFactory` + SQL Server + test JWT |
 | `ApexPost.Web.IntegrationTests` | 303 | 18 | 285 | `WebApplicationFactory` + SQL Server |
-| **Total** | **1,610** | **776 (48%)** | **834 (52%)** | `ApexPost.Specs` (Reqnroll) planned (M5) |
+| **Total** | **1,626** | **792 (49%)** | **834 (51%)** | `ApexPost.Specs` (Reqnroll) planned (M5) |
 
 - **Unit:** in memory, milliseconds; every rule and boundary. **Integration:** proves the wiring. Unique indexes, `rowversion`, rollback, procedures and JWT rules exist only in SQL Server and the HTTP pipeline, so this layer is thick on purpose. **BDD:** a few business scenarios on top.
 - **Framework:** xUnit 2.9.3 everywhere. A new class instance per test, `IDisposable`/`IAsyncLifetime` for setup and teardown, `[Theory]` + `[InlineData]` for boundaries. Reqnroll generates xUnit classes, so all levels run in `dotnet test` and Test Explorer.
@@ -47,7 +47,12 @@
 **RED:** write one failing test and see it fail. **GREEN:** write the minimum code that passes. **REFACTOR:** improve the structure while all tests stay green. Repeat for the next case. Each phase is its own commit (`RED:`, `GREEN:`, `REFACTOR:`) and is recorded in `TDD-LOG.md`.
 
 - **Rule:** a parcel strictly over 30 kg pays a surcharge in `ShippingPricingService.CalculatePrice`; exactly 30 kg does not. Tests go in `ShippingPricingServiceTests` (above, at, below). **The amount is to be confirmed, so none is assumed.**
-- **Moq** isolates services from `ITrackedShipmentRepository`, `IUnitOfWork`, `IScanRepository` and `IShipmentUploader`: `Setup`/`ReturnsAsync`/`ThrowsAsync`, `It.Is`/`It.IsAny`, and `Verify` with `Times.Once`/`Times.Never`.
+- **Moq (done, M3)** isolates two services with `Mock<T>`, `Setup`/`Returns`/`ReturnsAsync`/`ThrowsAsync`/`SetupSequence`, `It.Is`/`It.IsAny`, and `Verify` with `Times.Once`/`Times.Never`/`Times.Exactly`:
+  - **Interface naming:** the assignment's `IShipmentRepository` is this solution's `ITrackedShipmentRepository` (`src/ApexPost.Application/Persistence/ITrackedShipmentRepository.cs`), the shipment repository of the Week 4 API. Its SQL Server implementation is `SqlTrackedShipmentRepository`. No `IShipmentRepository` exists, and the interface is not renamed, because its name is already used by the service, the implementation and the dependency registration.
+  - `TrackedShipmentApplicationServiceTests` (10 tests) mocks `ITrackedShipmentRepository` and `IUnitOfWork`. The `ExecuteInTransactionAsync` mock runs the use case it is given, as the real unit of work does. Covered: create saves once; a `DuplicateRecordException` becomes a conflict (R2); an allowed status change saves; Delivered → InTransit, an unknown tracking number, and deleting a PickedUp shipment save nothing (R1); a repeated scan is stored once, a scan held by another shipment is rejected, and a duplicate on save reruns the upload once on fresh state (R3).
+  - `OutboxServiceInteractionTests` (6 tests) mocks `IScanRepository` and `IShipmentUploader`. Covered: Synced and Failed are written back per scan; 25 scans go as batches of 20 and 5; an uploader exception or a RetryLater stops the run with no status change for unanswered scans (R6); nothing pending or an already cancelled run never calls the uploader.
+  - **What they do not prove:** the SQL, unique keys, transactions and Couchbase Lite storage behind the mocked interfaces. Those are covered by `SqlPersistenceTests`, the API integration tests and `OutboxServiceTests`.
+  - **Proof that they can fail:** each class was checked by break-and-restore. A service that saved after accepting no scans failed 2 of the 10 tests, and an outbox that kept sending batches after a missing answer failed 2 of the 6 tests.
 - **How the tests guide the code:** the test states the rule before the code exists; only code a failing test asks for is written; later changes are checked against every earlier rule.
 
 ## 4. BDD: the outer loop (M5)
@@ -75,4 +80,4 @@ The business, a developer and a tester agree concrete examples first. These are 
 
 **Not tested:** UI and browser behaviour, real external networks, framework internals, the generated NSwag client line by line, performance (PERFORMANCE.md), Sync Gateway, and private members.
 
-**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq · M4 TDD and `TDD-LOG.md` · M5 `ApexPost.Specs` · M6 Copilot-assisted drafts and `COPILOT-LOG.md` (kept only if they fail when the code is broken) · M7 final run and reflection.
+**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq (done) · M4 TDD and `TDD-LOG.md` · M5 `ApexPost.Specs` · M6 Copilot-assisted drafts and `COPILOT-LOG.md` (kept only if they fail when the code is broken) · M7 final run and reflection.
