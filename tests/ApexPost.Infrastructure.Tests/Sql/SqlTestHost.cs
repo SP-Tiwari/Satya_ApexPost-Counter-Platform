@@ -30,6 +30,12 @@ public sealed class SqlTestHost : IDisposable
 	public static readonly Sku Stationery = new("STAT-1");
 	public static readonly Sku Packaging = new("PACK-1");
 
+	// Sales and voids are stamped at 10:00 UTC on this date, so report tests
+	// never depend on the real date or on a run crossing midnight UTC.
+	public static readonly DateOnly BusinessDate = new(2026, 1, 15);
+	private static readonly TimeProvider Clock = new FixedTimeProvider(
+		new DateTimeOffset(BusinessDate, new TimeOnly(10, 0), TimeSpan.Zero));
+
 	private readonly DisposableSqlDatabase _database = DisposableSqlDatabase.Create();
 	private readonly ServiceProvider _provider;
 
@@ -108,7 +114,7 @@ public sealed class SqlTestHost : IDisposable
 			[ShippingServiceLevel.Standard] = new Weight(30m)
 		},
 		TaxCategory.Standard,
-		TimeProvider.System,
+		Clock,
 		new MoneyOrderBasketSettings(
 			new Money(1000m, "INR"), new Money(25m, "INR"), TaxCategory.Standard),
 		new ApprovingVerification(),
@@ -122,7 +128,7 @@ public sealed class SqlTestHost : IDisposable
 		services.GetRequiredService<IStockRepository>(),
 		services.GetRequiredService<ICounterTransactionRepository>(),
 		services.GetRequiredService<IUnitOfWork>(),
-		TimeProvider.System,
+		Clock,
 		Events,
 		1);
 

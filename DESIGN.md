@@ -1041,7 +1041,7 @@ This run has 3 more tests than the 904 run:
 
 The 904 run rose by 12 from the earlier full run of 892 of 892, kept as history in the [test results](docs/evidence/week3-test-results.md): 42 tests were added and 30 were removed with the legacy JSON stores. During the 904 run, 15 read-only samples on `master` found 0 sessions in `ApexPostDb`, and all 38 database file rows belonged to `ApexPost_Test_*` databases in `E:\SqlData\ApexPost\Tests`. Afterwards only `ApexPostDb` remained. A Postman CLI run on the same code passed 65 of 65 requests and 188 of 188 assertions; the test results list what it verified.
 
-The dummy-hash timing test compares the fastest of three runs and accepts a ratio of 0.6–1.6 against a real check; the old 210,000-iteration dummy measured about 0.35.
+The dummy-hash timing test compared the fastest of three runs and accepted a ratio of 0.6–1.6 against a real check; the old 210,000-iteration dummy measured about 0.35. In Week 5 it was replaced by the deterministic `StaffPasswordHashingTests.DummyCredential_HasTheSameWorkFactorAsACreatedCredential`, because a wall-clock ratio depends on machine load ([TESTING-STRATEGY.md](TESTING-STRATEGY.md#2-test-architecture-and-projects)).
 
 ## 14. Known gaps
 

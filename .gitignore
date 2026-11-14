@@ -58,3 +58,9 @@ Thumbs.db
 # Local Week 5 assignment and reference files
 /assignmentweek05.txt
 /SampleStrategyReference.png
+/PPTReference/
+/docs/assets/testing-strategy-presentation.pptx
+
+# Week 5 strategy diagrams: committed once with git add -f, then listed here.
+# Git keeps tracking a committed file even when it matches an ignore rule.
+/docs/assets/testing-strategy.png

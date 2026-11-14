@@ -21,6 +21,7 @@
     <Project Path="tests/ApexPost.Courier.Sync.Tests/ApexPost.Courier.Sync.Tests.csproj" />
     <Project Path="tests/ApexPost.Domain.Tests/ApexPost.Domain.Tests.csproj" />
     <Project Path="tests/ApexPost.Infrastructure.Tests/ApexPost.Infrastructure.Tests.csproj" />
+    <Project Path="tests/ApexPost.Specs/ApexPost.Specs.csproj" />
     <Project Path="tests/ApexPost.Web.IntegrationTests/ApexPost.Web.IntegrationTests.csproj" />
   </Folder>
 </Solution>
