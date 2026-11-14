@@ -16,7 +16,7 @@ ApexPost is a .NET 10 / C# 14 ASP.NET Core MVC application for postal branch cou
 - `src/ApexPost.Client.Consumer` — Week 4: the console app that calls the API through the generated client.
 - `src/ApexPost.Courier.Sync` — Week 4 Part D: the courier client's typed API client, bearer-token handler, resilience pipeline (retry, circuit breaker, timeouts), DPAPI token store and source-generated JSON. See [Courier console client](#courier-console-client-week-4-part-d).
 - `src/ApexPost.Courier.Console` — Week 4 Part D: the courier console client (Login, New Scan, Pending Scans, Sync Status), used instead of a .NET MAUI app.
-- `tests/*` — Domain, Application, Infrastructure, Web integration, API integration, courier offline, courier client and courier console tests.
+- `tests/*` — Domain, Application, Infrastructure, Web integration, API integration, courier offline, courier client and courier console tests, and the Week 5 Reqnroll BDD specifications (`tests/ApexPost.Specs`).
 
 ## Implemented workflows and protections
 
@@ -558,7 +558,7 @@ The two versions' OpenAPI documents are published in [contracts/](contracts/): [
 
 ## Build and test
 
-The testing strategy, test levels and the review of every test class are in [TESTING-STRATEGY.md](TESTING-STRATEGY.md).
+The testing strategy, test levels, the review of every test class and the Week 5 reflection are in [TESTING-STRATEGY.md](TESTING-STRATEGY.md). The test-first work is recorded in [TDD-LOG.md](TDD-LOG.md). The latest full run is in [Final Week 5 test run](#final-week-5-test-run).
 
 ### Prerequisites
 
@@ -597,6 +597,10 @@ dotnet test ApexPost.slnx
 # One project, for example the unit tests that need no database
 dotnet test tests/ApexPost.Domain.Tests
 
+# The BDD scenarios (Reqnroll), or one feature
+dotnet test tests/ApexPost.Specs
+dotnet test tests/ApexPost.Specs --filter "FullyQualifiedName~ShipmentCreationFeature"
+
 # One class or one test, by name
 dotnet test tests/ApexPost.Infrastructure.Tests --filter "FullyQualifiedName~SqlScriptTests"
 dotnet test tests/ApexPost.Application.Tests --filter "FullyQualifiedName~StaffPasswordHashingTests.DummyCredential_HasTheSameWorkFactorAsACreatedCredential"
@@ -613,7 +617,7 @@ dotnet test ApexPost.slnx
 ### Run the tests in Visual Studio Test Explorer
 
 1. Open `ApexPost.slnx` in Visual Studio 2026 and build the solution (**Build** > **Build Solution**).
-2. Open **Test** > **Test Explorer**. The tests of all eight test projects are discovered after the build.
+2. Open **Test** > **Test Explorer**. The tests of all nine test projects are discovered after the build. Reqnroll generates an xUnit test for each BDD scenario and for each Examples row of a Scenario Outline.
 3. Select **Run All Tests**, or right-click a project, class or test and select **Run**. Group by **Project** or **Class** to find a test, and use the search box to filter by name.
 4. If you need the environment variables above, set them as user or system environment variables and restart Visual Studio, so the test host inherits them.
 
@@ -626,6 +630,39 @@ The four tests changed in Week 5 Milestone 2 take the date from a `FixedTimeProv
 - `SqlTestHost` stamps sales and voids at 10:00 UTC on `SqlTestHost.BusinessDate` (2026-01-15), so the `SqlScriptTests` daily-sales tests no longer read `DateTime.UtcNow` and cannot fail when a run crosses midnight UTC.
 - `DailySalesReportsControllerTests` replaces the Web application's `TimeProvider`, so the dashboard's "today" is the report date in `Dashboard_ShowsTodaysSalesRoundedLikeTheDailySalesReport`.
 - `StaffPasswordHashingTests.DummyCredential_HasTheSameWorkFactorAsACreatedCredential` replaces a wall-clock timing comparison. `StaffPasswordHashVerifier.PerformDummyVerification` now checks the password against `DummyCredential`, an internal credential that no password matches, so the unknown-account path does the same work as a real check by construction, and the test compares their hash parameters instead of their run times.
+
+### Final Week 5 test run
+
+On 2026-11-14, on the `week5-testing` branch, `dotnet build ApexPost.slnx --no-incremental` (15:56:08–15:56:34 UTC) finished with **0 warnings and 0 errors**. `dotnet test ApexPost.slnx --no-build` (15:56:34–15:58:11 UTC) then gave **1,660 passed, 0 failed, 0 skipped**. The run covers the code committed in `4fed488`; only documentation and the strategy diagram changed between the run and that commit, and no code, test or project file has changed since.
+
+| Project | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| Domain | 286 | 0 | 0 |
+| Application | 162 | 0 | 0 |
+| Courier.Sync | 215 | 0 | 0 |
+| Courier.Console | 15 | 0 | 0 |
+| Courier.Offline | 88 | 0 | 0 |
+| Specs (Reqnroll BDD) | 15 | 0 | 0 |
+| Infrastructure | 239 | 0 | 0 |
+| API integration | 337 | 0 | 0 |
+| Web integration | 303 | 0 | 0 |
+| **Total** | **1,660** | **0** | **0** |
+
+The summary lines of that run, as `dotnet test` printed them:
+
+```text
+Passed!  - Failed:     0, Passed:   162, Skipped:     0, Total:   162, Duration: 1 s - ApexPost.Application.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    15, Skipped:     0, Total:    15, Duration: 4 s - ApexPost.Courier.Console.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    88, Skipped:     0, Total:    88, Duration: 4 s - ApexPost.Courier.Offline.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   286, Skipped:     0, Total:   286, Duration: 1 s - ApexPost.Domain.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   215, Skipped:     0, Total:   215, Duration: 6 s - ApexPost.Courier.Sync.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    15, Skipped:     0, Total:    15, Duration: 12 s - ApexPost.Specs.dll (net10.0)
+Passed!  - Failed:     0, Passed:   239, Skipped:     0, Total:   239, Duration: 36 s - ApexPost.Infrastructure.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   337, Skipped:     0, Total:   337, Duration: 56 s - ApexPost.Api.IntegrationTests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   303, Skipped:     0, Total:   303, Duration: 1 m 8 s - ApexPost.Web.IntegrationTests.dll (net10.0)
+```
+
+The Week 5 baseline and the full runs after each milestone (1,610, 1,626, 1,633, 1,642 and 1,660 tests, all passing) are listed at the top of [TESTING-STRATEGY.md](TESTING-STRATEGY.md). No code coverage report was produced; it was optional in Week 5.
 
 ### Earlier verified runs
 
