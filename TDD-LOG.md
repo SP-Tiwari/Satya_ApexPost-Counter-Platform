@@ -84,4 +84,26 @@ Letters and parcels at or below 30 kg take the existing path unchanged. The 30 k
 
 ## REFACTOR
 
-Not started.
+Only `src/ApexPost.Domain/Services/ShippingPricingService.cs` changed, and its behaviour did not. No test was edited.
+
+| Change | Why |
+|---|---|
+| The literal `30m` became `HeavyParcelThreshold`, a `Weight` of 30 kg | The rule's threshold has a name, and lives in one place |
+| The check uses `shippingItem.Weight.Exceeds(HeavyParcelThreshold)` | Reuses the domain's own strictly-greater comparison, the one `ShippingWeightLimitRule` uses, so the 30 kg boundary keeps its meaning |
+| The surcharge branch moved into `HeavyParcelSurchargeFor(shippingItem, rate)`, which returns 0 when no surcharge applies, using early returns instead of nesting | `CalculatePrice` reads as the formula: base price + weight × per-kg charge + heavy-parcel surcharge |
+| The missing-surcharge message takes the number from `HeavyParcelThreshold` | Message and rule cannot drift apart; the text is unchanged ("…over 30 kg.") |
+
+**Deliberately not changed:**
+- The constructor signature, so existing callers compile unchanged.
+- The currency check still happens at pricing time. Checking in the constructor would refuse a service that never prices a heavy parcel, which would change behaviour.
+- No new types or interfaces were added.
+
+**Results (2026-11-14):**
+
+| Run | Result |
+|---|---|
+| `dotnet test tests/ApexPost.Domain.Tests --filter "FullyQualifiedName~ShippingPricingServiceTests"` (11:02 UTC) | 14 passed, 0 failed, 0 skipped |
+| `dotnet test tests/ApexPost.Domain.Tests` | 286 passed, 0 failed, 0 skipped |
+| `dotnet build ApexPost.slnx --no-incremental`, then `dotnet test ApexPost.slnx --no-build` (11:03–11:04 UTC) | 0 warnings; **1,633 passed, 0 failed, 0 skipped**: Domain 286, Application 150, Courier.Sync 215, Courier.Console 15, Courier.Offline 88, Infrastructure 239, Api 337, Web 303 |
+
+The same 14 pricing tests and 1,633 tests pass as after GREEN, so the refactoring kept the behaviour: the parcel-only rule, the strict boundary above 30 kg, the letter exemption, failing closed without a surcharge, and the currency check.
