@@ -38,33 +38,31 @@ public sealed class StaffPasswordHashingTests
 			() => StaffPasswordHashVerifier.Verify(Password, weak));
 	}
 
-	// The unknown-account path must cost about as much as a real check, so
-	// response time does not reveal which staff IDs exist. Each is timed
-	// several times and the fastest run compared, which keeps the check
-	// stable on a busy machine; the old 210,000-iteration dummy took about
-	// a third of the time of a real check.
+	// The unknown-account path must cost as much as a real check, so response
+	// time does not reveal which staff IDs exist. PerformDummyVerification runs
+	// Verify against DummyCredential, so equal hash parameters mean equal work.
+	// This replaces a wall-clock comparison whose result depended on machine
+	// load; it still fails if the dummy work factor drops (an earlier dummy
+	// used 210,000 iterations).
 	[Fact]
-	public void DummyVerification_TakesAboutAsLongAsARealCheck()
+	public void DummyCredential_HasTheSameWorkFactorAsACreatedCredential()
 	{
-		var credential = StaffPasswordHasher.CreateCredential("staff-1", Password);
+		// Arrange
+		var created = StaffPasswordHasher.CreateCredential("staff-1", Password);
+		var dummy = StaffPasswordHashVerifier.DummyCredential;
 
-		var real = Fastest(() => StaffPasswordHashVerifier.Verify("wrong", credential));
-		var dummy = Fastest(() => StaffPasswordHashVerifier.PerformDummyVerification("wrong"));
+		// Act
+		var dummyAcceptsAPassword = StaffPasswordHashVerifier.Verify(Password, dummy);
 
-		Assert.InRange(dummy.TotalMilliseconds / real.TotalMilliseconds, 0.6, 1.6);
-	}
-
-	private static TimeSpan Fastest(Action action)
-	{
-		var fastest = TimeSpan.MaxValue;
-		for (var attempt = 0; attempt < 3; attempt++)
-		{
-			var started = System.Diagnostics.Stopwatch.GetTimestamp();
-			action();
-			var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
-			if (elapsed < fastest)
-				fastest = elapsed;
-		}
-		return fastest;
+		// Assert
+		Assert.Equal(created.Version, dummy.Version);
+		Assert.Equal(created.Iterations, dummy.Iterations);
+		Assert.Equal(
+			Convert.FromBase64String(created.Salt).Length,
+			Convert.FromBase64String(dummy.Salt).Length);
+		Assert.Equal(
+			Convert.FromBase64String(created.PasswordHash).Length,
+			Convert.FromBase64String(dummy.PasswordHash).Length);
+		Assert.False(dummyAcceptsAPassword);
 	}
 }

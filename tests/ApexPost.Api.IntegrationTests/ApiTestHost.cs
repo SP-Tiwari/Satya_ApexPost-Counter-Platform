@@ -37,12 +37,6 @@ internal static class ApiTestDatabase
 	public static DisposableSqlDatabase Database => Instance.Value;
 }
 
-// A clock the test sets, for the strict future-time boundary.
-internal sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-{
-	public override DateTimeOffset GetUtcNow() => now;
-}
-
 // The API host on the disposable database, starting empty. User Secrets are
 // removed, and UseSetting replaces the connection string before Program reads
 // it, so a developer's own database is never used. The bearer scheme validates

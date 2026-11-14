@@ -33,7 +33,7 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 	{
 		await SellAsync(Stationery, 3, withShippingAndMoneyOrder: true);
 		await SellAsync(Packaging, 2);
-		var today = DateOnly.FromDateTime(DateTime.UtcNow);
+		var today = BusinessDate;
 
 		var expected = await DomainDailySalesAsync(today);
 		var actual = await ProceduresAsync(procedures =>
@@ -53,7 +53,7 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 	public async Task DailySalesReport_IsServedByTheProcedure()
 	{
 		await SellAsync(Stationery, 3, withShippingAndMoneyOrder: true);
-		var today = DateOnly.FromDateTime(DateTime.UtcNow);
+		var today = BusinessDate;
 
 		IReadOnlyList<DailySalesReportRow> report = [];
 		var commands = await CaptureCommandsAsync(async () =>
@@ -84,7 +84,7 @@ public sealed class SqlScriptTests(SqlTestHost host) : IAsyncLifetime
 			host.Sales(services).CreateAndProcessAsync(ClerkId, sale));
 		await host.InRequestAsync(services =>
 			host.Transactions(services).VoidAsync(sale.TransactionId, ManagerId, "Mistake"));
-		var today = DateOnly.FromDateTime(DateTime.UtcNow);
+		var today = BusinessDate;
 		await SellAsync(Packaging, 1);
 
 		var voidedExcluded = await ProceduresAsync(procedures =>

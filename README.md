@@ -558,12 +558,76 @@ The two versions' OpenAPI documents are published in [contracts/](contracts/): [
 
 ## Build and test
 
+The testing strategy, test levels and the review of every test class are in [TESTING-STRATEGY.md](TESTING-STRATEGY.md).
+
+### Prerequisites
+
+| Requirement | Why |
+|---|---|
+| Windows and the .NET 10 SDK | All projects target `net10.0`. `DpapiTokenStoreTests` use Windows DPAPI, and `RunDemoScriptTests` start `powershell.exe` |
+| A local SQL Server instance, reached with Windows authentication | `ApexPost.Infrastructure.Tests`, `ApexPost.Api.IntegrationTests` and `ApexPost.Web.IntegrationTests` run against a real database. The default instance is `.`; a LocalDB instance such as `(localdb)\MSSQLLocalDB` is also accepted |
+| Permission to create databases on that instance | Each test project run creates its own `ApexPost_Test_<guid>` database with the real migrations, and drops it when the run ends |
+| The SQL Server service account can write to the test data folder | The tests create the folder if it is missing (default `E:\SqlData\ApexPost\Tests`), and SQL Server writes the database files there |
+
+No connection string, user-secret, password or key is needed. The test settings build the connection themselves, always with Windows authentication and only to `master` or an `ApexPost_Test_*` database, so a test can never reach `ApexPostDb`. The Web and API test hosts remove user-secrets and supply their own fictional configuration; the API tests make a new JWT signing key for each run. The unit test projects need no database at all.
+
+If a test run is stopped before it ends (for example, the process is killed), its `ApexPost_Test_<guid>` database can remain. It never affects later runs, because each run uses a new name. To remove it, delete it in SSMS, or run `sqlcmd -S . -E -C -Q "DROP DATABASE [ApexPost_Test_<guid>]"` with the exact name. Never drop `ApexPostDb`.
+
+### Test environment variables (optional)
+
+Set these only to change the defaults, for example on another machine. They are read from the environment of the process that runs the tests.
+
+| Variable | Default | Accepts |
+|---|---|---|
+| `APEXPOST_TEST_SQL_SERVER` | `.` | A local instance only: `.`, `(local)` or `localhost`, each with an optional `\INSTANCE`, or `(localdb)\NAME`. Remote hosts, IP addresses, ports and protocol prefixes are refused |
+| `APEXPOST_TEST_DATA_DIRECTORY` | `E:\SqlData\ApexPost\Tests` | An absolute local folder of at most 73 characters that the SQL Server service account can write to. No part may end in a dot or space |
+| `APEXPOST_TEST_OTHER_MACHINE` | Not set | `true`, required with any other data folder, to confirm this is not the development machine |
+| `APEXPOST_COURIER_TEST_DATA_DIRECTORY` | `E:\ApexPostTestData\CourierOffline` if drive E: exists, otherwise `%TEMP%\ApexPostCourierTests` | An absolute folder on a drive that exists, for the Couchbase Lite test databases |
+
+An invalid value stops the tests, and they never fall back to another location. If `E:\SqlData\ApexPost` exists, the SQL data folder cannot be changed. Before migrating, the fixture confirms the database exists with both files in the configured folder, and stops otherwise. The SQL overrides have only been tested without a database, not in a full run on another machine.
+
+### Run the tests from PowerShell
+
 From the repository root:
 
 ```powershell
 dotnet build ApexPost.slnx
 dotnet test ApexPost.slnx
+
+# One project, for example the unit tests that need no database
+dotnet test tests/ApexPost.Domain.Tests
+
+# One class or one test, by name
+dotnet test tests/ApexPost.Infrastructure.Tests --filter "FullyQualifiedName~SqlScriptTests"
+dotnet test tests/ApexPost.Application.Tests --filter "FullyQualifiedName~StaffPasswordHashingTests.DummyCredential_HasTheSameWorkFactorAsACreatedCredential"
+
+# On another machine: set the variables in the same session first
+$env:APEXPOST_TEST_SQL_SERVER = "(localdb)\MSSQLLocalDB"
+$env:APEXPOST_TEST_DATA_DIRECTORY = "D:\SqlData\ApexPostTests"
+$env:APEXPOST_TEST_OTHER_MACHINE = "true"
+dotnet test ApexPost.slnx
 ```
+
+`dotnet test` prints `Passed!` or `Failed!` with the passed, failed and skipped counts for each project.
+
+### Run the tests in Visual Studio Test Explorer
+
+1. Open `ApexPost.slnx` in Visual Studio 2026 and build the solution (**Build** > **Build Solution**).
+2. Open **Test** > **Test Explorer**. The tests of all eight test projects are discovered after the build.
+3. Select **Run All Tests**, or right-click a project, class or test and select **Run**. Group by **Project** or **Class** to find a test, and use the search box to filter by name.
+4. If you need the environment variables above, set them as user or system environment variables and restart Visual Studio, so the test host inherits them.
+
+Test Explorer and `dotnet test` use the same xUnit runner and the same test settings, so no extra setup is needed for either.
+
+### Deterministic tests
+
+The four tests changed in Week 5 Milestone 2 take the date from a `FixedTimeProvider` ([tests/Shared/FixedTimeProvider.cs](tests/Shared/FixedTimeProvider.cs)) instead of the real clock:
+
+- `SqlTestHost` stamps sales and voids at 10:00 UTC on `SqlTestHost.BusinessDate` (2026-01-15), so the `SqlScriptTests` daily-sales tests no longer read `DateTime.UtcNow` and cannot fail when a run crosses midnight UTC.
+- `DailySalesReportsControllerTests` replaces the Web application's `TimeProvider`, so the dashboard's "today" is the report date in `Dashboard_ShowsTodaysSalesRoundedLikeTheDailySalesReport`.
+- `StaffPasswordHashingTests.DummyCredential_HasTheSameWorkFactorAsACreatedCredential` replaces a wall-clock timing comparison. `StaffPasswordHashVerifier.PerformDummyVerification` now checks the password against `DummyCredential`, an internal credential that no password matches, so the unknown-account path does the same work as a real check by construction, and the test compares their hash parameters instead of their run times.
+
+### Earlier verified runs
 
 **Final Week 4 verification (historical, before the Week 4 review fixes):** on 2026-11-09, from 21:25 to 21:27 UTC, on the `feature/week4-part-d-api-security` branch, `dotnet build ApexPost.slnx --no-incremental` finished with 0 warnings and 0 errors. `dotnet test ApexPost.slnx --no-build` then ran on that build and passed 1,575 of 1,575 tests, with 0 failed and 0 skipped. The per-project counts are the same as in Milestone 5, below. The run came after the last configuration change: the courier console's `ApexPost.Courier.Sync.CourierResilience` log level, in `src/ApexPost.Courier.Console/appsettings.json`. Since then, only documentation and evidence have changed.
 
@@ -647,13 +711,3 @@ Every code and test file was last changed before that build; only documentation 
 The Week 4 Part B full run, on 2026-11-07 at 11:14 UTC on the Week 4 Part B branch, passed 1,124 of 1,124 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 276, Application 140, Courier.Offline 68, Infrastructure 239, Web 303 and API integration 98. It is recorded in [docs/evidence/week4-part-b](docs/evidence/week4-part-b/README.md).
 
 The last full Week 3 run, on 2026-11-03 at 10:04 UTC after the Week 3 trainer-feedback corrections and the removal of unused code, passed 906 of 906 tests, with 0 failed and 0 skipped, on a clean build with 0 warnings and 0 errors: Domain 224, Application 140, Infrastructure 239, Web 303. The corrections are traced in [DESIGN.md section 4.10](DESIGN.md#410-week-3-trainer-feedback). The previous full run, on 2026-11-01, passed 904 of 904. A Postman CLI run on that earlier code passed 65 of 65 requests and 188 of 188 assertions. An earlier full run the same day, before the score-improvement changes, passed 892 of 892. The [test results](docs/evidence/week3-test-results.md) record all of these.
-
-The SQL tests need a local SQL Server instance and Windows authentication with permission to create databases. By default they use the instance `.` and keep disposable database files in `E:\SqlData\ApexPost\Tests`. On another machine, set these environment variables:
-
-| Variable | Default | Accepts |
-|---|---|---|
-| `APEXPOST_TEST_SQL_SERVER` | `.` | A local instance only: `.`, `(local)` or `localhost`, each with an optional `\INSTANCE`, or `(localdb)\NAME`. Remote hosts, IP addresses, ports and protocol prefixes are refused |
-| `APEXPOST_TEST_DATA_DIRECTORY` | `E:\SqlData\ApexPost\Tests` | An absolute local folder of at most 73 characters that the SQL Server service account can write to. No part may end in a dot or space |
-| `APEXPOST_TEST_OTHER_MACHINE` | Not set | `true`, required with any other data folder, to confirm this is not the development machine |
-
-An invalid value stops the tests, and they never fall back to another location. If `E:\SqlData\ApexPost` exists, the data folder cannot be changed. Before migrating, the fixture confirms the database exists with both files in the configured folder, and stops otherwise. It connects only to `master` and its own `ApexPost_Test_*` databases, so it can't reach `ApexPostDb`. These overrides have only been tested without a database, not in a full run on another machine.
