@@ -1,6 +1,6 @@
 # ApexPost testing strategy (Week 5)
 
-**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `684470c`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. "Planned" shows the milestone (M4–M7). After the Moq tests of M3, the full run of 2026-11-14 (10:36–10:38 UTC) passed **1,626 of 1,626**, with 0 failed, 0 skipped and 0 build warnings.
+**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `684470c`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. "Planned" shows the milestone (M5–M7). After the Moq tests of M3, the full run of 2026-11-14 (10:36–10:38 UTC) passed **1,626 of 1,626**, with 0 failed, 0 skipped and 0 build warnings. **Latest:** after the TDD work of M4, the full run of 2026-11-14 (11:03–11:04 UTC), on the code committed as `256a248`, gave **1,633 passed, 0 failed, 0 skipped, 0 build warnings**.
 
 ![ApexPost testing strategy: architecture, TDD, BDD, projects, resources and best practices](docs/assets/testing-strategy.png)
 
@@ -18,13 +18,13 @@
 | R6 | Offline outbox loses scans | `OutboxServiceTests`, `CourierOfflineSyncTests` | Moq: `OutboxServiceInteractionTests` (done, M3) |
 | R7 | Sale atomicity and stock | `SaleRollbackTests`, `TransactionsControllerTests` | Kept |
 | R8 | Published contract drift | `PublishedContractTests`, `ApiVersioningTests` | Kept |
-| R9 | Weight limits (0.1–70 kg) | `ShipmentEndpointsTests`, `WeightTests` | Surcharge by TDD (M4); Scenario Outline (M5) |
+| R9 | Weight limits (0.1–70 kg) | `ShipmentEndpointsTests`, `WeightTests` | Heavy-parcel surcharge by TDD (done, M4; `TDD-LOG.md`); Scenario Outline (M5) |
 
 ## 2. Test architecture and projects
 
 | Test project | Tests | Unit | Integration | Main tools / resources |
 |---|---:|---:|---:|---|
-| `ApexPost.Domain.Tests` | 279 | 279 | 0 | xUnit theories over rules and value objects |
+| `ApexPost.Domain.Tests` | 286 | 286 | 0 | xUnit theories over rules and value objects; heavy-parcel surcharge tests (TDD) |
 | `ApexPost.Application.Tests` | 150 | 150 | 0 | Hand-written fakes; Moq (`TrackedShipmentApplicationServiceTests`) |
 | `ApexPost.Courier.Sync.Tests` | 215 | 196 | 19 | `StubHandler`, test clock; DPAPI temp folder |
 | `ApexPost.Courier.Console.Tests` | 15 | 15 | 0 | Scripted console, in-memory stores |
@@ -32,7 +32,7 @@
 | `ApexPost.Infrastructure.Tests` | 239 | 99 | 140 | SQL Server test database |
 | `ApexPost.Api.IntegrationTests` | 337 | 0 | 337 | `WebApplicationFactory` + SQL Server + test JWT |
 | `ApexPost.Web.IntegrationTests` | 303 | 18 | 285 | `WebApplicationFactory` + SQL Server |
-| **Total** | **1,626** | **792 (49%)** | **834 (51%)** | `ApexPost.Specs` (Reqnroll) planned (M5) |
+| **Total** | **1,633** | **799 (49%)** | **834 (51%)** | `ApexPost.Specs` (Reqnroll) planned (M5) |
 
 - **Unit:** in memory, milliseconds; every rule and boundary. **Integration:** proves the wiring. Unique indexes, `rowversion`, rollback, procedures and JWT rules exist only in SQL Server and the HTTP pipeline, so this layer is thick on purpose. **BDD:** a few business scenarios on top.
 - **Framework:** xUnit 2.9.3 everywhere. A new class instance per test, `IDisposable`/`IAsyncLifetime` for setup and teardown, `[Theory]` + `[InlineData]` for boundaries. Reqnroll generates xUnit classes, so all levels run in `dotnet test` and Test Explorer.
@@ -46,7 +46,16 @@
 
 **RED:** write one failing test and see it fail. **GREEN:** write the minimum code that passes. **REFACTOR:** improve the structure while all tests stay green. Repeat for the next case. Each phase is its own commit (`RED:`, `GREEN:`, `REFACTOR:`) and is recorded in `TDD-LOG.md`.
 
-- **Rule:** a parcel strictly over 30 kg pays a surcharge in `ShippingPricingService.CalculatePrice`; exactly 30 kg does not. Tests go in `ShippingPricingServiceTests` (above, at, below). **The amount is to be confirmed, so none is assumed.**
+- **TDD (done, M4).** Evidence: [TDD-LOG.md](TDD-LOG.md) and three separate commits:
+  - `264f8f2` RED: add heavy parcel surcharge pricing tests;
+  - `5cce2c8` GREEN: implement heavy parcel surcharge pricing;
+  - `256a248` REFACTOR: improve heavy parcel pricing clarity.
+- **Rule:** a **parcel** strictly over 30 kg pays a heavy-parcel surcharge in `ShippingPricingService.CalculatePrice`.
+  - **No surcharge:** exactly 30 kg and below, and letters of any weight.
+  - **Amount:** a fictional **50.00 INR**. It is configurable, not hard-coded: it is passed to the service's constructor as `heavyParcelSurcharge`, because ADR 0005 treats prices as configured policy.
+  - **Errors:** a parcel over 30 kg with no configured surcharge fails closed (`InvalidOperationException`), as a missing rate does. A surcharge in a different currency from the rate is rejected.
+- **Tests:** 7 new cases in `ShippingPricingServiceTests`: 30 kg, 29.99 kg, 30.01 kg and 31 kg, no surcharge configured, a USD surcharge, and a 31 kg letter. The 7 original pricing tests are unchanged.
+- **Scope:** the rule is implemented only in the domain pricing service. The counter workflow (`MixedBasketApplicationService`) and the application configuration are **not wired**, so no surcharge is configured in the running application. Until it is, a counter sale of a parcel over 30 kg is refused rather than priced without its surcharge; this matters only where a parcel weight limit above 30 kg is configured.
 - **Moq (done, M3)** isolates two services with `Mock<T>`, `Setup`/`Returns`/`ReturnsAsync`/`ThrowsAsync`/`SetupSequence`, `It.Is`/`It.IsAny`, and `Verify` with `Times.Once`/`Times.Never`/`Times.Exactly`:
   - **Interface naming:** the assignment's `IShipmentRepository` is this solution's `ITrackedShipmentRepository` (`src/ApexPost.Application/Persistence/ITrackedShipmentRepository.cs`), the shipment repository of the Week 4 API. Its SQL Server implementation is `SqlTrackedShipmentRepository`. No `IShipmentRepository` exists, and the interface is not renamed, because its name is already used by the service, the implementation and the dependency registration.
   - `TrackedShipmentApplicationServiceTests` (10 tests) mocks `ITrackedShipmentRepository` and `IUnitOfWork`. The `ExecuteInTransactionAsync` mock runs the use case it is given, as the real unit of work does. Covered: create saves once; a `DuplicateRecordException` becomes a conflict (R2); an allowed status change saves; Delivered → InTransit, an unknown tracking number, and deleting a PickedUp shipment save nothing (R1); a repeated scan is stored once, a scan held by another shipment is rejected, and a duplicate on save reruns the upload once on fresh state (R3).
@@ -80,4 +89,4 @@ The business, a developer and a tester agree concrete examples first. These are 
 
 **Not tested:** UI and browser behaviour, real external networks, framework internals, the generated NSwag client line by line, performance (PERFORMANCE.md), Sync Gateway, and private members.
 
-**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq (done) · M4 TDD and `TDD-LOG.md` · M5 `ApexPost.Specs` · M6 Copilot-assisted drafts and `COPILOT-LOG.md` (kept only if they fail when the code is broken) · M7 final run and reflection.
+**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq (done) · M4 TDD and `TDD-LOG.md` (done; commits `264f8f2`, `5cce2c8`, `256a248`) · M5 `ApexPost.Specs` · M6 Copilot-assisted drafts and `COPILOT-LOG.md` (kept only if they fail when the code is broken) · M7 final run and reflection.
