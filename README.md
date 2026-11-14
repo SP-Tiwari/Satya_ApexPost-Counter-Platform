@@ -635,6 +635,8 @@ The four tests changed in Week 5 Milestone 2 take the date from a `FixedTimeProv
 
 On 2026-11-14, on the `week5-testing` branch, `dotnet build ApexPost.slnx --no-incremental` (15:56:08–15:56:34 UTC) finished with **0 warnings and 0 errors**. `dotnet test ApexPost.slnx --no-build` (15:56:34–15:58:11 UTC) then gave **1,660 passed, 0 failed, 0 skipped**. The run covers the code committed in `4fed488`; only documentation and the strategy diagram changed between the run and that commit, and no code, test or project file has changed since.
 
+**Clock note:** all 2026-11-14 times in this document were read from a system clock that VMware Tools had set 5 h 28 min 48 s fast at about 09:15 IST; Windows Time corrected it at 18:23 IST (Windows System log, Kernel-General event 1). The true times are 5 h 28 min 48 s earlier, for example 15:56 UTC was 10:27 UTC. Dates, order, durations and results are unaffected, and the dates of the Week 5 commits up to `4fed488` carry the same offset.
+
 | Project | Passed | Failed | Skipped |
 |---|---:|---:|---:|
 | Domain | 286 | 0 | 0 |
