@@ -1,6 +1,6 @@
 # ApexPost testing strategy (Week 5)
 
-**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `684470c`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. All planned Week 5 work is now done; the reflection is in section 8. After the Moq tests of M3, the full run of 2026-11-14 (10:36–10:38 UTC) passed **1,626 of 1,626**, with 0 failed, 0 skipped and 0 build warnings. After the TDD work of M4, the full run of 2026-11-14 (11:03–11:04 UTC), on the code committed as `256a248`, gave **1,633 passed, 0 failed, 0 skipped, 0 build warnings**. After the BDD scenarios of M5, the full run of 2026-11-14 (11:31–11:33 UTC) gave **1,642 passed, 0 failed, 0 skipped, 0 build warnings**. **Latest:** after the M6 tests, the full run of 2026-11-14 (15:56–15:58 UTC) gave **1,660 passed, 0 failed, 0 skipped, 0 build warnings**. **Clock note:** all 2026-11-14 times in this document were read from a system clock that VMware Tools had set 5 h 28 min 48 s fast at about 09:15 IST; Windows Time corrected it at 18:23 IST (Windows System log, Kernel-General event 1). The true times are 5 h 28 min 48 s earlier, for example 15:56 UTC was 10:27 UTC. Dates, order, durations and results are unaffected, and the dates of the Week 5 commits up to `4fed488` carry the same offset.
+**Rule: each risk is tested at the cheapest level that can really prove it.** Written before any new Week 5 test (Task 1). "Existing" means it is in the repository and passed in the fresh run of 2026-11-13 at commit `e2ca9e4`: **1,610 passed, 0 failed, 0 skipped**, build with 0 warnings. All planned Week 5 work is now done; the reflection is in section 8. After the Moq tests of M3, the full run of 2026-11-14 (10:36–10:38 UTC) passed **1,626 of 1,626**, with 0 failed, 0 skipped and 0 build warnings. After the TDD work of M4, the full run of 2026-11-14 (11:03–11:04 UTC), on the code committed as `0abc528`, gave **1,633 passed, 0 failed, 0 skipped, 0 build warnings**. After the BDD scenarios of M5, the full run of 2026-11-14 (11:31–11:33 UTC) gave **1,642 passed, 0 failed, 0 skipped, 0 build warnings**. **Latest:** after the M6 tests, the full run of 2026-11-14 (15:56–15:58 UTC) gave **1,660 passed, 0 failed, 0 skipped, 0 build warnings**. **Clock note:** all 2026-11-14 times in this document were read from a system clock that VMware Tools had set 5 h 28 min 48 s fast at about 09:15 IST; Windows Time corrected it at 18:23 IST (Windows System log, Kernel-General event 1). The true times are 5 h 28 min 48 s earlier, for example 15:56 UTC was 10:27 UTC. Dates, order, durations and results are unaffected, and the dates of the Week 5 commits up to `3c4493b` carry the same offset.
 
 ![ApexPost testing strategy: architecture, TDD, BDD, projects, resources and best practices](docs/assets/testing-strategy.png)
 
@@ -50,9 +50,9 @@ This is the documented equivalent of the suggested `ApexPost.UnitTests`, `ApexPo
 **RED:** write one failing test and see it fail. **GREEN:** write the minimum code that passes. **REFACTOR:** improve the structure while all tests stay green. Repeat for the next case. Each phase is its own commit (`RED:`, `GREEN:`, `REFACTOR:`) and is recorded in `TDD-LOG.md`.
 
 - **TDD (done, M4).** Evidence: [TDD-LOG.md](TDD-LOG.md) and three separate commits:
-  - `264f8f2` RED: add heavy parcel surcharge pricing tests;
-  - `5cce2c8` GREEN: implement heavy parcel surcharge pricing;
-  - `256a248` REFACTOR: improve heavy parcel pricing clarity.
+  - `e626e73` RED: add heavy parcel surcharge pricing tests;
+  - `79de475` GREEN: implement heavy parcel surcharge pricing;
+  - `0abc528` REFACTOR: improve heavy parcel pricing clarity.
 - **Rule:** a **parcel** strictly over 30 kg pays a heavy-parcel surcharge in `ShippingPricingService.CalculatePrice`.
   - **No surcharge:** exactly 30 kg and below, and letters of any weight.
   - **Amount:** a fictional **50.00 INR**. It is configurable, not hard-coded: it is passed to the service's constructor as `heavyParcelSurcharge`, because ADR 0005 treats prices as configured policy.
@@ -112,7 +112,7 @@ This is the documented equivalent of the suggested `ApexPost.UnitTests`, `ApexPo
 
 **Not tested:** UI and browser behaviour, real external networks, framework internals, the generated NSwag client line by line, performance (PERFORMANCE.md), Sync Gateway, and private members.
 
-**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq (done) · M4 TDD and `TDD-LOG.md` (done; commits `264f8f2`, `5cce2c8`, `256a248`) · M5 `ApexPost.Specs` (done) · M6 Copilot-assisted tests and `COPILOT-LOG.md` (done) · M7 final run and reflection (done; the run is in the README section "Final Week 5 test run", the reflection in section 8).
+**Milestones:** M1 this strategy (done) · M2 clock fixes and README run instructions (done; see the README section "Build and test") · M3 Moq (done) · M4 TDD and `TDD-LOG.md` (done; commits `e626e73`, `79de475`, `0abc528`) · M5 `ApexPost.Specs` (done) · M6 Copilot-assisted tests and `COPILOT-LOG.md` (done) · M7 final run and reflection (done; the run is in the README section "Final Week 5 test run", the reflection in section 8).
 
 ## 8. Reflection (M7)
 

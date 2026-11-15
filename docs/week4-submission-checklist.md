@@ -108,11 +108,11 @@ The assignment names the branches `week4-partA`, `week4-partB`, `week4-partC` an
 
 | Part | Branch | Pull request | Merge commit |
 |---|---|---|---|
-| A | `feature/week4-part-a-courier-offline` | #27 | `fe9d45d` |
-| B | `feature/week4-part-b-rest-api` | #28 | `2b0b3c9` |
-| Fix for the Part A test storage | `fix/courier-test-storage-on-e` | #29 | `28a08c4` |
-| C | `feature/week4-part-c-openapi` | #30 | `2a1a8da` |
-| D | `feature/week4-part-d-api-security` | #31 | `8cab515` |
+| A | `feature/week4-part-a-courier-offline` | #27 | `dccff64` |
+| B | `feature/week4-part-b-rest-api` | #28 | `a2fb35c` |
+| Fix for the Part A test storage | `fix/courier-test-storage-on-e` | #29 | `fd602a3` |
+| C | `feature/week4-part-c-openapi` | #30 | `cef086f` |
+| D | `feature/week4-part-d-api-security` | #31 | `3deec04` |
 
 This checklist and the demo-video preparation were added on `feature/week4-part-d-demo-video`, branched from `master` after #31.
 
