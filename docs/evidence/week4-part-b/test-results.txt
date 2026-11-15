@@ -18,7 +18,7 @@ Passed!  - Failed:     0, Passed:   303, Skipped:     0, Total:   303, Duration:
 
 Total: 1,124 passed, 0 failed, 0 skipped.
 
-Change from the Part A merge baseline of 974 (master fe9d45d, 2026-11-07 10:09 UTC):
+Change from the Part A merge baseline of 974 (master dccff64, 2026-11-07 10:09 UTC):
 - Domain 224 -> 276: ShipmentStatusTransitionRuleTests (37) and TrackedShipmentTests (15).
 - API integration: 98, a new project.
 - Infrastructure stays 239. Two existing tests now include the two new tables and the new index:
